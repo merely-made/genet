@@ -17815,3 +17815,3278 @@ browser guest and application-carrier migration remain open.
   "bytes",
   "rtc",
 ```
+
+
+## E2h automated browser interoperability - 2026-11-02T18:53:41.393Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T18:53:41.393Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "6c759ef1525ff2301c313e683fbe394b6eb956e86c50b0631b78968e749856a2",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "f2f765ce031dced2da615daca5b68c1d525544fc880c2d99c75c99591dd1a375",
+    "support/ci/webrtc_interop.mjs": "f76e0c4368c96c5e07ace5c8b62bce799dc9c4dcd2502e12f0792b2607ef2471",
+    "support/ci/webrtc_interop_peer.js": "94df238585b1f45d27419157edd569e6d023ba6daa75913f364c07d20d6b1813",
+    "components/genet-webrtc/Cargo.toml": "5884b70af4d2794b2ff85bbfddd2523632b8a8b4ba66c093247eb98aa1882ec2",
+    "components/genet-webrtc/src/lib.rs": "753e27024d2048812924c56158fa274af793aa9b17c6dbd4d43df4dceddb3a05",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "peer startup",
+      "error": "native fixture exited 3221225725"
+    }
+  ],
+  "failure": {
+    "phase": "peer startup",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "native fixture exited 3221225725"
+  },
+  "profilesRemoved": true,
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T18:54:52.040Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T18:54:52.040Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "fdf5b358be3c0ddbd39d8d7822c6945ae806e5c7f9dd4c27d75b9e87ed96af3a",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "ef63ed3a12dff896808373c2e41b0c37ef3540a4f199582c9163191f62f850d6",
+    "support/ci/webrtc_interop.mjs": "f1346001c555dfdd4c81f57423d8b0d342f6715f35b888cb3ed54170ab571570",
+    "support/ci/webrtc_interop_peer.js": "94df238585b1f45d27419157edd569e6d023ba6daa75913f364c07d20d6b1813",
+    "components/genet-webrtc/Cargo.toml": "5884b70af4d2794b2ff85bbfddd2523632b8a8b4ba66c093247eb98aa1882ec2",
+    "components/genet-webrtc/src/lib.rs": "753e27024d2048812924c56158fa274af793aa9b17c6dbd4d43df4dceddb3a05",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "application exchange deadline"
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "application exchange deadline"
+  },
+  "profilesRemoved": true,
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T18:56:19.299Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T18:56:19.299Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "fdf5b358be3c0ddbd39d8d7822c6945ae806e5c7f9dd4c27d75b9e87ed96af3a",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "ef63ed3a12dff896808373c2e41b0c37ef3540a4f199582c9163191f62f850d6",
+    "support/ci/webrtc_interop.mjs": "996427ab02d9c17a2b31da2c876e50e4dc03a9b77384e22dfcd0274949d158e7",
+    "support/ci/webrtc_interop_peer.js": "d89c77423b939c3126a8868816d1613970b446399e9ccc27a1c4546289b7b7da",
+    "components/genet-webrtc/Cargo.toml": "5884b70af4d2794b2ff85bbfddd2523632b8a8b4ba66c093247eb98aa1882ec2",
+    "components/genet-webrtc/src/lib.rs": "753e27024d2048812924c56158fa274af793aa9b17c6dbd4d43df4dceddb3a05",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "application exchange deadline",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "channelStates": [
+            "connecting",
+            "connecting"
+          ],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "disconnected",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "channelStates": [],
+          "gathering": "complete"
+        }
+      }
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "application exchange deadline"
+  },
+  "profilesRemoved": true,
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T18:58:48.575Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T18:58:48.575Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "74fea8ed043acbb00891b1844dcf4f7ffe3a1c4279b94154dad530e61a92829a",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "ef63ed3a12dff896808373c2e41b0c37ef3540a4f199582c9163191f62f850d6",
+    "support/ci/webrtc_interop.mjs": "5e6a2f36ae4a7c5dacc233575fb90b3cdef775e41b7b2502a5ce2157ac5dc0cf",
+    "support/ci/webrtc_interop_peer.js": "d89c77423b939c3126a8868816d1613970b446399e9ccc27a1c4546289b7b7da",
+    "components/genet-webrtc/Cargo.toml": "5884b70af4d2794b2ff85bbfddd2523632b8a8b4ba66c093247eb98aa1882ec2",
+    "components/genet-webrtc/src/lib.rs": "6faf4af0e36324999333303d33027d68095d266dc087f03fe55ca42d2a8df971",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "application exchange deadline",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "channelStates": [
+            "connecting",
+            "connecting"
+          ],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "disconnected",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "channelStates": [],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": null,
+          "localFingerprint": "d94a038ec473969d48ca3e02c43c4032d046687f689db1cb7a2300f2e15a996a",
+          "remoteFingerprint": "c7588b59db8fa24aae731e1559ba1386a4d239ac7a84b5cf19c46e08b71a5474",
+          "remoteCertificates": [],
+          "statsRemoteFingerprint": null
+        },
+        "browser": {
+          "pair": null,
+          "localFingerprint": "c7588b59db8fa24aae731e1559ba1386a4d239ac7a84b5cf19c46e08b71a5474",
+          "remoteFingerprint": "d94a038ec473969d48ca3e02c43c4032d046687f689db1cb7a2300f2e15a996a",
+          "remoteCertificates": [],
+          "statsRemoteFingerprint": null
+        }
+      },
+      "trace": [
+        "RTC poll variant: Route",
+        "RTC poll variant: Route",
+        "RTC poll variant: Route",
+        "RTC poll variant: Route",
+        "RTC poll variant: Route",
+        "RTC poll variant: Route",
+        "RTC poll variant: Route",
+        "RTC poll variant: Route"
+      ]
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "application exchange deadline"
+  },
+  "profilesRemoved": true,
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:00:26.467Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:00:26.467Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "74fea8ed043acbb00891b1844dcf4f7ffe3a1c4279b94154dad530e61a92829a",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "ef63ed3a12dff896808373c2e41b0c37ef3540a4f199582c9163191f62f850d6",
+    "support/ci/webrtc_interop.mjs": "5e6a2f36ae4a7c5dacc233575fb90b3cdef775e41b7b2502a5ce2157ac5dc0cf",
+    "support/ci/webrtc_interop_peer.js": "a0b6896eb00e7782c5f0942a1249bc64cc2b035771f2097fccbf99c7e09c673b",
+    "components/genet-webrtc/Cargo.toml": "5884b70af4d2794b2ff85bbfddd2523632b8a8b4ba66c093247eb98aa1882ec2",
+    "components/genet-webrtc/src/lib.rs": "6faf4af0e36324999333303d33027d68095d266dc087f03fe55ca42d2a8df971",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "route and certificate verification",
+      "error": "unexpected selected transport",
+      "observed": {
+        "native": {
+          "connected": true,
+          "connectionState": "connected",
+          "iceState": "connected",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [
+            "browser:text:λ🙂:reliable",
+            "binary:48000",
+            "browser:text:λ🙂:unreliable"
+          ],
+          "sent": [
+            "reliable:text",
+            "reliable:binary",
+            "unreliable:text"
+          ],
+          "modes": [
+            {
+              "label": "reliable",
+              "ordered": true,
+              "maxRetransmits": null
+            },
+            {
+              "label": "unreliable",
+              "ordered": false,
+              "maxRetransmits": 0
+            }
+          ],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp"
+          ],
+          "channelStates": [
+            "open",
+            "open"
+          ],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": true,
+          "connectionState": "connected",
+          "iceState": "connected",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [
+            "native:text:λ🙂:reliable",
+            "binary:48000",
+            "native:text:λ🙂:unreliable"
+          ],
+          "sent": [
+            "reliable:text",
+            "reliable:binary",
+            "unreliable:text"
+          ],
+          "modes": [
+            {
+              "label": "reliable",
+              "ordered": true,
+              "maxRetransmits": null
+            },
+            {
+              "label": "unreliable",
+              "ordered": false,
+              "maxRetransmits": 0
+            }
+          ],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp"
+          ],
+          "channelStates": [
+            "open",
+            "open"
+          ],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true
+          },
+          "localFingerprint": "3c3836c967533e8facd293d8a7000b888f055d4fecca55cdf066ba99aaceac28",
+          "remoteFingerprint": "b8934cd21859c282fa804d0de8bfb1f50152740f77f0f0197065a395fbfde3db",
+          "remoteCertificates": [
+            [
+              48,
+              130,
+              1,
+              22,
+              48,
+              129,
+              189,
+              160,
+              3,
+              2,
+              1,
+              2,
+              2,
+              9,
+              0,
+              240,
+              121,
+              82,
+              27,
+              162,
+              176,
+              230,
+              75,
+              48,
+              10,
+              6,
+              8,
+              42,
+              134,
+              72,
+              206,
+              61,
+              4,
+              3,
+              2,
+              48,
+              17,
+              49,
+              15,
+              48,
+              13,
+              6,
+              3,
+              85,
+              4,
+              3,
+              12,
+              6,
+              87,
+              101,
+              98,
+              82,
+              84,
+              67,
+              48,
+              30,
+              23,
+              13,
+              50,
+              54,
+              49,
+              49,
+              48,
+              49,
+              49,
+              57,
+              48,
+              48,
+              49,
+              57,
+              90,
+              23,
+              13,
+              50,
+              54,
+              49,
+              50,
+              48,
+              50,
+              49,
+              57,
+              48,
+              48,
+              49,
+              57,
+              90,
+              48,
+              17,
+              49,
+              15,
+              48,
+              13,
+              6,
+              3,
+              85,
+              4,
+              3,
+              12,
+              6,
+              87,
+              101,
+              98,
+              82,
+              84,
+              67,
+              48,
+              89,
+              48,
+              19,
+              6,
+              7,
+              42,
+              134,
+              72,
+              206,
+              61,
+              2,
+              1,
+              6,
+              8,
+              42,
+              134,
+              72,
+              206,
+              61,
+              3,
+              1,
+              7,
+              3,
+              66,
+              0,
+              4,
+              204,
+              224,
+              227,
+              69,
+              240,
+              223,
+              196,
+              23,
+              240,
+              178,
+              39,
+              246,
+              81,
+              156,
+              24,
+              212,
+              239,
+              158,
+              116,
+              219,
+              136,
+              181,
+              103,
+              112,
+              32,
+              129,
+              219,
+              16,
+              80,
+              53,
+              95,
+              17,
+              118,
+              81,
+              158,
+              172,
+              144,
+              54,
+              37,
+              184,
+              211,
+              72,
+              109,
+              166,
+              42,
+              36,
+              117,
+              199,
+              240,
+              66,
+              122,
+              79,
+              89,
+              221,
+              252,
+              190,
+              242,
+              147,
+              228,
+              3,
+              54,
+              21,
+              11,
+              61,
+              48,
+              10,
+              6,
+              8,
+              42,
+              134,
+              72,
+              206,
+              61,
+              4,
+              3,
+              2,
+              3,
+              72,
+              0,
+              48,
+              69,
+              2,
+              32,
+              67,
+              251,
+              12,
+              21,
+              112,
+              74,
+              158,
+              192,
+              47,
+              57,
+              14,
+              247,
+              56,
+              142,
+              223,
+              111,
+              196,
+              190,
+              87,
+              208,
+              123,
+              36,
+              226,
+              103,
+              161,
+              169,
+              105,
+              154,
+              137,
+              18,
+              8,
+              10,
+              2,
+              33,
+              0,
+              224,
+              22,
+              10,
+              99,
+              205,
+              53,
+              111,
+              167,
+              66,
+              105,
+              72,
+              197,
+              181,
+              213,
+              237,
+              3,
+              6,
+              115,
+              217,
+              115,
+              221,
+              28,
+              24,
+              175,
+              222,
+              189,
+              192,
+              224,
+              218,
+              117,
+              119,
+              166
+            ]
+          ],
+          "statsRemoteFingerprint": "b8934cd21859c282fa804d0de8bfb1f50152740f77f0f0197065a395fbfde3db"
+        },
+        "browser": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true,
+            "local": "relay",
+            "remote": "relay",
+            "localProtocol": "udp",
+            "remoteProtocol": "udp"
+          },
+          "localFingerprint": "b8934cd21859c282fa804d0de8bfb1f50152740f77f0f0197065a395fbfde3db",
+          "remoteFingerprint": "3c3836c967533e8facd293d8a7000b888f055d4fecca55cdf066ba99aaceac28",
+          "remoteCertificates": [
+            [
+              48,
+              130,
+              1,
+              101,
+              48,
+              130,
+              1,
+              11,
+              160,
+              3,
+              2,
+              1,
+              2,
+              2,
+              20,
+              43,
+              159,
+              142,
+              153,
+              153,
+              14,
+              120,
+              177,
+              255,
+              205,
+              152,
+              156,
+              165,
+              89,
+              157,
+              195,
+              168,
+              133,
+              55,
+              119,
+              48,
+              10,
+              6,
+              8,
+              42,
+              134,
+              72,
+              206,
+              61,
+              4,
+              3,
+              2,
+              48,
+              33,
+              49,
+              31,
+              48,
+              29,
+              6,
+              3,
+              85,
+              4,
+              3,
+              12,
+              22,
+              114,
+              99,
+              103,
+              101,
+              110,
+              32,
+              115,
+              101,
+              108,
+              102,
+              32,
+              115,
+              105,
+              103,
+              110,
+              101,
+              100,
+              32,
+              99,
+              101,
+              114,
+              116,
+              48,
+              32,
+              23,
+              13,
+              55,
+              53,
+              48,
+              49,
+              48,
+              49,
+              48,
+              48,
+              48,
+              48,
+              48,
+              48,
+              90,
+              24,
+              15,
+              52,
+              48,
+              57,
+              54,
+              48,
+              49,
+              48,
+              49,
+              48,
+              48,
+              48,
+              48,
+              48,
+              48,
+              90,
+              48,
+              33,
+              49,
+              31,
+              48,
+              29,
+              6,
+              3,
+              85,
+              4,
+              3,
+              12,
+              22,
+              114,
+              99,
+              103,
+              101,
+              110,
+              32,
+              115,
+              101,
+              108,
+              102,
+              32,
+              115,
+              105,
+              103,
+              110,
+              101,
+              100,
+              32,
+              99,
+              101,
+              114,
+              116,
+              48,
+              89,
+              48,
+              19,
+              6,
+              7,
+              42,
+              134,
+              72,
+              206,
+              61,
+              2,
+              1,
+              6,
+              8,
+              42,
+              134,
+              72,
+              206,
+              61,
+              3,
+              1,
+              7,
+              3,
+              66,
+              0,
+              4,
+              11,
+              138,
+              17,
+              237,
+              25,
+              209,
+              166,
+              12,
+              241,
+              154,
+              222,
+              62,
+              217,
+              153,
+              42,
+              13,
+              73,
+              39,
+              6,
+              209,
+              232,
+              83,
+              138,
+              152,
+              227,
+              115,
+              16,
+              247,
+              124,
+              253,
+              216,
+              5,
+              92,
+              140,
+              143,
+              150,
+              161,
+              72,
+              15,
+              181,
+              182,
+              102,
+              71,
+              210,
+              254,
+              84,
+              100,
+              23,
+              64,
+              220,
+              122,
+              154,
+              77,
+              96,
+              111,
+              160,
+              92,
+              122,
+              255,
+              208,
+              166,
+              199,
+              95,
+              52,
+              163,
+              31,
+              48,
+              29,
+              48,
+              27,
+              6,
+              3,
+              85,
+              29,
+              17,
+              4,
+              20,
+              48,
+              18,
+              130,
+              16,
+              107,
+              109,
+              88,
+              110,
+              86,
+              104,
+              121,
+              76,
+              102,
+              116,
+              72,
+              90,
+              79,
+              102,
+              99,
+              111,
+              48,
+              10,
+              6,
+              8,
+              42,
+              134,
+              72,
+              206,
+              61,
+              4,
+              3,
+              2,
+              3,
+              72,
+              0,
+              48,
+              69,
+              2,
+              32,
+              74,
+              193,
+              231,
+              174,
+              238,
+              97,
+              72,
+              35,
+              166,
+              156,
+              104,
+              72,
+              224,
+              148,
+              243,
+              126,
+              212,
+              120,
+              94,
+              70,
+              134,
+              111,
+              138,
+              122,
+              229,
+              252,
+              74,
+              169,
+              28,
+              178,
+              96,
+              235,
+              2,
+              33,
+              0,
+              202,
+              164,
+              37,
+              67,
+              233,
+              147,
+              83,
+              20,
+              163,
+              71,
+              68,
+              191,
+              133,
+              254,
+              145,
+              78,
+              45,
+              134,
+              81,
+              53,
+              159,
+              0,
+              171,
+              146,
+              159,
+              11,
+              203,
+              193,
+              43,
+              34,
+              68,
+              158
+            ]
+          ],
+          "statsRemoteFingerprint": "3c3836c967533e8facd293d8a7000b888f055d4fecca55cdf066ba99aaceac28"
+        }
+      },
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "route and certificate verification",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "unexpected selected transport"
+  },
+  "profilesRemoved": true,
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:01:47.590Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:01:47.590Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "74fea8ed043acbb00891b1844dcf4f7ffe3a1c4279b94154dad530e61a92829a",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "ef63ed3a12dff896808373c2e41b0c37ef3540a4f199582c9163191f62f850d6",
+    "support/ci/webrtc_interop.mjs": "5e6a2f36ae4a7c5dacc233575fb90b3cdef775e41b7b2502a5ce2157ac5dc0cf",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "5884b70af4d2794b2ff85bbfddd2523632b8a8b4ba66c093247eb98aa1882ec2",
+    "components/genet-webrtc/src/lib.rs": "6faf4af0e36324999333303d33027d68095d266dc087f03fe55ca42d2a8df971",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "peer startup",
+      "error": "native control deadline",
+      "observed": {},
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "peer startup",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "native control deadline"
+  },
+  "profilesRemoved": true,
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:05:01.749Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:05:01.749Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "74fea8ed043acbb00891b1844dcf4f7ffe3a1c4279b94154dad530e61a92829a",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "ef63ed3a12dff896808373c2e41b0c37ef3540a4f199582c9163191f62f850d6",
+    "support/ci/webrtc_interop.mjs": "cadd2e4c947b4b3fd38d1ab8596c9fef348ec4a6947fbc9c4a7c7ebbbb395380",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "5884b70af4d2794b2ff85bbfddd2523632b8a8b4ba66c093247eb98aa1882ec2",
+    "components/genet-webrtc/src/lib.rs": "6faf4af0e36324999333303d33027d68095d266dc087f03fe55ca42d2a8df971",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "peer startup",
+      "error": "native control deadline",
+      "observed": {},
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "peer startup",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "Command failed: taskkill /PID 30704 /T /F"
+  },
+  "profilesRemoved": true,
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:11:06.076Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:11:06.076Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "1c3fdec953713f5be5ecfdb6cf3ac69ebbee4152e21e080c5191af4be01dce43",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "589d126a60bfd4b264fbbe76634209f6cd18cc54d2043474fa1be8e0bc1e507e",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "d691ee2a7786d2e92f0198f026653506536b1f9caa7b55f31bbca49cddafa993",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "application exchange deadline",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp",
+            "udp",
+            "udp"
+          ],
+          "channelStates": [
+            "connecting",
+            "connecting"
+          ],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "disconnected",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp",
+            "udp"
+          ],
+          "channelStates": [],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": null,
+          "localFingerprint": "ddffbaea352746049f390dc57894046dce462c668206d5c3abd9a44b6c0268ff",
+          "remoteFingerprint": "280a1c9149c4f6558a47db9c30466c736d97e392f89b6e3a99b5060c9c5412dc",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:zgwmN4ppMQv4bXhqje5cjNR0zCDc29EX",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCLocalIceCandidate_candidate:Uvr77LEGdwS0U8vYGq7x1CcR9PWLUUXN",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCRemoteIceCandidate_candidate:wfGv0pwXRqhLyyuXW2WJzw98g0ezUZKS",
+              "type": "remote-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCRemoteIceCandidate_candidate:Y9syk//qab5u1fepXwjdPIwa8S6pqI+Z",
+              "type": "remote-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCRemoteIceCandidate_candidate:8FxXq7DFLH7MzDexTPphpFul9BnGF9ey",
+              "type": "remote-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        },
+        "browser": {
+          "pair": null,
+          "localFingerprint": "280a1c9149c4f6558a47db9c30466c736d97e392f89b6e3a99b5060c9c5412dc",
+          "remoteFingerprint": "ddffbaea352746049f390dc57894046dce462c668206d5c3abd9a44b6c0268ff",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "ICCzyxrEx",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "IQKQMLWX/",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "IfHkwLa9O",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        }
+      },
+      "trace": [
+        "RTC poll variant: Route { transport: TransportContext { local_addr: 0.0.0.0:5353, peer_addr: 224.0.0.251:5353, transport_protocol: UDP, ecn: None } }"
+      ]
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "application exchange deadline"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:11:54.803Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:11:54.803Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "1c3fdec953713f5be5ecfdb6cf3ac69ebbee4152e21e080c5191af4be01dce43",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "589d126a60bfd4b264fbbe76634209f6cd18cc54d2043474fa1be8e0bc1e507e",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "d691ee2a7786d2e92f0198f026653506536b1f9caa7b55f31bbca49cddafa993",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "pass",
+      "seconds": 18.33,
+      "native": {
+        "connected": true,
+        "connectionState": "connected",
+        "iceState": "connected",
+        "signaling": "stable",
+        "remoteSet": true,
+        "received": [
+          "browser:text:λ🙂:unreliable",
+          "browser:text:λ🙂:reliable",
+          "binary:48000"
+        ],
+        "sent": [
+          "unreliable:text",
+          "reliable:text",
+          "reliable:binary"
+        ],
+        "modes": [
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          },
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          }
+        ],
+        "errors": [],
+        "refused": [],
+        "remoteProtocols": [
+          "udp"
+        ],
+        "channelStates": [
+          "open",
+          "open"
+        ],
+        "gathering": "complete",
+        "stats": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true,
+            "local": "relay",
+            "remote": "relay",
+            "localProtocol": "udp",
+            "remoteProtocol": "udp"
+          },
+          "localFingerprint": "ef5993bfaf27f622a95549180bb7a6c32d2750b7b4c61810e045d597863e607b",
+          "remoteFingerprint": "fe5477591a878daeceecac19776cb460126adf98de2b3ad7a7e0b2bfe5802f65",
+          "statsRemoteFingerprint": "fe5477591a878daeceecac19776cb460126adf98de2b3ad7a7e0b2bfe5802f65",
+          "pairKeys": {
+            "local": "RTCLocalIceCandidate_candidate:me0d/rPhm2RaIJlQgN1NW7Y2UrhmtDeb",
+            "remote": "RTCRemoteIceCandidate_candidate:UtOd41UH7WDD3WUrYT7DptoGHZ9bIAyd"
+          },
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:me0d/rPhm2RaIJlQgN1NW7Y2UrhmtDeb",
+              "type": "local-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCRemoteIceCandidate_candidate:UtOd41UH7WDD3WUrYT7DptoGHZ9bIAyd",
+              "type": "remote-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": [
+            "fe5477591a878daeceecac19776cb460126adf98de2b3ad7a7e0b2bfe5802f65"
+          ]
+        }
+      },
+      "browserPeer": {
+        "connected": true,
+        "connectionState": "connected",
+        "iceState": "connected",
+        "signaling": "stable",
+        "remoteSet": true,
+        "received": [
+          "native:text:λ🙂:unreliable",
+          "native:text:λ🙂:reliable",
+          "binary:48000"
+        ],
+        "sent": [
+          "unreliable:text",
+          "reliable:text",
+          "reliable:binary"
+        ],
+        "modes": [
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          },
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          }
+        ],
+        "errors": [],
+        "refused": [],
+        "remoteProtocols": [
+          "udp"
+        ],
+        "channelStates": [
+          "open",
+          "open"
+        ],
+        "gathering": "complete",
+        "stats": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true,
+            "local": "relay",
+            "remote": "relay",
+            "localProtocol": "udp",
+            "remoteProtocol": "udp"
+          },
+          "localFingerprint": "fe5477591a878daeceecac19776cb460126adf98de2b3ad7a7e0b2bfe5802f65",
+          "remoteFingerprint": "ef5993bfaf27f622a95549180bb7a6c32d2750b7b4c61810e045d597863e607b",
+          "statsRemoteFingerprint": "ef5993bfaf27f622a95549180bb7a6c32d2750b7b4c61810e045d597863e607b",
+          "pairKeys": {
+            "local": "IEUpfiagg",
+            "remote": "I7Zoasvzo"
+          },
+          "candidateKeys": [
+            {
+              "id": "I7Zoasvzo",
+              "type": "remote-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            },
+            {
+              "id": "IEUpfiagg",
+              "type": "local-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": [
+            "ef5993bfaf27f622a95549180bb7a6c32d2750b7b4c61810e045d597863e607b"
+          ]
+        }
+      },
+      "cleanupVerified": true,
+      "socketRebound": true
+    }
+  ],
+  "failure": null,
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:12:59.614Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:12:59.614Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "8e893c219a5352aa0395483de04b62e2aab0520463e88e879a7137da564ff0bd",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "589d126a60bfd4b264fbbe76634209f6cd18cc54d2043474fa1be8e0bc1e507e",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "83a99e4f364c7892cd46acb2800675c95baaecb426e2395a06fbe4f154c75864",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "route and certificate verification",
+      "error": "unexpected selected transport",
+      "observed": {
+        "native": {
+          "connected": true,
+          "connectionState": "connected",
+          "iceState": "connected",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [
+            "browser:text:λ🙂:unreliable",
+            "browser:text:λ🙂:reliable",
+            "binary:48000"
+          ],
+          "sent": [
+            "unreliable:text",
+            "reliable:text",
+            "reliable:binary"
+          ],
+          "modes": [
+            {
+              "label": "unreliable",
+              "ordered": false,
+              "maxRetransmits": 0
+            },
+            {
+              "label": "reliable",
+              "ordered": true,
+              "maxRetransmits": null
+            }
+          ],
+          "errors": [],
+          "refused": [
+            "mdns:OperationError",
+            "mdns:OperationError"
+          ],
+          "remoteProtocols": [
+            "udp",
+            "udp",
+            "udp"
+          ],
+          "channelStates": [
+            "open",
+            "open"
+          ],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": true,
+          "connectionState": "connected",
+          "iceState": "connected",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [
+            "native:text:λ🙂:unreliable",
+            "native:text:λ🙂:reliable",
+            "binary:48000"
+          ],
+          "sent": [
+            "unreliable:text",
+            "reliable:text",
+            "reliable:binary"
+          ],
+          "modes": [
+            {
+              "label": "unreliable",
+              "ordered": false,
+              "maxRetransmits": 0
+            },
+            {
+              "label": "reliable",
+              "ordered": true,
+              "maxRetransmits": null
+            }
+          ],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp",
+            "udp"
+          ],
+          "channelStates": [
+            "open",
+            "open"
+          ],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true,
+            "local": "host",
+            "localProtocol": "udp"
+          },
+          "localFingerprint": "26f8b966316eccc90a83b23d997501abd3e7fdf2a80e43a3f8a96c6c08770825",
+          "remoteFingerprint": "e19773b8ae67172d4e1633fbc6b98e3565cb0354d1d78eb6fd245a0457313812",
+          "statsRemoteFingerprint": "e19773b8ae67172d4e1633fbc6b98e3565cb0354d1d78eb6fd245a0457313812",
+          "pairKeys": {
+            "local": "RTCLocalIceCandidate_candidate:fkYaVjzNUGIYnxfWlOAPAlAui9Y1FRE9",
+            "remote": "candidate:I0BzaaizTRtDxQegSJ3RZGnfPE4uxJJe"
+          },
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:49HPurIghXfslMA3xaTEBNXdu6rfnaWa",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCLocalIceCandidate_candidate:fkYaVjzNUGIYnxfWlOAPAlAui9Y1FRE9",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCRemoteIceCandidate_candidate:yNAVxLHZTrWhWsfLu0sjUow+OPY21wbc",
+              "type": "remote-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": [
+            "e19773b8ae67172d4e1633fbc6b98e3565cb0354d1d78eb6fd245a0457313812"
+          ]
+        },
+        "browser": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true,
+            "local": "srflx",
+            "remote": "host",
+            "localProtocol": "udp",
+            "remoteProtocol": "udp"
+          },
+          "localFingerprint": "e19773b8ae67172d4e1633fbc6b98e3565cb0354d1d78eb6fd245a0457313812",
+          "remoteFingerprint": "26f8b966316eccc90a83b23d997501abd3e7fdf2a80e43a3f8a96c6c08770825",
+          "statsRemoteFingerprint": "26f8b966316eccc90a83b23d997501abd3e7fdf2a80e43a3f8a96c6c08770825",
+          "pairKeys": {
+            "local": "IzfQaCNuq",
+            "remote": "IhET9v7sp"
+          },
+          "candidateKeys": [
+            {
+              "id": "IQKSr5mAR",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "IbouJvO0q",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "IhET9v7sp",
+              "type": "remote-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "IzfQaCNuq",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": [
+            "26f8b966316eccc90a83b23d997501abd3e7fdf2a80e43a3f8a96c6c08770825"
+          ]
+        }
+      },
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "route and certificate verification",
+    "case": {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close"
+    },
+    "error": "unexpected selected transport"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:15:22.361Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:15:22.361Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "32f4556b304ad51e9e0f72ad5dca3f8d03bbf94ed16a0ddb19a5e0d35c21b389",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "589d126a60bfd4b264fbbe76634209f6cd18cc54d2043474fa1be8e0bc1e507e",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "1edb440b14b9c85d08051068ad4272345ba83a573e2aa9fbe8ba257210532fad",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "chrome",
+      "version": "Chrome/156.0.8078.74",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "chrome",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "close",
+      "status": "pass",
+      "seconds": 15.85,
+      "native": {
+        "connected": true,
+        "connectionState": "connected",
+        "iceState": "connected",
+        "signaling": "stable",
+        "remoteSet": true,
+        "received": [
+          "browser:text:λ🙂:reliable",
+          "binary:48000",
+          "browser:text:λ🙂:unreliable"
+        ],
+        "sent": [
+          "reliable:text",
+          "reliable:binary",
+          "unreliable:text"
+        ],
+        "modes": [
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          },
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          }
+        ],
+        "errors": [],
+        "refused": [
+          "mdns:OperationError",
+          "mdns:OperationError"
+        ],
+        "remoteProtocols": [
+          "udp",
+          "udp",
+          "udp"
+        ],
+        "channelStates": [
+          "open",
+          "open"
+        ],
+        "gathering": "complete",
+        "stats": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true,
+            "local": "host",
+            "remote": "prflx",
+            "localProtocol": "udp",
+            "remoteProtocol": "udp"
+          },
+          "localFingerprint": "3d53f83fee72decd1a4a35f5fe0082fc856225aca967428f428f8b32b137c95c",
+          "remoteFingerprint": "e2fd08ea82581bd76544380cadddaf6ae73da0144fe54fd6049bca6425d64e33",
+          "statsRemoteFingerprint": "e2fd08ea82581bd76544380cadddaf6ae73da0144fe54fd6049bca6425d64e33",
+          "pairKeys": {
+            "local": "RTCLocalIceCandidate_candidate:4FllNQUbruWZNRBXxrQvD7ZWCmgVzZ8f",
+            "remote": "RTCRemoteIceCandidate_candidate:+SISIcfVhCvjuh90KmJkpsK/N5JKjz0G"
+          },
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:Ep9zB/PkrLEkZMh9Xxj25vlu2dbDLg4K",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCLocalIceCandidate_candidate:4FllNQUbruWZNRBXxrQvD7ZWCmgVzZ8f",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCRemoteIceCandidate_candidate:FBWBp3XJjuFJKsGauQ4Jb/u5qqOlSV6l",
+              "type": "remote-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCRemoteIceCandidate_candidate:+SISIcfVhCvjuh90KmJkpsK/N5JKjz0G",
+              "type": "remote-candidate",
+              "candidateType": "prflx",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": [
+            "e2fd08ea82581bd76544380cadddaf6ae73da0144fe54fd6049bca6425d64e33"
+          ]
+        }
+      },
+      "browserPeer": {
+        "connected": true,
+        "connectionState": "connected",
+        "iceState": "connected",
+        "signaling": "stable",
+        "remoteSet": true,
+        "received": [
+          "native:text:λ🙂:reliable",
+          "binary:48000",
+          "native:text:λ🙂:unreliable"
+        ],
+        "sent": [
+          "reliable:text",
+          "reliable:binary",
+          "unreliable:text"
+        ],
+        "modes": [
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          },
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          }
+        ],
+        "errors": [],
+        "refused": [],
+        "remoteProtocols": [
+          "udp",
+          "udp"
+        ],
+        "channelStates": [
+          "open",
+          "open"
+        ],
+        "gathering": "complete",
+        "stats": {
+          "pair": {
+            "state": "succeeded",
+            "nominated": true,
+            "local": "srflx",
+            "remote": "host",
+            "localProtocol": "udp",
+            "remoteProtocol": "udp"
+          },
+          "localFingerprint": "e2fd08ea82581bd76544380cadddaf6ae73da0144fe54fd6049bca6425d64e33",
+          "remoteFingerprint": "3d53f83fee72decd1a4a35f5fe0082fc856225aca967428f428f8b32b137c95c",
+          "statsRemoteFingerprint": "3d53f83fee72decd1a4a35f5fe0082fc856225aca967428f428f8b32b137c95c",
+          "pairKeys": {
+            "local": "Iq6H8bddQ",
+            "remote": "Iy1YnZjfh"
+          },
+          "candidateKeys": [
+            {
+              "id": "IAagdkYUl",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "Iq6H8bddQ",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            },
+            {
+              "id": "IsMglqGUK",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "Iy1YnZjfh",
+              "type": "remote-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": [
+            "3d53f83fee72decd1a4a35f5fe0082fc856225aca967428f428f8b32b137c95c"
+          ]
+        }
+      },
+      "cleanupVerified": true,
+      "socketRebound": true
+    }
+  ],
+  "failure": null,
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:18:24.600Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:18:24.600Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "e98d52fae689f1998ea7ccbc66506529223a3fc30f4cb717a114d08658424320",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [],
+  "cases": [],
+  "failure": {
+    "phase": "browser startup",
+    "case": null,
+    "error": "browser has no OS-visible owned window"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:20:57.591Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:20:57.591Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "e1899847249566107e259ba14593979d90ecca17a88312f7dc552b819db6e35d",
+    "support/ci/webrtc_interop_peer.js": "35ab1f8c7f74c4ff550400617a1b86a4f61a0e2a93d63263b5930fb5c04462f7",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "firefox",
+      "version": "159.0",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "navigate",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "peer error gathering:701",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "connecting",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [
+            "mdns:OperationError",
+            "mdns:OperationError",
+            "mdns:OperationError",
+            "mdns:OperationError"
+          ],
+          "remoteProtocols": [
+            "UDP",
+            "UDP",
+            "TCP",
+            "TCP",
+            null
+          ],
+          "channelStates": [
+            "connecting",
+            "connecting"
+          ],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "connecting",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [
+            "gathering:701"
+          ],
+          "refused": [],
+          "remoteProtocols": [
+            "udp",
+            "udp"
+          ],
+          "channelStates": [],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": null,
+          "localFingerprint": "e812ed9561b4ed0ef4c30a21c2cd6e6a5819845c7783172c18ddfabaafd29a6a",
+          "remoteFingerprint": "0535e6f72ebc795d93c39b6cc62a38d7eabec29f478ae4bfa93bd677a9be4f89",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:pfXDNOqD53YXkkCySUrofaSBO3ot1oHz",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCLocalIceCandidate_candidate:IQi1wabCfUqTrLOz6xEuZcmEBSvT/uC7",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        },
+        "browser": {
+          "pair": null,
+          "localFingerprint": "0535e6f72ebc795d93c39b6cc62a38d7eabec29f478ae4bfa93bd677a9be4f89",
+          "remoteFingerprint": "e812ed9561b4ed0ef4c30a21c2cd6e6a5819845c7783172c18ddfabaafd29a6a",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "bcb41154",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "afa176a1",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "1ee9ea8b",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "tcp"
+            },
+            {
+              "id": "b5aa69ac",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "tcp"
+            },
+            {
+              "id": "d6913d4c",
+              "type": "remote-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "24c9dda6",
+              "type": "remote-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        }
+      },
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "navigate"
+    },
+    "error": "peer error gathering:701"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:23:31.572Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:23:31.572Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "ed91bda3ab568b2628cd1a0e34eb95dff4afab9cd43947d470b289d965fd6dfe",
+    "support/ci/webrtc_interop_peer.js": "e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "firefox",
+      "version": "159.0",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "navigate",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "application exchange deadline",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "connecting",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [
+            "mdns:OperationError",
+            "mdns:OperationError",
+            "mdns:OperationError",
+            "mdns:OperationError"
+          ],
+          "remoteProtocols": [
+            "UDP",
+            "UDP",
+            "TCP",
+            "TCP",
+            null
+          ],
+          "gatheringErrors": [],
+          "channelStates": [
+            "connecting",
+            "connecting"
+          ],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "failed",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp",
+            "udp"
+          ],
+          "gatheringErrors": [
+            {
+              "code": 701,
+              "text": ""
+            }
+          ],
+          "channelStates": [],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": null,
+          "localFingerprint": "c4d74817909fe08e4a464b63e5b30d578bf1fbcef313eeed00cc6b7ee4ccc874",
+          "remoteFingerprint": "032e893d665ca47469e0232940187d274ce24ff83d026dd5275d980433e35172",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:TnAFZVg3ts0AwrTA7xIAXTCcgjCz4Rrs",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "RTCLocalIceCandidate_candidate:be6GVZdkJSFpvLp0PeQEVDrOo/xVecdh",
+              "type": "local-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        },
+        "browser": {
+          "pair": null,
+          "localFingerprint": "032e893d665ca47469e0232940187d274ce24ff83d026dd5275d980433e35172",
+          "remoteFingerprint": "c4d74817909fe08e4a464b63e5b30d578bf1fbcef313eeed00cc6b7ee4ccc874",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "ce01e9aa",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "96d44e66",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "c8c49301",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "tcp"
+            },
+            {
+              "id": "1db8b35b",
+              "type": "local-candidate",
+              "candidateType": "host",
+              "protocol": "tcp"
+            },
+            {
+              "id": "34dcc90f",
+              "type": "remote-candidate",
+              "candidateType": "host",
+              "protocol": "udp"
+            },
+            {
+              "id": "41a6a236",
+              "type": "remote-candidate",
+              "candidateType": "srflx",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        }
+      },
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "navigate"
+    },
+    "error": "application exchange deadline"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:26:53.240Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:26:53.240Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "ed91bda3ab568b2628cd1a0e34eb95dff4afab9cd43947d470b289d965fd6dfe",
+    "support/ci/webrtc_interop_peer.js": "e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "firefox",
+      "version": "159.0",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false
+    }
+  ],
+  "cases": [
+    {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "browser",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "incomplete application exchange",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "connecting",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            null
+          ],
+          "gatheringErrors": [],
+          "channelStates": [],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "failed",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp"
+          ],
+          "gatheringErrors": [
+            {
+              "code": 701,
+              "text": ""
+            }
+          ],
+          "channelStates": [
+            "closed",
+            "closed"
+          ],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": null,
+          "localFingerprint": "1bf07b5b62491e37de820b1311848a7b6b87ac0cca7ecdc9017be31eb5464005",
+          "remoteFingerprint": "d291617d4e8f50a2be33e2fc8393b09dfa04df3b62e172a5fbf5d612b8c8ec73",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:8uGuRWlIjjHzjgrybWVIkqQ6CYmXlIwH",
+              "type": "local-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        },
+        "browser": {
+          "pair": null,
+          "localFingerprint": "d291617d4e8f50a2be33e2fc8393b09dfa04df3b62e172a5fbf5d612b8c8ec73",
+          "remoteFingerprint": "1bf07b5b62491e37de820b1311848a7b6b87ac0cca7ecdc9017be31eb5464005",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "45ccc26d",
+              "type": "remote-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        }
+      },
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "browser",
+      "cleanup": "close"
+    },
+    "error": "incomplete application exchange"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:30:14.870Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:30:14.870Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "2db29663c29cda911afb7d6bd6e2d8c62c52d5556523b38ccd47a0f168bc237e",
+    "support/ci/webrtc_interop_peer.js": "e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "firefox",
+      "version": "159.0",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false,
+      "networkPermissions": [
+        {
+          "permission": "local-network",
+          "before": "prompt",
+          "after": "granted",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "browser",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "application exchange deadline",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "connecting",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [],
+          "gatheringErrors": [],
+          "channelStates": [],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "failed",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp"
+          ],
+          "gatheringErrors": [],
+          "channelStates": [
+            "closed",
+            "closed"
+          ],
+          "gathering": "gathering"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": null,
+          "localFingerprint": "704ee44aa9f9f3431e0c5dceb4eadd81dc985265d549d69165b9aa1d142791b8",
+          "remoteFingerprint": "21511c7afe115eb7f67cf5ef548610b9ead32716543e84ce252121fb3a1f0d76",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:kJACZQHGzsFJb9boS88ie3hRcgg+cqQI",
+              "type": "local-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        },
+        "browser": {
+          "pair": null,
+          "localFingerprint": "21511c7afe115eb7f67cf5ef548610b9ead32716543e84ce252121fb3a1f0d76",
+          "remoteFingerprint": "704ee44aa9f9f3431e0c5dceb4eadd81dc985265d549d69165b9aa1d142791b8",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "e2c5d7ad",
+              "type": "remote-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        }
+      },
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "browser",
+      "cleanup": "close"
+    },
+    "error": "application exchange deadline"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:33:24.271Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:33:24.271Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "e962787a5bff5ecf1933202cdb1f81ed8f9eba66fbae54a45702a7a59148c6db",
+    "support/ci/webrtc_interop_peer.js": "e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [],
+  "cases": [],
+  "failure": {
+    "phase": "browser startup",
+    "case": null,
+    "error": "browser RPC no such frame"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:35:40.272Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:35:40.272Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "3ee7c8889822b5bc84f81d3032248000a06ba16d624819bd9b88a62f8a6ad449",
+    "support/ci/webrtc_interop_peer.js": "e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "firefox",
+      "version": "159.0",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false,
+      "networkPermissions": [
+        {
+          "permission": "local-network",
+          "before": "prompt",
+          "after": "granted",
+          "error": null,
+          "reset": "prompt"
+        },
+        {
+          "permission": "loopback-network",
+          "before": "prompt",
+          "after": "granted",
+          "error": null,
+          "reset": "prompt"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "browser",
+      "cleanup": "close",
+      "status": "fail",
+      "phase": "negotiation and transfer",
+      "error": "application exchange deadline",
+      "observed": {
+        "native": {
+          "connected": false,
+          "connectionState": "connecting",
+          "iceState": "checking",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            null
+          ],
+          "gatheringErrors": [],
+          "channelStates": [],
+          "gathering": "complete"
+        },
+        "browser": {
+          "connected": false,
+          "connectionState": "failed",
+          "iceState": "failed",
+          "signaling": "stable",
+          "remoteSet": true,
+          "received": [],
+          "sent": [],
+          "modes": [],
+          "errors": [],
+          "refused": [],
+          "remoteProtocols": [
+            "udp"
+          ],
+          "gatheringErrors": [
+            {
+              "code": 701,
+              "text": ""
+            }
+          ],
+          "channelStates": [
+            "closed",
+            "closed"
+          ],
+          "gathering": "complete"
+        }
+      },
+      "observedStats": {
+        "native": {
+          "pair": null,
+          "localFingerprint": "1216fa38e07cb027d3478a4c0db7f3d9ad76eebec6c43092ccecb26696e24e73",
+          "remoteFingerprint": "f54960428e7130b7f8cebdd6ee77f2867d804c92a7f3079eee8c2656f724cd1b",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "RTCLocalIceCandidate_candidate:N+tPa1SGKIZYyfAXAlhyR1BTkgZcZ1Ej",
+              "type": "local-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        },
+        "browser": {
+          "pair": null,
+          "localFingerprint": "f54960428e7130b7f8cebdd6ee77f2867d804c92a7f3079eee8c2656f724cd1b",
+          "remoteFingerprint": "1216fa38e07cb027d3478a4c0db7f3d9ad76eebec6c43092ccecb26696e24e73",
+          "statsRemoteFingerprint": null,
+          "pairKeys": null,
+          "candidateKeys": [
+            {
+              "id": "3c70c875",
+              "type": "remote-candidate",
+              "candidateType": "relay",
+              "protocol": "udp"
+            }
+          ],
+          "remoteDER_SHA256": []
+        }
+      },
+      "trace": []
+    }
+  ],
+  "failure": {
+    "phase": "negotiation and transfer",
+    "case": {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "browser",
+      "cleanup": "close"
+    },
+    "error": "application exchange deadline"
+  },
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:40:06.875Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:40:06.875Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "c6bb644c5a707c2151a1c2a234af2efff9048bf2ca483d878a252a0fc296dda6",
+    "support/ci/webrtc_interop_peer.js": "e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "firefox",
+      "version": "159.0",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false,
+      "networkPermissions": [
+        {
+          "permission": "local-network",
+          "before": "prompt",
+          "after": "granted",
+          "error": null,
+          "reset": "prompt"
+        },
+        {
+          "permission": "loopback-network",
+          "before": "prompt",
+          "after": "granted",
+          "error": null,
+          "reset": "prompt"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "relay",
+      "offerer": "browser",
+      "cleanup": "close",
+      "status": "pass",
+      "seconds": 17.27,
+      "native": {
+        "connected": true,
+        "textMessagesVerified": 2,
+        "binaryBytesVerified": 48000,
+        "modes": [
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          },
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          }
+        ],
+        "refused": [],
+        "gatheringErrors": [],
+        "pair": {
+          "state": "succeeded",
+          "nominated": true,
+          "local": "relay",
+          "remote": "relay",
+          "localProtocol": "udp",
+          "remoteProtocol": "udp"
+        },
+        "localFingerprint": "ee96e2f6b944e8c7571b8831d4411737e3a273b58f8f54bd5060152e9d7fd442",
+        "remoteFingerprint": "401dfaba14bf7c2736aca958b00f1ea9f1452e3f82b3cb6d0b5f8bab1b42a910",
+        "remoteDER_SHA256": [
+          "401dfaba14bf7c2736aca958b00f1ea9f1452e3f82b3cb6d0b5f8bab1b42a910"
+        ],
+        "statsRemoteFingerprint": "401dfaba14bf7c2736aca958b00f1ea9f1452e3f82b3cb6d0b5f8bab1b42a910"
+      },
+      "browserPeer": {
+        "connected": true,
+        "textMessagesVerified": 2,
+        "binaryBytesVerified": 48000,
+        "modes": [
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          },
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          }
+        ],
+        "refused": [],
+        "gatheringErrors": [],
+        "pair": {
+          "state": "succeeded",
+          "nominated": true,
+          "local": "relay",
+          "remote": "relay",
+          "localProtocol": "udp",
+          "remoteProtocol": "udp"
+        },
+        "localFingerprint": "401dfaba14bf7c2736aca958b00f1ea9f1452e3f82b3cb6d0b5f8bab1b42a910",
+        "remoteFingerprint": "ee96e2f6b944e8c7571b8831d4411737e3a273b58f8f54bd5060152e9d7fd442",
+        "remoteDER_SHA256": [
+          "ee96e2f6b944e8c7571b8831d4411737e3a273b58f8f54bd5060152e9d7fd442"
+        ],
+        "statsRemoteFingerprint": "ee96e2f6b944e8c7571b8831d4411737e3a273b58f8f54bd5060152e9d7fd442"
+      },
+      "cleanupVerified": true,
+      "socketRebound": true
+    }
+  ],
+  "failure": null,
+  "relayFixture": "bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB",
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T19:43:46.697Z
+
+```json
+{
+  "schema": 1,
+  "gate": "E2h",
+  "utc": "2026-11-02T19:43:46.697Z",
+  "source": "42f9bc7df50e38669479fd37adc450e526959383",
+  "node": "v24.11.0",
+  "nativeBinarySHA256": "9f07b0fcda46985c363b05c47dc8c3a377d9f93ef4a01249b2604fb6189cedec",
+  "sourceSHA256": {
+    "components/genet-webrtc/examples/interop_host.rs": "de4f114e285f3d0117f3906d57b46213fa49f597916f5039745673bb9447a79c",
+    "support/ci/webrtc_interop.mjs": "c6bb644c5a707c2151a1c2a234af2efff9048bf2ca483d878a252a0fc296dda6",
+    "support/ci/webrtc_interop_peer.js": "e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28",
+    "components/genet-webrtc/Cargo.toml": "a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265",
+    "components/genet-webrtc/src/lib.rs": "0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19",
+    "components/script-runtime-api/webrtc/bootstrap.js": "b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"
+  },
+  "versions": [
+    {
+      "browser": "firefox",
+      "version": "159.0",
+      "headed": true,
+      "visibleWindows": 1,
+      "webrtcPreferenceOverrides": false,
+      "networkPermissions": [
+        {
+          "permission": "local-network",
+          "before": "prompt",
+          "after": "granted",
+          "error": null,
+          "reset": "prompt"
+        },
+        {
+          "permission": "loopback-network",
+          "before": "prompt",
+          "after": "granted",
+          "error": null,
+          "reset": "prompt"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "browser": "firefox",
+      "engine": "boa",
+      "route": "direct",
+      "offerer": "native",
+      "cleanup": "navigate",
+      "status": "pass",
+      "seconds": 17.3,
+      "native": {
+        "connected": true,
+        "textMessagesVerified": 2,
+        "binaryBytesVerified": 48000,
+        "modes": [
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          },
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          }
+        ],
+        "refused": [
+          "mdns:OperationError",
+          "mdns:OperationError",
+          "mdns:OperationError",
+          "mdns:OperationError"
+        ],
+        "gatheringErrors": [],
+        "pair": {
+          "state": "succeeded",
+          "nominated": true,
+          "local": "host",
+          "remote": "prflx",
+          "localProtocol": "udp",
+          "remoteProtocol": "udp"
+        },
+        "localFingerprint": "404a7a713726976a88f45444d237d595051f6aa8cfffef57c3f5d07d7f61f169",
+        "remoteFingerprint": "b24118bc32b51229b3c40b7c4df62834ad90c0993df77e28f555c4ef4672073b",
+        "remoteDER_SHA256": [
+          "b24118bc32b51229b3c40b7c4df62834ad90c0993df77e28f555c4ef4672073b"
+        ],
+        "statsRemoteFingerprint": "b24118bc32b51229b3c40b7c4df62834ad90c0993df77e28f555c4ef4672073b"
+      },
+      "browserPeer": {
+        "connected": true,
+        "textMessagesVerified": 2,
+        "binaryBytesVerified": 48000,
+        "modes": [
+          {
+            "label": "unreliable",
+            "ordered": false,
+            "maxRetransmits": 0
+          },
+          {
+            "label": "reliable",
+            "ordered": true,
+            "maxRetransmits": null
+          }
+        ],
+        "refused": [],
+        "gatheringErrors": [],
+        "pair": {
+          "state": "succeeded",
+          "nominated": true,
+          "local": "host",
+          "remote": "host",
+          "localProtocol": "udp",
+          "remoteProtocol": "udp"
+        },
+        "localFingerprint": "b24118bc32b51229b3c40b7c4df62834ad90c0993df77e28f555c4ef4672073b",
+        "remoteFingerprint": "404a7a713726976a88f45444d237d595051f6aa8cfffef57c3f5d07d7f61f169",
+        "remoteDER_SHA256": [
+          "404a7a713726976a88f45444d237d595051f6aa8cfffef57c3f5d07d7f61f169"
+        ],
+        "statsRemoteFingerprint": "404a7a713726976a88f45444d237d595051f6aa8cfffef57c3f5d07d7f61f169"
+      },
+      "cleanupVerified": true,
+      "socketRebound": true
+    }
+  ],
+  "failure": null,
+  "relayFixture": "bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB",
+  "profileCache": "C:\\t\\cargo-targets\\genet\\rtc-interop",
+  "profileCleanup": "automatic approval review blocked recursive deletion; marked profiles retained for reuse",
+  "scope": "native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"
+}
+```
+
+
+## E2h final native fixture build
+
+```json
+{"source":"d644fa0a013364a3d3437b30e98ef3da08dccbb2","utc":"2026-11-02T19:56:32.506032+00:00","command":["cargo","build","-p","genet-webrtc","--example","interop_host","--locked","--offline","-j","1"],"exit":0,"seconds":17.94,"lockSHA256":"0a42b50cb56df741ad34acc18be60070a2eb3244a3a50d64260e7e67e9754f9f","stderr_tail":["   |     ^^^^^^^^^^^^^^^^^^^^^^","","warning: `genet-runtime` (lib) generated 4 warnings (run `cargo fix --lib -p genet-runtime` to apply 1 suggestion)","   Compiling genet-webrtc v0.2.0 (C:\\Users\\mark_\\Code\\repos\\genet\\components\\genet-webrtc)","    Finished `dev` profile [unoptimized] target(s) in 17.70s"]}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T20:03:54.787Z
+
+```json
+{"schema":1,"gate":"E2h","utc":"2026-11-02T20:03:54.787Z","source":"d644fa0a013364a3d3437b30e98ef3da08dccbb2","node":"v24.11.0","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790"],"expectedCases":32,"completeMatrix":true,"nativeBinarySHA256":"eee9ff809eb71d647a9679881b494dfebadb05d8642c9e2c5536a88b8b041536","sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"821b677b6bf201647cca780409886e0ef46b2cf6c52eaec4baab36d6febe394b","support/ci/webrtc_interop.mjs":"9406d01b856275312b60a291ec29d9a52f52e4c5b5c8abddd847adf9176b2c54","support/ci/webrtc_interop_peer.js":"e4defa0fb7bc53407f64a3151c39aef45c3ab82ef959a39a575b02f093edfa28","components/genet-webrtc/Cargo.toml":"a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265","components/genet-webrtc/src/lib.rs":"0bae61d087b330f70fef6e7d6a000b554d1867ab02b968c54dcbca3017a23b19","components/script-runtime-api/webrtc/bootstrap.js":"b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"},"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.74","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[]},{"browser":"firefox","version":"159.0","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[{"permission":"local-network","before":"prompt","after":"granted","error":null,"reset":"prompt"},{"permission":"loopback-network","before":"prompt","after":"granted","error":null,"reset":"prompt"}]}],"cases":[{"browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":16.82,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"994ca3e0617e30c6707b2a35686cebe307825f08b762cf686223bf41735ad68e","remoteFingerprint":"564ea216fb1abe2e820ce1e6228a1fb43359e43369be4de8a243e4407b19138b","remoteDER_SHA256":["564ea216fb1abe2e820ce1e6228a1fb43359e43369be4de8a243e4407b19138b"],"statsRemoteFingerprint":"564ea216fb1abe2e820ce1e6228a1fb43359e43369be4de8a243e4407b19138b"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"564ea216fb1abe2e820ce1e6228a1fb43359e43369be4de8a243e4407b19138b","remoteFingerprint":"994ca3e0617e30c6707b2a35686cebe307825f08b762cf686223bf41735ad68e","remoteDER_SHA256":["994ca3e0617e30c6707b2a35686cebe307825f08b762cf686223bf41735ad68e"],"statsRemoteFingerprint":"994ca3e0617e30c6707b2a35686cebe307825f08b762cf686223bf41735ad68e"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":16.97,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"b39fe1ca4671de9b0699aae27a18f6e2aa73e4a92258affd07e93c77c7a499ae","remoteFingerprint":"a6ea5f63e14f58703cec556c57ffb39198b9d4bb61af9dfc1aa36d71e97d7e43","remoteDER_SHA256":["a6ea5f63e14f58703cec556c57ffb39198b9d4bb61af9dfc1aa36d71e97d7e43"],"statsRemoteFingerprint":"a6ea5f63e14f58703cec556c57ffb39198b9d4bb61af9dfc1aa36d71e97d7e43"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"a6ea5f63e14f58703cec556c57ffb39198b9d4bb61af9dfc1aa36d71e97d7e43","remoteFingerprint":"b39fe1ca4671de9b0699aae27a18f6e2aa73e4a92258affd07e93c77c7a499ae","remoteDER_SHA256":["b39fe1ca4671de9b0699aae27a18f6e2aa73e4a92258affd07e93c77c7a499ae"],"statsRemoteFingerprint":"b39fe1ca4671de9b0699aae27a18f6e2aa73e4a92258affd07e93c77c7a499ae"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":12.64,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"61bf72e9276feaaa81bd18d086f01ad97e368accfe6d8017c0a2db3b1967d647","remoteFingerprint":"1be4233a635ac124448e2d34d88df19d4f1488068e549f932dfc2dc7490040c5","remoteDER_SHA256":["1be4233a635ac124448e2d34d88df19d4f1488068e549f932dfc2dc7490040c5"],"statsRemoteFingerprint":"1be4233a635ac124448e2d34d88df19d4f1488068e549f932dfc2dc7490040c5"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"1be4233a635ac124448e2d34d88df19d4f1488068e549f932dfc2dc7490040c5","remoteFingerprint":"61bf72e9276feaaa81bd18d086f01ad97e368accfe6d8017c0a2db3b1967d647","remoteDER_SHA256":["61bf72e9276feaaa81bd18d086f01ad97e368accfe6d8017c0a2db3b1967d647"],"statsRemoteFingerprint":"61bf72e9276feaaa81bd18d086f01ad97e368accfe6d8017c0a2db3b1967d647"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":15.62,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"ea5b448af46b596e862ca21f3940f49c0c82df473d3caf702d1a329500a87153","remoteFingerprint":"5ad854a441527a321dd84545c76d0e679074afa0da39e041986781b9a360ca0a","remoteDER_SHA256":["5ad854a441527a321dd84545c76d0e679074afa0da39e041986781b9a360ca0a"],"statsRemoteFingerprint":"5ad854a441527a321dd84545c76d0e679074afa0da39e041986781b9a360ca0a"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"5ad854a441527a321dd84545c76d0e679074afa0da39e041986781b9a360ca0a","remoteFingerprint":"ea5b448af46b596e862ca21f3940f49c0c82df473d3caf702d1a329500a87153","remoteDER_SHA256":["ea5b448af46b596e862ca21f3940f49c0c82df473d3caf702d1a329500a87153"],"statsRemoteFingerprint":"ea5b448af46b596e862ca21f3940f49c0c82df473d3caf702d1a329500a87153"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":16.28,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"6a8d7c3fcfe4acd64c7f2147dbead6cec7d975d418d587f10e2fe366860de8f7","remoteFingerprint":"f6aac549d878162e12b9f087ff9f62f6db435712df68f98f7e77f17a7a197344","remoteDER_SHA256":["f6aac549d878162e12b9f087ff9f62f6db435712df68f98f7e77f17a7a197344"],"statsRemoteFingerprint":"f6aac549d878162e12b9f087ff9f62f6db435712df68f98f7e77f17a7a197344"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"f6aac549d878162e12b9f087ff9f62f6db435712df68f98f7e77f17a7a197344","remoteFingerprint":"6a8d7c3fcfe4acd64c7f2147dbead6cec7d975d418d587f10e2fe366860de8f7","remoteDER_SHA256":["6a8d7c3fcfe4acd64c7f2147dbead6cec7d975d418d587f10e2fe366860de8f7"],"statsRemoteFingerprint":"6a8d7c3fcfe4acd64c7f2147dbead6cec7d975d418d587f10e2fe366860de8f7"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":19.63,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"b3505c92d441c42f37ceda0ece1dd0f808df3376ac135c0c9a2244529e994d11","remoteFingerprint":"30eb394736e24a77afb7d787a2fdc56610e0e9af42a6d02632f5bca20dd0d5b4","remoteDER_SHA256":["30eb394736e24a77afb7d787a2fdc56610e0e9af42a6d02632f5bca20dd0d5b4"],"statsRemoteFingerprint":"30eb394736e24a77afb7d787a2fdc56610e0e9af42a6d02632f5bca20dd0d5b4"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"30eb394736e24a77afb7d787a2fdc56610e0e9af42a6d02632f5bca20dd0d5b4","remoteFingerprint":"b3505c92d441c42f37ceda0ece1dd0f808df3376ac135c0c9a2244529e994d11","remoteDER_SHA256":["b3505c92d441c42f37ceda0ece1dd0f808df3376ac135c0c9a2244529e994d11"],"statsRemoteFingerprint":"b3505c92d441c42f37ceda0ece1dd0f808df3376ac135c0c9a2244529e994d11"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":12.99,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"ba1d72dc5a2486465bd806341ac694fb38a8cd34d1694abe883c36a68dd31f50","remoteFingerprint":"0467cc25c9123fb0cde1c5727d14d5db7ab2bb2aa16ef4be78c24529ef02e8fa","remoteDER_SHA256":["0467cc25c9123fb0cde1c5727d14d5db7ab2bb2aa16ef4be78c24529ef02e8fa"],"statsRemoteFingerprint":"0467cc25c9123fb0cde1c5727d14d5db7ab2bb2aa16ef4be78c24529ef02e8fa"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"0467cc25c9123fb0cde1c5727d14d5db7ab2bb2aa16ef4be78c24529ef02e8fa","remoteFingerprint":"ba1d72dc5a2486465bd806341ac694fb38a8cd34d1694abe883c36a68dd31f50","remoteDER_SHA256":["ba1d72dc5a2486465bd806341ac694fb38a8cd34d1694abe883c36a68dd31f50"],"statsRemoteFingerprint":"ba1d72dc5a2486465bd806341ac694fb38a8cd34d1694abe883c36a68dd31f50"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":16.4,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"f1f1b63bc40173ed4b84639bb2883b67983a57d059030b4c6177bcf42debb135","remoteFingerprint":"e6ae1d60cbfebff03cf2450b1d8ae12c875e1dffbdb92bac30cb434f429bbdf3","remoteDER_SHA256":["e6ae1d60cbfebff03cf2450b1d8ae12c875e1dffbdb92bac30cb434f429bbdf3"],"statsRemoteFingerprint":"e6ae1d60cbfebff03cf2450b1d8ae12c875e1dffbdb92bac30cb434f429bbdf3"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"e6ae1d60cbfebff03cf2450b1d8ae12c875e1dffbdb92bac30cb434f429bbdf3","remoteFingerprint":"f1f1b63bc40173ed4b84639bb2883b67983a57d059030b4c6177bcf42debb135","remoteDER_SHA256":["f1f1b63bc40173ed4b84639bb2883b67983a57d059030b4c6177bcf42debb135"],"statsRemoteFingerprint":"f1f1b63bc40173ed4b84639bb2883b67983a57d059030b4c6177bcf42debb135"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":13.3,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"9325ecbc59b0091fb637234362d19079000ab00b18e19291cb3fe880491934a8","remoteFingerprint":"38a7096c81e79cc3230c37c70dcbfe79f1434dbda31a0e98e769b9f0765fe837","remoteDER_SHA256":["38a7096c81e79cc3230c37c70dcbfe79f1434dbda31a0e98e769b9f0765fe837"],"statsRemoteFingerprint":"38a7096c81e79cc3230c37c70dcbfe79f1434dbda31a0e98e769b9f0765fe837"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"38a7096c81e79cc3230c37c70dcbfe79f1434dbda31a0e98e769b9f0765fe837","remoteFingerprint":"9325ecbc59b0091fb637234362d19079000ab00b18e19291cb3fe880491934a8","remoteDER_SHA256":["9325ecbc59b0091fb637234362d19079000ab00b18e19291cb3fe880491934a8"],"statsRemoteFingerprint":"9325ecbc59b0091fb637234362d19079000ab00b18e19291cb3fe880491934a8"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":12.03,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"2fb907a4d66980b58bba95320fbee4ba18043332558fcd91c498178d49d77c4d","remoteFingerprint":"dc92287c00922e0b808d111be3ce7b2125826d0487085e75568854b0cce79b5e","remoteDER_SHA256":["dc92287c00922e0b808d111be3ce7b2125826d0487085e75568854b0cce79b5e"],"statsRemoteFingerprint":"dc92287c00922e0b808d111be3ce7b2125826d0487085e75568854b0cce79b5e"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"dc92287c00922e0b808d111be3ce7b2125826d0487085e75568854b0cce79b5e","remoteFingerprint":"2fb907a4d66980b58bba95320fbee4ba18043332558fcd91c498178d49d77c4d","remoteDER_SHA256":["2fb907a4d66980b58bba95320fbee4ba18043332558fcd91c498178d49d77c4d"],"statsRemoteFingerprint":"2fb907a4d66980b58bba95320fbee4ba18043332558fcd91c498178d49d77c4d"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":9.42,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"31b4a2f7e89c174b43ebfeb5cee178c67fb235b19ba8235c2597e637ddc33b24","remoteFingerprint":"af84c7bf6ef1bcbb5346a127d2bc178ae43a5df299140bbcfabc86a174a604dd","remoteDER_SHA256":["af84c7bf6ef1bcbb5346a127d2bc178ae43a5df299140bbcfabc86a174a604dd"],"statsRemoteFingerprint":"af84c7bf6ef1bcbb5346a127d2bc178ae43a5df299140bbcfabc86a174a604dd"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"af84c7bf6ef1bcbb5346a127d2bc178ae43a5df299140bbcfabc86a174a604dd","remoteFingerprint":"31b4a2f7e89c174b43ebfeb5cee178c67fb235b19ba8235c2597e637ddc33b24","remoteDER_SHA256":["31b4a2f7e89c174b43ebfeb5cee178c67fb235b19ba8235c2597e637ddc33b24"],"statsRemoteFingerprint":"31b4a2f7e89c174b43ebfeb5cee178c67fb235b19ba8235c2597e637ddc33b24"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":10.45,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"ffa7dd280cf3cadbd6787e1c81eff6d3942bffc4cfc15a3fb6866984175d8ea5","remoteFingerprint":"ebb841be19cc13a9b8acb6984e0f53ec9408fb3fc4fe874042fd4264f5ca9ee2","remoteDER_SHA256":["ebb841be19cc13a9b8acb6984e0f53ec9408fb3fc4fe874042fd4264f5ca9ee2"],"statsRemoteFingerprint":"ebb841be19cc13a9b8acb6984e0f53ec9408fb3fc4fe874042fd4264f5ca9ee2"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"ebb841be19cc13a9b8acb6984e0f53ec9408fb3fc4fe874042fd4264f5ca9ee2","remoteFingerprint":"ffa7dd280cf3cadbd6787e1c81eff6d3942bffc4cfc15a3fb6866984175d8ea5","remoteDER_SHA256":["ffa7dd280cf3cadbd6787e1c81eff6d3942bffc4cfc15a3fb6866984175d8ea5"],"statsRemoteFingerprint":"ffa7dd280cf3cadbd6787e1c81eff6d3942bffc4cfc15a3fb6866984175d8ea5"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":12.47,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"0dcaae672105f68a5164e24b75c925d0124494bc821cd429645a21999237a81a","remoteFingerprint":"35dc42dfc0e861e6332c248f2a481f20ee25f6c0ea6288356d52256f1608caa9","remoteDER_SHA256":["35dc42dfc0e861e6332c248f2a481f20ee25f6c0ea6288356d52256f1608caa9"],"statsRemoteFingerprint":"35dc42dfc0e861e6332c248f2a481f20ee25f6c0ea6288356d52256f1608caa9"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"35dc42dfc0e861e6332c248f2a481f20ee25f6c0ea6288356d52256f1608caa9","remoteFingerprint":"0dcaae672105f68a5164e24b75c925d0124494bc821cd429645a21999237a81a","remoteDER_SHA256":["0dcaae672105f68a5164e24b75c925d0124494bc821cd429645a21999237a81a"],"statsRemoteFingerprint":"0dcaae672105f68a5164e24b75c925d0124494bc821cd429645a21999237a81a"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":13.58,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"14bda565252388fcdf761c226652714341b5a9715234213f8ddf90a10bc15c4a","remoteFingerprint":"c9f01fbb0afa81106d3bf44384b86500b46e51118666c27e318195c44099445a","remoteDER_SHA256":["c9f01fbb0afa81106d3bf44384b86500b46e51118666c27e318195c44099445a"],"statsRemoteFingerprint":"c9f01fbb0afa81106d3bf44384b86500b46e51118666c27e318195c44099445a"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"c9f01fbb0afa81106d3bf44384b86500b46e51118666c27e318195c44099445a","remoteFingerprint":"14bda565252388fcdf761c226652714341b5a9715234213f8ddf90a10bc15c4a","remoteDER_SHA256":["14bda565252388fcdf761c226652714341b5a9715234213f8ddf90a10bc15c4a"],"statsRemoteFingerprint":"14bda565252388fcdf761c226652714341b5a9715234213f8ddf90a10bc15c4a"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":9.52,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"482787d3b5d5bc749461f2f5f6bc36f9294f19fbdb32978e375bff69533acc47","remoteFingerprint":"edc7fe5346ce14af9a1e4789eb1fa98484a00f800c89a58e77f8e2c54ae988b4","remoteDER_SHA256":["edc7fe5346ce14af9a1e4789eb1fa98484a00f800c89a58e77f8e2c54ae988b4"],"statsRemoteFingerprint":"edc7fe5346ce14af9a1e4789eb1fa98484a00f800c89a58e77f8e2c54ae988b4"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"edc7fe5346ce14af9a1e4789eb1fa98484a00f800c89a58e77f8e2c54ae988b4","remoteFingerprint":"482787d3b5d5bc749461f2f5f6bc36f9294f19fbdb32978e375bff69533acc47","remoteDER_SHA256":["482787d3b5d5bc749461f2f5f6bc36f9294f19fbdb32978e375bff69533acc47"],"statsRemoteFingerprint":"482787d3b5d5bc749461f2f5f6bc36f9294f19fbdb32978e375bff69533acc47"},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":10.53,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"0e3844db93730e9a31ca4568c51e514580f5f03b77583dabf3ac53969dc5aab2","remoteFingerprint":"8da118868fbf3ce340f7332eacf8aa297eeb602c9230945b142cd88ee9e72156","remoteDER_SHA256":["8da118868fbf3ce340f7332eacf8aa297eeb602c9230945b142cd88ee9e72156"],"statsRemoteFingerprint":"8da118868fbf3ce340f7332eacf8aa297eeb602c9230945b142cd88ee9e72156"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"8da118868fbf3ce340f7332eacf8aa297eeb602c9230945b142cd88ee9e72156","remoteFingerprint":"0e3844db93730e9a31ca4568c51e514580f5f03b77583dabf3ac53969dc5aab2","remoteDER_SHA256":["0e3844db93730e9a31ca4568c51e514580f5f03b77583dabf3ac53969dc5aab2"],"statsRemoteFingerprint":"0e3844db93730e9a31ca4568c51e514580f5f03b77583dabf3ac53969dc5aab2"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":13.78,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"6fa796657e192f5684b026bc87db8cc06f332ba22bff06062fd57e3602364f60","remoteFingerprint":"8aa1483e244d52a22cfcc0ee1e1cba948b6856e83f32b38a3d0b188f24d5e415","remoteDER_SHA256":["8aa1483e244d52a22cfcc0ee1e1cba948b6856e83f32b38a3d0b188f24d5e415"],"statsRemoteFingerprint":"8aa1483e244d52a22cfcc0ee1e1cba948b6856e83f32b38a3d0b188f24d5e415"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"8aa1483e244d52a22cfcc0ee1e1cba948b6856e83f32b38a3d0b188f24d5e415","remoteFingerprint":"6fa796657e192f5684b026bc87db8cc06f332ba22bff06062fd57e3602364f60","remoteDER_SHA256":["6fa796657e192f5684b026bc87db8cc06f332ba22bff06062fd57e3602364f60"],"statsRemoteFingerprint":"6fa796657e192f5684b026bc87db8cc06f332ba22bff06062fd57e3602364f60"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":16.66,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"756c472b3348d55dd7b58fb9266013baf666fff5023f1e41149dd73930ce5914","remoteFingerprint":"032d3b54b1da218cbeb25ed6f7a4a5bf8b016780f0da68a40be0927950a59a1c","remoteDER_SHA256":["032d3b54b1da218cbeb25ed6f7a4a5bf8b016780f0da68a40be0927950a59a1c"],"statsRemoteFingerprint":"032d3b54b1da218cbeb25ed6f7a4a5bf8b016780f0da68a40be0927950a59a1c"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"032d3b54b1da218cbeb25ed6f7a4a5bf8b016780f0da68a40be0927950a59a1c","remoteFingerprint":"756c472b3348d55dd7b58fb9266013baf666fff5023f1e41149dd73930ce5914","remoteDER_SHA256":["756c472b3348d55dd7b58fb9266013baf666fff5023f1e41149dd73930ce5914"],"statsRemoteFingerprint":"756c472b3348d55dd7b58fb9266013baf666fff5023f1e41149dd73930ce5914"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":16.9,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"b27ea6cf6618d25e582f8874da95c7f6ce0c0f5b63d38fd90ff7143565ca3044","remoteFingerprint":"b197c41d56b8bbafbe393ec1e41c342b67cfedad431242dda2c7a71e7ae4c9bb","remoteDER_SHA256":["b197c41d56b8bbafbe393ec1e41c342b67cfedad431242dda2c7a71e7ae4c9bb"],"statsRemoteFingerprint":"b197c41d56b8bbafbe393ec1e41c342b67cfedad431242dda2c7a71e7ae4c9bb"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"b197c41d56b8bbafbe393ec1e41c342b67cfedad431242dda2c7a71e7ae4c9bb","remoteFingerprint":"b27ea6cf6618d25e582f8874da95c7f6ce0c0f5b63d38fd90ff7143565ca3044","remoteDER_SHA256":["b27ea6cf6618d25e582f8874da95c7f6ce0c0f5b63d38fd90ff7143565ca3044"],"statsRemoteFingerprint":"b27ea6cf6618d25e582f8874da95c7f6ce0c0f5b63d38fd90ff7143565ca3044"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":15.62,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"cca9ee125291df4461ec49da0d99b8059354921ded1f45b0f89723a49148eddd","remoteFingerprint":"abd226115d6521088a1a8cb0f9f293c1ef54b7ef7049ad0b350532e921a55f2e","remoteDER_SHA256":["abd226115d6521088a1a8cb0f9f293c1ef54b7ef7049ad0b350532e921a55f2e"],"statsRemoteFingerprint":"abd226115d6521088a1a8cb0f9f293c1ef54b7ef7049ad0b350532e921a55f2e"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"abd226115d6521088a1a8cb0f9f293c1ef54b7ef7049ad0b350532e921a55f2e","remoteFingerprint":"cca9ee125291df4461ec49da0d99b8059354921ded1f45b0f89723a49148eddd","remoteDER_SHA256":["cca9ee125291df4461ec49da0d99b8059354921ded1f45b0f89723a49148eddd"],"statsRemoteFingerprint":"cca9ee125291df4461ec49da0d99b8059354921ded1f45b0f89723a49148eddd"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":14.66,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"73844c1fcf55809e5be36bbb9867392af6f11d3a312fc69115a32450bc1b5e49","remoteFingerprint":"0ddccbe0fa584ca11b4456cb46afc8c5deaced598ac1de8064240edda1cad3e4","remoteDER_SHA256":["0ddccbe0fa584ca11b4456cb46afc8c5deaced598ac1de8064240edda1cad3e4"],"statsRemoteFingerprint":"0ddccbe0fa584ca11b4456cb46afc8c5deaced598ac1de8064240edda1cad3e4"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"0ddccbe0fa584ca11b4456cb46afc8c5deaced598ac1de8064240edda1cad3e4","remoteFingerprint":"73844c1fcf55809e5be36bbb9867392af6f11d3a312fc69115a32450bc1b5e49","remoteDER_SHA256":["73844c1fcf55809e5be36bbb9867392af6f11d3a312fc69115a32450bc1b5e49"],"statsRemoteFingerprint":"73844c1fcf55809e5be36bbb9867392af6f11d3a312fc69115a32450bc1b5e49"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":17.98,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"20fee7ab25b6798520b0fc54455ffc3da1ec6ff0b1ab718ede46622bc39b4656","remoteFingerprint":"a02d80be504a7de838e402fee9f53391318ce0f85b220cba4df258ffaaaf3e90","remoteDER_SHA256":["a02d80be504a7de838e402fee9f53391318ce0f85b220cba4df258ffaaaf3e90"],"statsRemoteFingerprint":"a02d80be504a7de838e402fee9f53391318ce0f85b220cba4df258ffaaaf3e90"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"a02d80be504a7de838e402fee9f53391318ce0f85b220cba4df258ffaaaf3e90","remoteFingerprint":"20fee7ab25b6798520b0fc54455ffc3da1ec6ff0b1ab718ede46622bc39b4656","remoteDER_SHA256":["20fee7ab25b6798520b0fc54455ffc3da1ec6ff0b1ab718ede46622bc39b4656"],"statsRemoteFingerprint":"20fee7ab25b6798520b0fc54455ffc3da1ec6ff0b1ab718ede46622bc39b4656"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":12.73,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"33006df2e875b0fec70cd928a61537a6ebbc67101d52c751dfda9a1f6c88b73b","remoteFingerprint":"75db258d3300473871e7d7ab9b784fbabd7cfee643204d0240203ed8e95095d6","remoteDER_SHA256":["75db258d3300473871e7d7ab9b784fbabd7cfee643204d0240203ed8e95095d6"],"statsRemoteFingerprint":"75db258d3300473871e7d7ab9b784fbabd7cfee643204d0240203ed8e95095d6"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"75db258d3300473871e7d7ab9b784fbabd7cfee643204d0240203ed8e95095d6","remoteFingerprint":"33006df2e875b0fec70cd928a61537a6ebbc67101d52c751dfda9a1f6c88b73b","remoteDER_SHA256":["33006df2e875b0fec70cd928a61537a6ebbc67101d52c751dfda9a1f6c88b73b"],"statsRemoteFingerprint":"33006df2e875b0fec70cd928a61537a6ebbc67101d52c751dfda9a1f6c88b73b"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":16.01,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"5e02cd1d2a4ab65f37b6a7c16d9ad3484aae71abba80729e768333d34a7cbc01","remoteFingerprint":"659b27e8919125e5bdaedf605fa40c18e23321a3c194bcc3d02df734d1e971a3","remoteDER_SHA256":["659b27e8919125e5bdaedf605fa40c18e23321a3c194bcc3d02df734d1e971a3"],"statsRemoteFingerprint":"659b27e8919125e5bdaedf605fa40c18e23321a3c194bcc3d02df734d1e971a3"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"659b27e8919125e5bdaedf605fa40c18e23321a3c194bcc3d02df734d1e971a3","remoteFingerprint":"5e02cd1d2a4ab65f37b6a7c16d9ad3484aae71abba80729e768333d34a7cbc01","remoteDER_SHA256":["5e02cd1d2a4ab65f37b6a7c16d9ad3484aae71abba80729e768333d34a7cbc01"],"statsRemoteFingerprint":"5e02cd1d2a4ab65f37b6a7c16d9ad3484aae71abba80729e768333d34a7cbc01"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":10.04,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"4b72bc28aa547c2ab7e74176810b4252b6ec6e1f227a01d1debee7c4b8941de7","remoteFingerprint":"98616a52c4e651e6f117814b32f241049b580f1ebb7f71f1ee1086c51d2e0e1e","remoteDER_SHA256":["98616a52c4e651e6f117814b32f241049b580f1ebb7f71f1ee1086c51d2e0e1e"],"statsRemoteFingerprint":"98616a52c4e651e6f117814b32f241049b580f1ebb7f71f1ee1086c51d2e0e1e"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"98616a52c4e651e6f117814b32f241049b580f1ebb7f71f1ee1086c51d2e0e1e","remoteFingerprint":"4b72bc28aa547c2ab7e74176810b4252b6ec6e1f227a01d1debee7c4b8941de7","remoteDER_SHA256":["4b72bc28aa547c2ab7e74176810b4252b6ec6e1f227a01d1debee7c4b8941de7"],"statsRemoteFingerprint":"4b72bc28aa547c2ab7e74176810b4252b6ec6e1f227a01d1debee7c4b8941de7"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":11.89,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"fe2ae05d78c4177cccbf74fe4b79cb9cb572b78a61f9b9363cae418a2ba8c11e","remoteFingerprint":"7ec916af072472e4ad8486a6435b8912bad48f5f317a0d6622648f09665050a6","remoteDER_SHA256":["7ec916af072472e4ad8486a6435b8912bad48f5f317a0d6622648f09665050a6"],"statsRemoteFingerprint":"7ec916af072472e4ad8486a6435b8912bad48f5f317a0d6622648f09665050a6"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"7ec916af072472e4ad8486a6435b8912bad48f5f317a0d6622648f09665050a6","remoteFingerprint":"fe2ae05d78c4177cccbf74fe4b79cb9cb572b78a61f9b9363cae418a2ba8c11e","remoteDER_SHA256":["fe2ae05d78c4177cccbf74fe4b79cb9cb572b78a61f9b9363cae418a2ba8c11e"],"statsRemoteFingerprint":"fe2ae05d78c4177cccbf74fe4b79cb9cb572b78a61f9b9363cae418a2ba8c11e"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":9.39,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"3289e2c28ba0498aeaeff31d10aeee74bbe63829f55079c97d422dc09b9f9cd5","remoteFingerprint":"c27e42ec5f1f22253bbd80df3eb078e19fcd0687a632b3219aa1ddc4480e3c50","remoteDER_SHA256":["c27e42ec5f1f22253bbd80df3eb078e19fcd0687a632b3219aa1ddc4480e3c50"],"statsRemoteFingerprint":"c27e42ec5f1f22253bbd80df3eb078e19fcd0687a632b3219aa1ddc4480e3c50"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"c27e42ec5f1f22253bbd80df3eb078e19fcd0687a632b3219aa1ddc4480e3c50","remoteFingerprint":"3289e2c28ba0498aeaeff31d10aeee74bbe63829f55079c97d422dc09b9f9cd5","remoteDER_SHA256":["3289e2c28ba0498aeaeff31d10aeee74bbe63829f55079c97d422dc09b9f9cd5"],"statsRemoteFingerprint":"3289e2c28ba0498aeaeff31d10aeee74bbe63829f55079c97d422dc09b9f9cd5"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":10.73,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"c1bf308eba2f8ed9dfe475bdd913cb0019b2a27d6fabc48e0ff5e4b19b9308d7","remoteFingerprint":"6d34d823908095955c516df1ee66a6091415e712bf09e307339816c7f69ad6da","remoteDER_SHA256":["6d34d823908095955c516df1ee66a6091415e712bf09e307339816c7f69ad6da"],"statsRemoteFingerprint":"6d34d823908095955c516df1ee66a6091415e712bf09e307339816c7f69ad6da"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"6d34d823908095955c516df1ee66a6091415e712bf09e307339816c7f69ad6da","remoteFingerprint":"c1bf308eba2f8ed9dfe475bdd913cb0019b2a27d6fabc48e0ff5e4b19b9308d7","remoteDER_SHA256":["c1bf308eba2f8ed9dfe475bdd913cb0019b2a27d6fabc48e0ff5e4b19b9308d7"],"statsRemoteFingerprint":"c1bf308eba2f8ed9dfe475bdd913cb0019b2a27d6fabc48e0ff5e4b19b9308d7"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":10.95,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"5d73d5c5c8e6f9990fc8a381950209609a660c5fb7d7387382b224d7d6f0b33d","remoteFingerprint":"1474feb619f8202bf29212c0a88c88c79f4c1f9d599bfd7f3aca6c4d2d1bd5f5","remoteDER_SHA256":["1474feb619f8202bf29212c0a88c88c79f4c1f9d599bfd7f3aca6c4d2d1bd5f5"],"statsRemoteFingerprint":"1474feb619f8202bf29212c0a88c88c79f4c1f9d599bfd7f3aca6c4d2d1bd5f5"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"1474feb619f8202bf29212c0a88c88c79f4c1f9d599bfd7f3aca6c4d2d1bd5f5","remoteFingerprint":"5d73d5c5c8e6f9990fc8a381950209609a660c5fb7d7387382b224d7d6f0b33d","remoteDER_SHA256":["5d73d5c5c8e6f9990fc8a381950209609a660c5fb7d7387382b224d7d6f0b33d"],"statsRemoteFingerprint":"5d73d5c5c8e6f9990fc8a381950209609a660c5fb7d7387382b224d7d6f0b33d"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":12.51,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"0b30ac8f0f4d898a4b74a27aab13db8a7a3b3ee94525fb0034f4f3edf736ef52","remoteFingerprint":"aa1e00192e47be80fa65b8be01312843941c4d3be6f64efd91e542afac4afbea","remoteDER_SHA256":["aa1e00192e47be80fa65b8be01312843941c4d3be6f64efd91e542afac4afbea"],"statsRemoteFingerprint":"aa1e00192e47be80fa65b8be01312843941c4d3be6f64efd91e542afac4afbea"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"aa1e00192e47be80fa65b8be01312843941c4d3be6f64efd91e542afac4afbea","remoteFingerprint":"0b30ac8f0f4d898a4b74a27aab13db8a7a3b3ee94525fb0034f4f3edf736ef52","remoteDER_SHA256":["0b30ac8f0f4d898a4b74a27aab13db8a7a3b3ee94525fb0034f4f3edf736ef52"],"statsRemoteFingerprint":"0b30ac8f0f4d898a4b74a27aab13db8a7a3b3ee94525fb0034f4f3edf736ef52"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":9.53,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"13a4f8f39a980b090929a454b38d7db53497c421ddb334aa7c3d4933d826574e","remoteFingerprint":"206eac60207b4aec75dc81abcd6503a12e73ff10b7dfeafdd024a174057ad038","remoteDER_SHA256":["206eac60207b4aec75dc81abcd6503a12e73ff10b7dfeafdd024a174057ad038"],"statsRemoteFingerprint":"206eac60207b4aec75dc81abcd6503a12e73ff10b7dfeafdd024a174057ad038"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"206eac60207b4aec75dc81abcd6503a12e73ff10b7dfeafdd024a174057ad038","remoteFingerprint":"13a4f8f39a980b090929a454b38d7db53497c421ddb334aa7c3d4933d826574e","remoteDER_SHA256":["13a4f8f39a980b090929a454b38d7db53497c421ddb334aa7c3d4933d826574e"],"statsRemoteFingerprint":"13a4f8f39a980b090929a454b38d7db53497c421ddb334aa7c3d4933d826574e"},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":10.66,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"d579101f795e3e2aff410ad33c4aaacfe9ffd75f5b5322810f28f2a2ba9645c1","remoteFingerprint":"e423dedc1109801b890fd54b41f6fde1ba653e3dd3548df0f45999b955d1833e","remoteDER_SHA256":["e423dedc1109801b890fd54b41f6fde1ba653e3dd3548df0f45999b955d1833e"],"statsRemoteFingerprint":"e423dedc1109801b890fd54b41f6fde1ba653e3dd3548df0f45999b955d1833e"},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"e423dedc1109801b890fd54b41f6fde1ba653e3dd3548df0f45999b955d1833e","remoteFingerprint":"d579101f795e3e2aff410ad33c4aaacfe9ffd75f5b5322810f28f2a2ba9645c1","remoteDER_SHA256":["d579101f795e3e2aff410ad33c4aaacfe9ffd75f5b5322810f28f2a2ba9645c1"],"statsRemoteFingerprint":"d579101f795e3e2aff410ad33c4aaacfe9ffd75f5b5322810f28f2a2ba9645c1"},"cleanupVerified":true,"socketRebound":true}],"failure":null,"relayFixture":"bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB","profileCache":"C:\\t\\cargo-targets\\genet\\rtc-interop","profileCleanup":"automatic approval review blocked recursive deletion; marked profiles retained for reuse","scope":"native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T20:08:38.697Z
+
+```json
+{"schema":1,"gate":"E2h","utc":"2026-11-02T20:08:38.697Z","source":"d644fa0a013364a3d3437b30e98ef3da08dccbb2","node":"v24.11.0","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790","--offerer","native","--cleanup","close"],"expectedCases":8,"completeMatrix":false,"nativeBinarySHA256":"818f9a3e181526e4eddb91c87d3dd8bd30c18c0d845e235e347676d941d2c475","sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"821b677b6bf201647cca780409886e0ef46b2cf6c52eaec4baab36d6febe394b","support/ci/webrtc_interop.mjs":"d9e4512aab42d7f9ac5b05896879c3ba034aadc1d3fd7ab0e4063c8af5f30c46","support/ci/webrtc_interop_peer.js":"a74a1d9b0d42a096f7353f6f6abe11cae7a65a3defbea4579d0001ebf4c4f5b6","components/genet-webrtc/Cargo.toml":"a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265","components/genet-webrtc/src/lib.rs":"c91da3fea1701e320035a78e2f3d0f52edf89925d7ca25e6a2241828944ff279","components/script-runtime-api/webrtc/bootstrap.js":"b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"},"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.74","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[]}],"cases":[{"browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"fail","phase":"negotiation and transfer","error":"application exchange deadline","observed":{"native":{"connected":true,"connectionState":"connected","iceState":"connected","signaling":"stable","remoteSet":true,"received":["browser:text:λ🙂:reliable"],"sent":["reliable:text","reliable:binary","unreliable:text"],"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"errors":[],"refused":["mdns:OperationError","mdns:OperationError"],"remoteProtocols":["udp","udp"],"gatheringErrors":[],"channelStates":["open","open"],"gathering":"complete"},"browser":{"connected":true,"connectionState":"connected","iceState":"connected","signaling":"stable","remoteSet":true,"received":[],"sent":["reliable:text","reliable:binary","unreliable:text"],"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"errors":[],"refused":[],"remoteProtocols":["udp"],"gatheringErrors":[],"channelStates":["open","open"],"gathering":"complete"}},"observedStats":{"native":{"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"6a8fa85e36344a706be82d224623b315292e4bf4663a100f3ecd6c8d61b9e5b0","remoteFingerprint":"97a0a36c1cba12f2751396d81ca02519de1baf1e090cfb863d73a4da849f9498","statsRemoteFingerprint":"97a0a36c1cba12f2751396d81ca02519de1baf1e090cfb863d73a4da849f9498","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false,"pairKeys":{"local":"RTCLocalIceCandidate_candidate:0jVOPigh8q7dJxIMDo0egFFSw35e6eI7","remote":"RTCRemoteIceCandidate_candidate:Dexv58c3KZfFCzkpxvjcAq9vTMvXVcWn"},"candidateKeys":[{"id":"RTCLocalIceCandidate_candidate:0jVOPigh8q7dJxIMDo0egFFSw35e6eI7","type":"local-candidate","candidateType":"host","protocol":"udp"},{"id":"RTCRemoteIceCandidate_candidate:Dexv58c3KZfFCzkpxvjcAq9vTMvXVcWn","type":"remote-candidate","candidateType":"prflx","protocol":"udp"}],"remoteDER_SHA256":["97a0a36c1cba12f2751396d81ca02519de1baf1e090cfb863d73a4da849f9498"]},"browser":{"pair":{"state":"in-progress","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"97a0a36c1cba12f2751396d81ca02519de1baf1e090cfb863d73a4da849f9498","remoteFingerprint":"6a8fa85e36344a706be82d224623b315292e4bf4663a100f3ecd6c8d61b9e5b0","statsRemoteFingerprint":"6a8fa85e36344a706be82d224623b315292e4bf4663a100f3ecd6c8d61b9e5b0","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":false,"pairKeys":{"local":"IykTxN2nh","remote":"I04wLIASk"},"candidateKeys":[{"id":"I04wLIASk","type":"remote-candidate","candidateType":"host","protocol":"udp"},{"id":"IHpiwFWvy","type":"local-candidate","candidateType":"host","protocol":"udp"},{"id":"IIhe5aFNg","type":"local-candidate","candidateType":"host","protocol":"tcp"},{"id":"IykTxN2nh","type":"local-candidate","candidateType":"host","protocol":"udp"}],"remoteDER_SHA256":["6a8fa85e36344a706be82d224623b315292e4bf4663a100f3ecd6c8d61b9e5b0"]}},"trace":[]}],"failure":{"phase":"negotiation and transfer","case":{"browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close"},"error":"application exchange deadline"},"relayFixture":"bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB","profileCache":"C:\\t\\cargo-targets\\genet\\rtc-interop","profileCleanup":"automatic approval review blocked recursive deletion; marked profiles retained for reuse","scope":"native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T20:14:54.498Z
+
+```json
+{"schema":1,"gate":"E2h","utc":"2026-11-02T20:14:54.498Z","source":"d644fa0a013364a3d3437b30e98ef3da08dccbb2","node":"v24.11.0","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790","--offerer","native","--cleanup","close"],"expectedCases":8,"completeMatrix":false,"nativeBinarySHA256":"818f9a3e181526e4eddb91c87d3dd8bd30c18c0d845e235e347676d941d2c475","sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"821b677b6bf201647cca780409886e0ef46b2cf6c52eaec4baab36d6febe394b","support/ci/webrtc_interop.mjs":"d9e4512aab42d7f9ac5b05896879c3ba034aadc1d3fd7ab0e4063c8af5f30c46","support/ci/webrtc_interop_peer.js":"a74a1d9b0d42a096f7353f6f6abe11cae7a65a3defbea4579d0001ebf4c4f5b6","components/genet-webrtc/Cargo.toml":"a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265","components/genet-webrtc/src/lib.rs":"c91da3fea1701e320035a78e2f3d0f52edf89925d7ca25e6a2241828944ff279","components/script-runtime-api/webrtc/bootstrap.js":"b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"},"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.74","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[]},{"browser":"firefox","version":"159.0","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[{"permission":"local-network","before":"prompt","after":"granted","error":null,"reset":"prompt"},{"permission":"loopback-network","before":"prompt","after":"granted","error":null,"reset":"prompt"}]}],"cases":[{"browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":23.42,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"ae56ca60f151c9b0c9217523bee91342acee6f9a7913b37f6142aa4d8e585d5b","remoteFingerprint":"4a6519497f2e6114accd0c5d10a854bdbe09c6f79e7d0395bb6ea9c0d2979f04","remoteDER_SHA256":["4a6519497f2e6114accd0c5d10a854bdbe09c6f79e7d0395bb6ea9c0d2979f04"],"statsRemoteFingerprint":"4a6519497f2e6114accd0c5d10a854bdbe09c6f79e7d0395bb6ea9c0d2979f04","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"4a6519497f2e6114accd0c5d10a854bdbe09c6f79e7d0395bb6ea9c0d2979f04","remoteFingerprint":"ae56ca60f151c9b0c9217523bee91342acee6f9a7913b37f6142aa4d8e585d5b","remoteDER_SHA256":["ae56ca60f151c9b0c9217523bee91342acee6f9a7913b37f6142aa4d8e585d5b"],"statsRemoteFingerprint":"ae56ca60f151c9b0c9217523bee91342acee6f9a7913b37f6142aa4d8e585d5b","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":false},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":15.82,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"b66f27476d26970986e54c50aeb5fe41a8a36b0cbe01e3c21c918c580e6eba4f","remoteFingerprint":"f1de5f1fef51ffc2648ee42f482e46e617e1ce98dd724d4bfcd8ee2ee9ffa6a7","remoteDER_SHA256":["f1de5f1fef51ffc2648ee42f482e46e617e1ce98dd724d4bfcd8ee2ee9ffa6a7"],"statsRemoteFingerprint":"f1de5f1fef51ffc2648ee42f482e46e617e1ce98dd724d4bfcd8ee2ee9ffa6a7","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"f1de5f1fef51ffc2648ee42f482e46e617e1ce98dd724d4bfcd8ee2ee9ffa6a7","remoteFingerprint":"b66f27476d26970986e54c50aeb5fe41a8a36b0cbe01e3c21c918c580e6eba4f","remoteDER_SHA256":["b66f27476d26970986e54c50aeb5fe41a8a36b0cbe01e3c21c918c580e6eba4f"],"statsRemoteFingerprint":"b66f27476d26970986e54c50aeb5fe41a8a36b0cbe01e3c21c918c580e6eba4f","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":false},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":18.28,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"e19704148a1e5bd9aa3e189505fe1728281bd41ae3f5e4f661569bffa5045369","remoteFingerprint":"8e41b4da25336210f5572a01e8fac76346277f0eee36df26b685fa3186d25bce","remoteDER_SHA256":["8e41b4da25336210f5572a01e8fac76346277f0eee36df26b685fa3186d25bce"],"statsRemoteFingerprint":"8e41b4da25336210f5572a01e8fac76346277f0eee36df26b685fa3186d25bce","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"8e41b4da25336210f5572a01e8fac76346277f0eee36df26b685fa3186d25bce","remoteFingerprint":"e19704148a1e5bd9aa3e189505fe1728281bd41ae3f5e4f661569bffa5045369","remoteDER_SHA256":["e19704148a1e5bd9aa3e189505fe1728281bd41ae3f5e4f661569bffa5045369"],"statsRemoteFingerprint":"e19704148a1e5bd9aa3e189505fe1728281bd41ae3f5e4f661569bffa5045369","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":false},"cleanupVerified":true,"socketRebound":true},{"browser":"chrome","engine":"nova","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":13.06,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"0ae6d941c695b1f3b321933e906e83cc02cb38eb09f315c747d049e8ab73d70b","remoteFingerprint":"6949893de553ee9ced3bcc51dc026027c78c5d5f6d10396565375f16e5b4f3d8","remoteDER_SHA256":["6949893de553ee9ced3bcc51dc026027c78c5d5f6d10396565375f16e5b4f3d8"],"statsRemoteFingerprint":"6949893de553ee9ced3bcc51dc026027c78c5d5f6d10396565375f16e5b4f3d8","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"6949893de553ee9ced3bcc51dc026027c78c5d5f6d10396565375f16e5b4f3d8","remoteFingerprint":"0ae6d941c695b1f3b321933e906e83cc02cb38eb09f315c747d049e8ab73d70b","remoteDER_SHA256":["0ae6d941c695b1f3b321933e906e83cc02cb38eb09f315c747d049e8ab73d70b"],"statsRemoteFingerprint":"0ae6d941c695b1f3b321933e906e83cc02cb38eb09f315c747d049e8ab73d70b","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":false},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":13.73,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"f5ece0d6028810bd9e85ba05c66bba298b8a509be81b913d20dc81fca64b762f","remoteFingerprint":"ab1ddc4a148684c9c4498ffe1005103c20276da558c45cc019d1b533c5f1a2b2","remoteDER_SHA256":["ab1ddc4a148684c9c4498ffe1005103c20276da558c45cc019d1b533c5f1a2b2"],"statsRemoteFingerprint":"ab1ddc4a148684c9c4498ffe1005103c20276da558c45cc019d1b533c5f1a2b2","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"ab1ddc4a148684c9c4498ffe1005103c20276da558c45cc019d1b533c5f1a2b2","remoteFingerprint":"f5ece0d6028810bd9e85ba05c66bba298b8a509be81b913d20dc81fca64b762f","remoteDER_SHA256":["f5ece0d6028810bd9e85ba05c66bba298b8a509be81b913d20dc81fca64b762f"],"statsRemoteFingerprint":"f5ece0d6028810bd9e85ba05c66bba298b8a509be81b913d20dc81fca64b762f","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":null},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":14.51,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"6330ed080f37489eeb968504a8dc0ef81fee98586cba42ca87b7272cfec6852c","remoteFingerprint":"d1f53d402b2778ad02cceab91f10bff02fc52f516430dbecc3f2c211e36790b7","remoteDER_SHA256":["d1f53d402b2778ad02cceab91f10bff02fc52f516430dbecc3f2c211e36790b7"],"statsRemoteFingerprint":"d1f53d402b2778ad02cceab91f10bff02fc52f516430dbecc3f2c211e36790b7","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"d1f53d402b2778ad02cceab91f10bff02fc52f516430dbecc3f2c211e36790b7","remoteFingerprint":"6330ed080f37489eeb968504a8dc0ef81fee98586cba42ca87b7272cfec6852c","remoteDER_SHA256":["6330ed080f37489eeb968504a8dc0ef81fee98586cba42ca87b7272cfec6852c"],"statsRemoteFingerprint":"6330ed080f37489eeb968504a8dc0ef81fee98586cba42ca87b7272cfec6852c","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":null},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":10.44,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":["mdns:OperationError","mdns:OperationError","mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"70de621ac27e02b6b7ce105d8b01b46e2c2e724a3dac992eeb8d21155666dcdb","remoteFingerprint":"bfacfa5bf4bed0ed92ca04c0aeb5be6c9b8f3a0ed0c2a3a383e2229a56a9b558","remoteDER_SHA256":["bfacfa5bf4bed0ed92ca04c0aeb5be6c9b8f3a0ed0c2a3a383e2229a56a9b558"],"statsRemoteFingerprint":"bfacfa5bf4bed0ed92ca04c0aeb5be6c9b8f3a0ed0c2a3a383e2229a56a9b558","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"bfacfa5bf4bed0ed92ca04c0aeb5be6c9b8f3a0ed0c2a3a383e2229a56a9b558","remoteFingerprint":"70de621ac27e02b6b7ce105d8b01b46e2c2e724a3dac992eeb8d21155666dcdb","remoteDER_SHA256":["70de621ac27e02b6b7ce105d8b01b46e2c2e724a3dac992eeb8d21155666dcdb"],"statsRemoteFingerprint":"70de621ac27e02b6b7ce105d8b01b46e2c2e724a3dac992eeb8d21155666dcdb","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":null},"cleanupVerified":true,"socketRebound":true},{"browser":"firefox","engine":"nova","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":11.31,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"67c0c320f67f8782647f9f207f6bde2a0e56fbb34fe69965e08b2ddd3e201e1e","remoteFingerprint":"6a33d48b8a8fe86764aa7fa6c41ab4b501099b29e1d593a22e0812a98626b6f8","remoteDER_SHA256":["6a33d48b8a8fe86764aa7fa6c41ab4b501099b29e1d593a22e0812a98626b6f8"],"statsRemoteFingerprint":"6a33d48b8a8fe86764aa7fa6c41ab4b501099b29e1d593a22e0812a98626b6f8","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"reliable","ordered":true,"maxRetransmits":null},{"label":"unreliable","ordered":false,"maxRetransmits":0}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"relay","remote":"relay","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"6a33d48b8a8fe86764aa7fa6c41ab4b501099b29e1d593a22e0812a98626b6f8","remoteFingerprint":"67c0c320f67f8782647f9f207f6bde2a0e56fbb34fe69965e08b2ddd3e201e1e","remoteDER_SHA256":["67c0c320f67f8782647f9f207f6bde2a0e56fbb34fe69965e08b2ddd3e201e1e"],"statsRemoteFingerprint":"67c0c320f67f8782647f9f207f6bde2a0e56fbb34fe69965e08b2ddd3e201e1e","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":null},"cleanupVerified":true,"socketRebound":true}],"failure":null,"relayFixture":"bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB","profileCache":"C:\\t\\cargo-targets\\genet\\rtc-interop","profileCleanup":"automatic approval review blocked recursive deletion; marked profiles retained for reuse","scope":"native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"}
+```
+
+
+## E2h automated browser interoperability - 2026-11-02T20:17:02.614Z
+
+```json
+{"schema":1,"gate":"E2h","utc":"2026-11-02T20:17:02.614Z","source":"73a2f0ae4be1e9da10b3acc410d910aa355559cb","node":"v24.11.0","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790","--browser","chrome","--engine","boa","--route","direct","--offerer","native","--cleanup","close"],"expectedCases":1,"completeMatrix":false,"nativeBinarySHA256":"5cc71b425cf5a14bfc6f983c0e683b88d7c2d9ef185482d23864d5092e671406","sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"821b677b6bf201647cca780409886e0ef46b2cf6c52eaec4baab36d6febe394b","support/ci/webrtc_interop.mjs":"d9d5d004eb0aad1b93a12481476a710cdb73ca7679333ccdfbd5317443cca183","support/ci/webrtc_interop_peer.js":"a74a1d9b0d42a096f7353f6f6abe11cae7a65a3defbea4579d0001ebf4c4f5b6","components/genet-webrtc/Cargo.toml":"a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265","components/genet-webrtc/src/lib.rs":"c89452631672d4c12848182ed48f3cb6c9b01951ca77efb689b1952d1adea5bf","components/script-runtime-api/webrtc/bootstrap.js":"b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"},"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.74","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[]}],"cases":[{"browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":15.51,"native":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":["mdns:OperationError","mdns:OperationError"],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"prflx","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"f1a99efc4c58a8cbc1245f4cace5db03bc6dd4993590dcdf9808a746e281a983","remoteFingerprint":"51284c9f4329c83bad2daa7f99b5eeca38caf6c67ebcfb6ecbef885c6b8c9f9e","remoteDER_SHA256":["51284c9f4329c83bad2daa7f99b5eeca38caf6c67ebcfb6ecbef885c6b8c9f9e"],"statsRemoteFingerprint":"51284c9f4329c83bad2daa7f99b5eeca38caf6c67ebcfb6ecbef885c6b8c9f9e","remoteAddressesRedacted":true,"peerReflexiveInRemoteList":false},"browserPeer":{"connected":true,"textMessagesVerified":2,"binaryBytesVerified":48000,"modes":[{"label":"unreliable","ordered":false,"maxRetransmits":0},{"label":"reliable","ordered":true,"maxRetransmits":null}],"refused":[],"gatheringErrors":[],"pair":{"state":"succeeded","nominated":true,"local":"host","remote":"host","localProtocol":"udp","remoteProtocol":"udp"},"localFingerprint":"51284c9f4329c83bad2daa7f99b5eeca38caf6c67ebcfb6ecbef885c6b8c9f9e","remoteFingerprint":"f1a99efc4c58a8cbc1245f4cace5db03bc6dd4993590dcdf9808a746e281a983","remoteDER_SHA256":["f1a99efc4c58a8cbc1245f4cace5db03bc6dd4993590dcdf9808a746e281a983"],"statsRemoteFingerprint":"f1a99efc4c58a8cbc1245f4cace5db03bc6dd4993590dcdf9808a746e281a983","remoteAddressesRedacted":false,"peerReflexiveInRemoteList":false},"cleanupVerified":true,"socketRebound":true}],"failure":null,"relayFixture":"bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB","profileCache":"C:\\t\\cargo-targets\\genet\\rtc-interop","profileCleanup":"automatic approval review blocked recursive deletion; marked profiles retained for reuse","scope":"native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance"}
+```
+
+
+## 2026-11-02: E2h final receiving checks
+
+```json
+{"gate":"E2h-final-checks","source":"73a2f0ae4be1e9da10b3acc410d910aa355559cb","utc":"2026-11-02T20:15:38.389695+00:00","environment":{"CARGO_TARGET_DIR":"C:\\t\\cargo-targets\\genet","CARGO_BUILD_BUILD_DIR":"C:\\t\\cargo-targets\\genet\\build","CARGO_PROFILE_DEV_DEBUG":"0"},"rustc":"rustc 1.99.1 (58cf8f9c3 2026-10-13)","lockSHA256Before":"0a42b50cb56df741ad34acc18be60070a2eb3244a3a50d64260e7e67e9754f9f","checks":[{"name":"ordinary native","command":["cargo","test","-p","genet-webrtc","--test","browser","--locked","--offline","-j","1"],"exit":0,"seconds":27.08,"summary":["    Finished `test` profile [unoptimized] target(s) in 8.81s","test result: ok. 16 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 17.03s"]},{"name":"controlled native TURN","command":["cargo","test","-p","genet-webrtc","--test","browser","--locked","--offline","-j","1","--","--ignored","--test-threads=1"],"exit":0,"seconds":25.55,"summary":["    Finished `test` profile [unoptimized] target(s) in 3.12s","test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 22.25s"]},{"name":"strict native library and fixture Clippy","command":["cargo","clippy","-p","genet-webrtc","--lib","--example","interop_host","--no-deps","--locked","--offline","-j","1","--","-D","warnings"],"exit":0,"seconds":4.52,"summary":["    Finished `dev` profile [unoptimized] target(s) in 4.22s"]},{"name":"native fixture build","command":["cargo","build","-p","genet-webrtc","--example","interop_host","--locked","--offline","-j","1"],"exit":0,"seconds":8.86,"summary":["    Finished `dev` profile [unoptimized] target(s) in 8.71s"]},{"name":"cold startup deadline smoke","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790","--browser","chrome","--engine","boa","--route","direct","--offerer","native","--cleanup","close"],"exit":0,"seconds":18.27,"summary":["E2h 1/1 passed; compact receipt appended"]},{"name":"WPT receiving runner build","command":["cargo","build","-p","genet-wpt","--no-default-features","--features","webrtc","--locked","--offline","-j","1"],"exit":0,"seconds":65.89,"summary":["    Finished `dev` profile [unoptimized] target(s) in 1m 05s"]},{"name":"Ortet scripted Vano all targets","command":["cargo","check","-p","ortet","--features","scripted-nova","--all-targets","--locked","--offline","-j","1"],"exit":0,"seconds":16.81,"summary":["    Finished `dev` profile [unoptimized] target(s) in 16.59s"]}],"lockSHA256After":"0a42b50cb56df741ad34acc18be60070a2eb3244a3a50d64260e7e67e9754f9f","nativeBinarySHA256":"5cc71b425cf5a14bfc6f983c0e683b88d7c2d9ef185482d23864d5092e671406","wptBinarySHA256":"2ac84674fa2775992efe75059bd522f73ee478b6ed25ba8c4396906dd42dee5b"}
+```
+
+
+## 2026-11-02: final selected WPT identities
+
+```json
+{"gate":"E2h-selected-WPT","utc":"2026-11-02T20:18:51.068127+00:00","source":"73a2f0ae4be1e9da10b3acc410d910aa355559cb","binarySHA256":"2ac84674fa2775992efe75059bd522f73ee478b6ed25ba8c4396906dd42dee5b","lockSHA256":"0a42b50cb56df741ad34acc18be60070a2eb3244a3a50d64260e7e67e9754f9f","historicalComparisonSource":"835dca0f37cf7efbd6d791f94752a2e40733c2fa","historicalComparisonBinarySHA256":"246f0e49876fd7669bba40c5dc2c5663e3c82d0bc7b27f780066893f5dff97b1","outcomes":[{"detail":null,"failures":[],"reason":null,"status":"pass","subtests":[{"name":"RTCPeerConnection.length","status":"pass"},{"name":"new RTCPeerConnection()","status":"pass"},{"name":"new RTCPeerConnection(null)","status":"pass"},{"name":"new RTCPeerConnection(undefined)","status":"pass"},{"name":"new RTCPeerConnection({})","status":"pass"},{"name":"new RTCPeerConnection({ certificates: null })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: undefined })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: [] })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: [null] })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: [undefined] })","status":"pass"},{"name":"new RTCPeerConnection({ iceCandidatePoolSize: toNumberThrows })","status":"pass"},{"name":"localDescription initial value","status":"pass"},{"name":"currentLocalDescription initial value","status":"pass"},{"name":"pendingLocalDescription initial value","status":"pass"},{"name":"remoteDescription initial value","status":"pass"},{"name":"currentRemoteDescription initial value","status":"pass"},{"name":"pendingRemoteDescription initial value","status":"pass"},{"name":"signalingState initial value","status":"pass"},{"name":"iceGatheringState initial value","status":"pass"},{"name":"iceConnectionState initial value","status":"pass"},{"name":"connectionState initial value","status":"pass"},{"name":"canTrickleIceCandidates initial value","status":"pass"}],"subtests_passed":22,"subtests_total":22,"engine":"boa","test":"webrtc/RTCPeerConnection-constructor.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCPeerConnection-constructor.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-constructor.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","boa","--drive-deadline","5"],"seconds":7.98},{"detail":null,"failures":[],"reason":null,"status":"pass","subtests":[{"name":"new RTCIceCandidate()","status":"pass"},{"name":"new RTCIceCandidate({})","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with manually filled default values","status":"pass"},{"name":"new RTCIceCandidate({ sdpMid: null, sdpMLineIndex: null })","status":"pass"},{"name":"new RTCIceCandidate({ candidate: '' })","status":"pass"},{"name":"new RTCIceCandidate({ candidate: null })","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with valid candidate string only","status":"pass"},{"name":"new RTCIceCandidate({ sdpMid: 'audio' })","status":"pass"},{"name":"new RTCIceCandidate({ sdpMLineIndex: 0 })","status":"pass"},{"name":"new RTCIceCandidate({ sdpMid: 'audio', sdpMLineIndex: 0 })","status":"pass"},{"name":"new RTCIceCandidate({ candidate: '', sdpMid: 'audio' }","status":"pass"},{"name":"new RTCIceCandidate({ candidate: null, sdpMLineIndex: 0 }","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with valid candidate string and sdpMid","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with invalid candidate string and sdpMid","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for most fields","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for most fields, tcp candidate","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for all fields","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for all fields, tcp candidate","status":"pass"},{"name":"new RTCIceCandidate({ relayProtocol, url }) cloned vs signaled","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with invalid sdpMid","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with invalid sdpMLineIndex","status":"pass"}],"subtests_passed":21,"subtests_total":21,"engine":"boa","test":"webrtc/RTCIceCandidate-constructor.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCIceCandidate-constructor.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCIceCandidate-constructor.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","boa","--drive-deadline","5"],"seconds":7.14},{"detail":null,"failures":["        [1] addTrack, then creating datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"","        [1] addTrack, then creating datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"","        [1] Renegotiation with audio/video and datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"","        [1] addTrack, then creating negotiated datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"","        [1] addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\"","        [1] Renegotiation with audio/video and negotiated datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: cannot convert 'null' or 'undefined' to object\""],"reason":null,"status":"fail","subtests":[{"name":"createDataChannel with no argument should throw TypeError","status":"pass"},{"name":"createDataChannel with closed connection should throw InvalidStateError","status":"pass"},{"name":"createDataChannel attribute default values","status":"pass"},{"name":"createDataChannel with provided parameters should initialize attributes to provided values","status":"pass"},{"name":"createDataChannel with label \"foo\" should succeed","status":"pass"},{"name":"createDataChannel with label null should succeed","status":"pass"},{"name":"createDataChannel with label undefined should succeed","status":"pass"},{"name":"createDataChannel with label lone surrogate should succeed","status":"pass"},{"name":"createDataChannel with ordered false should succeed","status":"pass"},{"name":"createDataChannel with ordered null/undefined should succeed","status":"pass"},{"name":"createDataChannel with maxPacketLifeTime 0 should succeed","status":"pass"},{"name":"createDataChannel with maxRetransmits 0 should succeed","status":"pass"},{"name":"createDataChannel with both maxPacketLifeTime and maxRetransmits undefined should succeed","status":"pass"},{"name":"createDataChannel with both maxPacketLifeTime and maxRetransmits should throw TypeError","status":"pass"},{"name":"createDataChannel with protocol \"foo\" should succeed","status":"pass"},{"name":"createDataChannel with protocol null should succeed","status":"pass"},{"name":"createDataChannel with protocol undefined should succeed","status":"pass"},{"name":"createDataChannel with protocol lone surrogate should succeed","status":"pass"},{"name":"createDataChannel with id 0 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 1 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 65534 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 65535 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 0 and negotiated true should succeed, and set the channel's id","status":"pass"},{"name":"createDataChannel with id 1 and negotiated true should succeed, and set the channel's id","status":"pass"},{"name":"createDataChannel with id 65534 and negotiated true should succeed, and set the channel's id","status":"pass"},{"name":"createDataChannel with id -1 and negotiated not set should throw TypeError","status":"pass"},{"name":"createDataChannel with id 65536 and negotiated not set should throw TypeError","status":"pass"},{"name":"createDataChannel with id -1 should throw TypeError","status":"pass"},{"name":"createDataChannel with id 65535 should throw TypeError","status":"pass"},{"name":"createDataChannel with id 65536 should throw TypeError","status":"pass"},{"name":"createDataChannel with too long label should throw TypeError","status":"pass"},{"name":"createDataChannel with too long label (2 byte unicode) should throw TypeError","status":"pass"},{"name":"createDataChannel with same label used twice should not throw","status":"pass"},{"name":"createDataChannel with negotiated true and id should succeed","status":"pass"},{"name":"createDataChannel with too long protocol should throw TypeError","status":"pass"},{"name":"createDataChannel with too long protocol (2 byte unicode) should throw TypeError","status":"pass"},{"name":"createDataChannel with maximum length label and protocol should succeed","status":"pass"},{"name":"createDataChannel with negotiated false should succeed","status":"pass"},{"name":"createDataChannel with negotiated false and id 42 should ignore the id","status":"pass"},{"name":"createDataChannel with negotiated true and id not defined should throw TypeError","status":"pass"},{"name":"Channels created (after SCTP connected) should have id assigned","status":"pass"},{"name":"Reusing a data channel id that is in use should throw OperationError","status":"pass"},{"name":"Reusing a data channel id that is in use (after setRemoteDescription) should throw OperationError","status":"pass"},{"name":"Reusing a data channel id that is in use (after setRemoteDescription, negotiated via DCEP) should throw OperationError","status":"pass"},{"name":"New datachannel should be in the connecting state after creation (after connection establishment)","status":"pass"},{"name":"addTrack, then creating datachannel, should negotiate properly","status":"fail"},{"name":"addTrack, then creating datachannel, should negotiate properly when max-bundle is used","status":"fail"},{"name":"Renegotiation with audio/video and datachannel should work properly","status":"fail"},{"name":"New negotiated datachannel should be in the connecting state after creation (after connection establishment)","status":"pass"},{"name":"addTrack, then creating negotiated datachannel, should negotiate properly","status":"fail"},{"name":"addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used","status":"fail"},{"name":"Renegotiation with audio/video and negotiated datachannel should work properly","status":"fail"}],"subtests_passed":46,"subtests_total":52,"engine":"boa","test":"webrtc/RTCPeerConnection-createDataChannel.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCPeerConnection-createDataChannel.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-createDataChannel.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","boa","--drive-deadline","5"],"seconds":9.91},{"detail":null,"failures":[],"reason":null,"status":"pass","subtests":[{"name":"RTCPeerConnectionIceErrorEvent constructed from init parameters","status":"pass"}],"subtests_passed":1,"subtests_total":1,"engine":"boa","test":"webrtc/RTCPeerConnectionIceErrorEvent.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCPeerConnectionIceErrorEvent.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnectionIceErrorEvent.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","boa","--drive-deadline","5"],"seconds":7.49},{"detail":null,"failures":[],"reason":null,"status":"pass","subtests":[{"name":"RTCPeerConnection.length","status":"pass"},{"name":"new RTCPeerConnection()","status":"pass"},{"name":"new RTCPeerConnection(null)","status":"pass"},{"name":"new RTCPeerConnection(undefined)","status":"pass"},{"name":"new RTCPeerConnection({})","status":"pass"},{"name":"new RTCPeerConnection({ certificates: null })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: undefined })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: [] })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: [null] })","status":"pass"},{"name":"new RTCPeerConnection({ certificates: [undefined] })","status":"pass"},{"name":"new RTCPeerConnection({ iceCandidatePoolSize: toNumberThrows })","status":"pass"},{"name":"localDescription initial value","status":"pass"},{"name":"currentLocalDescription initial value","status":"pass"},{"name":"pendingLocalDescription initial value","status":"pass"},{"name":"remoteDescription initial value","status":"pass"},{"name":"currentRemoteDescription initial value","status":"pass"},{"name":"pendingRemoteDescription initial value","status":"pass"},{"name":"signalingState initial value","status":"pass"},{"name":"iceGatheringState initial value","status":"pass"},{"name":"iceConnectionState initial value","status":"pass"},{"name":"connectionState initial value","status":"pass"},{"name":"canTrickleIceCandidates initial value","status":"pass"}],"subtests_passed":22,"subtests_total":22,"engine":"nova","test":"webrtc/RTCPeerConnection-constructor.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCPeerConnection-constructor.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-constructor.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","nova","--drive-deadline","5"],"seconds":3.39},{"detail":null,"failures":[],"reason":null,"status":"pass","subtests":[{"name":"new RTCIceCandidate()","status":"pass"},{"name":"new RTCIceCandidate({})","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with manually filled default values","status":"pass"},{"name":"new RTCIceCandidate({ sdpMid: null, sdpMLineIndex: null })","status":"pass"},{"name":"new RTCIceCandidate({ candidate: '' })","status":"pass"},{"name":"new RTCIceCandidate({ candidate: null })","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with valid candidate string only","status":"pass"},{"name":"new RTCIceCandidate({ sdpMid: 'audio' })","status":"pass"},{"name":"new RTCIceCandidate({ sdpMLineIndex: 0 })","status":"pass"},{"name":"new RTCIceCandidate({ sdpMid: 'audio', sdpMLineIndex: 0 })","status":"pass"},{"name":"new RTCIceCandidate({ candidate: '', sdpMid: 'audio' }","status":"pass"},{"name":"new RTCIceCandidate({ candidate: null, sdpMLineIndex: 0 }","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with valid candidate string and sdpMid","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with invalid candidate string and sdpMid","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for most fields","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for most fields, tcp candidate","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for all fields","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with nondefault values for all fields, tcp candidate","status":"pass"},{"name":"new RTCIceCandidate({ relayProtocol, url }) cloned vs signaled","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with invalid sdpMid","status":"pass"},{"name":"new RTCIceCandidate({ ... }) with invalid sdpMLineIndex","status":"pass"}],"subtests_passed":21,"subtests_total":21,"engine":"nova","test":"webrtc/RTCIceCandidate-constructor.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCIceCandidate-constructor.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCIceCandidate-constructor.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","nova","--drive-deadline","5"],"seconds":3.53},{"detail":null,"failures":["        [1] addTrack, then creating datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"","        [1] addTrack, then creating datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"","        [1] Renegotiation with audio/video and datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"","        [1] addTrack, then creating negotiated datachannel, should negotiate properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"","        [1] addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\"","        [1] Renegotiation with audio/video and negotiated datachannel should work properly promise_test: Unhandled rejection with value: object \"TypeError: Cannot read property 'getUserMedia' of undefined.\""],"reason":null,"status":"fail","subtests":[{"name":"createDataChannel with no argument should throw TypeError","status":"pass"},{"name":"createDataChannel with closed connection should throw InvalidStateError","status":"pass"},{"name":"createDataChannel attribute default values","status":"pass"},{"name":"createDataChannel with provided parameters should initialize attributes to provided values","status":"pass"},{"name":"createDataChannel with label \"foo\" should succeed","status":"pass"},{"name":"createDataChannel with label null should succeed","status":"pass"},{"name":"createDataChannel with label undefined should succeed","status":"pass"},{"name":"createDataChannel with label lone surrogate should succeed","status":"pass"},{"name":"createDataChannel with ordered false should succeed","status":"pass"},{"name":"createDataChannel with ordered null/undefined should succeed","status":"pass"},{"name":"createDataChannel with maxPacketLifeTime 0 should succeed","status":"pass"},{"name":"createDataChannel with maxRetransmits 0 should succeed","status":"pass"},{"name":"createDataChannel with both maxPacketLifeTime and maxRetransmits undefined should succeed","status":"pass"},{"name":"createDataChannel with both maxPacketLifeTime and maxRetransmits should throw TypeError","status":"pass"},{"name":"createDataChannel with protocol \"foo\" should succeed","status":"pass"},{"name":"createDataChannel with protocol null should succeed","status":"pass"},{"name":"createDataChannel with protocol undefined should succeed","status":"pass"},{"name":"createDataChannel with protocol lone surrogate should succeed","status":"pass"},{"name":"createDataChannel with id 0 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 1 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 65534 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 65535 and negotiated not set should succeed, but not set the channel's id","status":"pass"},{"name":"createDataChannel with id 0 and negotiated true should succeed, and set the channel's id","status":"pass"},{"name":"createDataChannel with id 1 and negotiated true should succeed, and set the channel's id","status":"pass"},{"name":"createDataChannel with id 65534 and negotiated true should succeed, and set the channel's id","status":"pass"},{"name":"createDataChannel with id -1 and negotiated not set should throw TypeError","status":"pass"},{"name":"createDataChannel with id 65536 and negotiated not set should throw TypeError","status":"pass"},{"name":"createDataChannel with id -1 should throw TypeError","status":"pass"},{"name":"createDataChannel with id 65535 should throw TypeError","status":"pass"},{"name":"createDataChannel with id 65536 should throw TypeError","status":"pass"},{"name":"createDataChannel with too long label should throw TypeError","status":"pass"},{"name":"createDataChannel with too long label (2 byte unicode) should throw TypeError","status":"pass"},{"name":"createDataChannel with same label used twice should not throw","status":"pass"},{"name":"createDataChannel with negotiated true and id should succeed","status":"pass"},{"name":"createDataChannel with too long protocol should throw TypeError","status":"pass"},{"name":"createDataChannel with too long protocol (2 byte unicode) should throw TypeError","status":"pass"},{"name":"createDataChannel with maximum length label and protocol should succeed","status":"pass"},{"name":"createDataChannel with negotiated false should succeed","status":"pass"},{"name":"createDataChannel with negotiated false and id 42 should ignore the id","status":"pass"},{"name":"createDataChannel with negotiated true and id not defined should throw TypeError","status":"pass"},{"name":"Channels created (after SCTP connected) should have id assigned","status":"pass"},{"name":"Reusing a data channel id that is in use should throw OperationError","status":"pass"},{"name":"Reusing a data channel id that is in use (after setRemoteDescription) should throw OperationError","status":"pass"},{"name":"Reusing a data channel id that is in use (after setRemoteDescription, negotiated via DCEP) should throw OperationError","status":"pass"},{"name":"New datachannel should be in the connecting state after creation (after connection establishment)","status":"pass"},{"name":"addTrack, then creating datachannel, should negotiate properly","status":"fail"},{"name":"addTrack, then creating datachannel, should negotiate properly when max-bundle is used","status":"fail"},{"name":"Renegotiation with audio/video and datachannel should work properly","status":"fail"},{"name":"New negotiated datachannel should be in the connecting state after creation (after connection establishment)","status":"pass"},{"name":"addTrack, then creating negotiated datachannel, should negotiate properly","status":"fail"},{"name":"addTrack, then creating negotiated datachannel, should negotiate properly when max-bundle is used","status":"fail"},{"name":"Renegotiation with audio/video and negotiated datachannel should work properly","status":"fail"}],"subtests_passed":46,"subtests_total":52,"engine":"nova","test":"webrtc/RTCPeerConnection-createDataChannel.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCPeerConnection-createDataChannel.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnection-createDataChannel.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","nova","--drive-deadline","5"],"seconds":6.08},{"detail":null,"failures":[],"reason":null,"status":"pass","subtests":[{"name":"RTCPeerConnectionIceErrorEvent constructed from init parameters","status":"pass"}],"subtests_passed":1,"subtests_total":1,"engine":"nova","test":"webrtc/RTCPeerConnectionIceErrorEvent.html","exit_code":0,"command":["C:\\t\\cargo-targets\\genet\\debug\\genet-wpt.exe","testharness-one","webrtc/RTCPeerConnectionIceErrorEvent.html","--test-path","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests\\webrtc\\RTCPeerConnectionIceErrorEvent.html","--tests-root","C:\\Users\\mark_\\Code\\repos\\genet\\tests\\wpt\\tests","--engine","nova","--drive-deadline","5"],"seconds":2.94}],"matchedCases":[{"engine":"boa","test":"webrtc/RTCPeerConnection-constructor.html","beforeCases":22,"afterCases":22,"missing":[],"added":[],"changed":[]},{"engine":"boa","test":"webrtc/RTCIceCandidate-constructor.html","beforeCases":21,"afterCases":21,"missing":[],"added":[],"changed":[]},{"engine":"boa","test":"webrtc/RTCPeerConnection-createDataChannel.html","beforeCases":52,"afterCases":52,"missing":[],"added":[],"changed":[]},{"engine":"nova","test":"webrtc/RTCPeerConnection-constructor.html","beforeCases":22,"afterCases":22,"missing":[],"added":[],"changed":[]},{"engine":"nova","test":"webrtc/RTCIceCandidate-constructor.html","beforeCases":21,"afterCases":21,"missing":[],"added":[],"changed":[]},{"engine":"nova","test":"webrtc/RTCPeerConnection-createDataChannel.html","beforeCases":52,"afterCases":52,"missing":[],"added":[],"changed":[]}],"sourceSHA256":{"tests/wpt/tests/resources/testharness.js":"d2399236c2a09c429804ff2299ad6629e17e2b53f17a74dd341e936adb11ae3e","tests/wpt/tests/webrtc/RTCPeerConnection-helper.js":"9709abd9c5a024c8bdbedd1cfab8a8f2c47b9358a987905cedc2a770ded69d2d","tests/wpt/tests/webrtc/RTCPeerConnection-constructor.html":"31cf6a8f9f9d9c36d4a00a6ca1c224b493b6ee39b848dc4e380ce5b96988d074","tests/wpt/tests/webrtc/RTCIceCandidate-constructor.html":"9bab537b6f3618bda3410d37bba9d63bbdec6116ebe9958759e67fb9fe7d5449","tests/wpt/tests/webrtc/RTCPeerConnection-createDataChannel.html":"0356665f81d466804a4fd06d73075cc03767a5b4944e3f7d62e1da002c49c71f","tests/wpt/tests/webrtc/RTCPeerConnectionIceErrorEvent.html":"4232b52ef4fbd19f75bf86164c9750ab00fadafcb0d9bf21b7e27ffb40ee25c3"},"scope":"Same archived selected source cases, not a new whole-manifest baseline or a WPT gain attribution; six media assertions per engine remain failed.","failure":null}
+```
+
+
+## 2026-11-02: E2h final source, boundaries and cleanup audit
+
+The full 32-case transport matrix passed with installed headed Chrome 156.0.8078.74 and Firefox 159.0, both engines, both offerer roles, direct/forced TURN and close/navigation. Every case verified both text messages and the 48,000-byte binary in each direction, channel modes, selected UDP route, remote certificate, wrapper revocation and actual socket ownership/rebind. Firefox's origin-scoped local/loopback-network grants were reset; no camera/microphone permission or WebRTC preference override was used.
+
+Final review then corrected observation privacy. Eight targeted cases across both browsers/engines/routes pass with remote stats addresses null, remote URL/relayProtocol absent, and no peer-reflexive candidates in the public remote-candidate list. The record carries working-file hashes because that run preceded its source commit. A final cold-start case, 16 ordinary native tests, two explicitly selected coturn tests, strict native library/fixture Clippy, WPT receiving runner build and Ortet all-target receiving check pass at the final committed source. The selected historical WPT case identities/results are unchanged: 89/95 plus the separate ICE-error constructor 1/1 per engine. Six media assertions per engine remain failed. This is a preserved selected case map, not full WebRTC/media conformance or a newly measured WPT gain.
+
+Failed exploratory records remain above. The first fixture used Windows' small executable-entry stack; it now uses an 8 MiB runtime thread. The browser/schema/ownership probes exposed candidate stats namespace gaps, an undriven multicast route, Firefox launcher/window handling and navigation readiness. Firefox's direct WSL server path timed out in this environment; the final bounded Windows UDP front end forwards unchanged packets to real coturn using distinct backend sockets. Gathering errors are retained independently of successful candidate pairs. A later startup-inclusive transfer deadline failed once; its unchanged retry passed all eight cases, and startup and transfer now have separate bounded deadlines. One strict Clippy run refused a nested if in the privacy repair; the final let-chain passes.
+
+Earlier exploratory `profilesRemoved: true` fields were optimistic and incorrect: automatic approval review blocked recursive deletion, including the verified literal-path retry. They are corrected by this appended audit, not overwritten. Both generated profiles remain in the stable target cache, with all browser/native/fixture owners stopped. The task-owned foreground coturn process was verified before SIGINT; its automatic service remains inactive and disabled. No new isolated Cargo target, Cargo home or worktree was created. DNS/mDNS resolution, TCP/TLS, restart/server replacement, public/cross-machine deployment, browser-guest, media and application-carrier cutover retain separate gates.
+
+The ignored root lock is reconstructed from the full archived receiving lock plus this delta; only the Murm source revision differs. No package or dependency edge changed.
+
+```diff
+--- archived full receiving lock
++++ E2h receiving lock
+@@ -4567,7 +4567,7 @@
+ [[package]]
+ name = "murm-rtc"
+ version = "0.1.0"
+-source = "git+https://github.com/merely-made/murm.git?rev=c58b70421d31ed9f2288dc44152dcb6d719552a9#c58b70421d31ed9f2288dc44152dcb6d719552a9"
++source = "git+https://github.com/merely-made/murm.git?rev=01449d2822a8219f7531b2ea8ed59989535a86eb#01449d2822a8219f7531b2ea8ed59989535a86eb"
+ dependencies = [
+  "bytes",
+  "rtc",
+```
+
+```json
+{"utc":"2026-11-02T20:20:58.383030+00:00","source":"73a2f0ae4be1e9da10b3acc410d910aa355559cb","supplier":"01449d2822a8219f7531b2ea8ed59989535a86eb","core":"70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38","fullMatrix":{"source":"d644fa0a013364a3d3437b30e98ef3da08dccbb2","utc":"2026-11-02T20:03:54.787Z","uniqueCases":32,"nativeBinarySHA256":"eee9ff809eb71d647a9679881b494dfebadb05d8642c9e2c5536a88b8b041536"},"privacyFollowup":{"recordedHead":"d644fa0a013364a3d3437b30e98ef3da08dccbb2","utc":"2026-11-02T20:14:54.498Z","passingCases":8,"workingSourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"821b677b6bf201647cca780409886e0ef46b2cf6c52eaec4baab36d6febe394b","support/ci/webrtc_interop.mjs":"d9e4512aab42d7f9ac5b05896879c3ba034aadc1d3fd7ab0e4063c8af5f30c46","support/ci/webrtc_interop_peer.js":"a74a1d9b0d42a096f7353f6f6abe11cae7a65a3defbea4579d0001ebf4c4f5b6","components/genet-webrtc/Cargo.toml":"a0c7b33c3e49b10ba972f67c1169c674046cb6c5e717caa9f6ed2d1c0e3a4265","components/genet-webrtc/src/lib.rs":"c91da3fea1701e320035a78e2f3d0f52edf89925d7ca25e6a2241828944ff279","components/script-runtime-api/webrtc/bootstrap.js":"b16a9c2cc771628ab6800492789278dec6fccc524c8308e2d03272f3b77c1bdd"},"note":"Privacy working bytes were promoted in 73a2f0ae4be; final changes collapse a nested if, clarify a network comment and start the transfer deadline after startup. Final native/WPT/Clippy/Ortet checks and cold-start smoke use that committed source."},"lockSHA256":"0a42b50cb56df741ad34acc18be60070a2eb3244a3a50d64260e7e67e9754f9f","localCargoOverrides":"No task-local patch, Cargo home or target override beyond the recorded stable target/build paths. Existing repository configuration retained.","nativeFixtureSHA256":"821b677b6bf201647cca780409886e0ef46b2cf6c52eaec4baab36d6febe394b","coturnFixtureSHA256":"745ad015cf1c9c8703698794a7c43f8da92c622c5f6d1f1812d3ad7282db9875","ownedProcessesAfterStop":{"nativePeer":0,"profileBrowsers":0,"coturn":0,"coturnService":"inactive and disabled"},"retainedProfileCache":{"owner":"Genet RTC browser interoperability fixture","path":"C:\\t\\cargo-targets\\genet\\rtc-interop","reason":"automatic approval review rejected verified recursive deletion as blocked by policy; marker-owned profiles retained for reuse","chromeBytes":99462130,"firefoxBytes":109002473},"newIsolatedTargetCargoHomeOrWorktree":false}
+```
+
+Partial independent coturn observations (bounded summary only):
+
+```json
+{"coturnObservedPartialWindow":{"scope":"Partial stdout observations across exploratory and final runs; output was truncated, so these are not total or per-matrix counts.","allocations":35,"permissions":107,"refreshes":215,"lifetimeZero":36,"selectedLines":["5005: session 000000000000000074: CREATE_PERMISSION processed, success","5005: session 000000000000000075: CREATE_PERMISSION processed, success","5011: session 000000000000000074: refreshed, lifetime=0","5011: session 000000000000000075: refreshed, lifetime=0"]}}
+```

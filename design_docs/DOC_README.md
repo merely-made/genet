@@ -1,6 +1,6 @@
 # genet Documentation Index
 
-- [WebRTC conformance and shared transport evaluation](2026-11-01_webrtc_conformance_plan.md): native Boa/Vano data channels and IP-literal UDP STUN/TURN through Murm's shared provider, selected unmodified WPT and document lifetime; DNS, TCP/TLS, restart, headed interop, media and application-carrier cutover remain separate gates.
+- [WebRTC conformance and shared transport evaluation](2026-11-01_webrtc_conformance_plan.md): native Boa/Vano data channels through Murm's shared provider, selected unmodified WPT, document lifetime and headed Chrome/Firefox direct/forced-UDP-TURN interoperability. DNS/mDNS, TCP/TLS, restart, browser-guest, media and application-carrier cutover remain separate gates.
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-09-26_accessible_names_plan.md#read-only-selector-intake-2026-10-21) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 
@@ -835,6 +835,10 @@ same session; links out of it are rewritten for its new depth.
   checks, native headed acceptance, and browser-hosted acceptance independently,
   with the source and feature scope each receipt actually exercised. A commit
   or a passing receipt on one host does not close the other gates.
+- **Enabled discovery requires a working socket route.** A caller-driven core
+  may default to multicast queries that a host's unicast adapter cannot send.
+  Disable unsupported paths explicitly and preserve their refusals; otherwise
+  one retained datagram can prevent unrelated usable routes from progressing.
 - **Freeze dependency resolution with a measured runner.** `Cargo.lock` is
   intentionally ignored here. Retain the generated lockfile, its digest,
   target/features and local-override facts with the source and binary receipt.

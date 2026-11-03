@@ -19,11 +19,19 @@ pub(crate) struct ShapeKey {
 }
 
 impl ShapeKey {
+    pub(super) fn fingerprint_matches(&self, generation: u64, seed: &RandomState) -> bool {
+        self.generation == generation
+            && self.fingerprint == seed.hash_one((&generation, self.input()))
+    }
     pub(super) fn generation(&self) -> u64 {
         self.generation
     }
     pub(super) fn input(&self) -> &ShapeInput {
         self.input.as_ref()
+    }
+    #[cfg(test)]
+    pub(super) fn force_fingerprint_from(&mut self, other: &Self) {
+        self.fingerprint = other.fingerprint;
     }
     #[cfg(test)]
     pub(super) fn force_fingerprint(&mut self, fingerprint: u64) {
@@ -179,6 +187,18 @@ mod tests {
             },
             seed,
         )
+    }
+
+    #[test]
+    fn fingerprint_recheck_uses_current_seed_and_generation() {
+        let seed = RandomState::new();
+        let foreign = RandomState::new();
+        let mut candidate = key("same", &seed);
+        assert!(candidate.fingerprint_matches(0, &seed));
+        assert!(!candidate.fingerprint_matches(1, &seed));
+        assert!(!candidate.fingerprint_matches(0, &foreign));
+        candidate.force_fingerprint(candidate.fingerprint ^ 1);
+        assert!(!candidate.fingerprint_matches(0, &seed));
     }
 
     #[test]

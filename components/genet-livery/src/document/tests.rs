@@ -4794,6 +4794,7 @@ fn shaping_benchmark_real_fixtures_are_ready_and_equivalent() {
         crate::layout::INPUT_OWNERSHIP.with(|c| c.set((0, 0)));
         crate::text::SPAN_OWNERSHIP.with(|c| c.set((0, 0)));
         crate::text::READY_KEY_WORK.with(|c| c.set((0, 0, 0, 0)));
+        crate::text::BORROWED_KEY_WORK.with(|c| c.set((0, 0)));
         document.frame(800, 600).expect("fixture frame");
         let (style_total, style_shared) = crate::layout::INPUT_OWNERSHIP.with(|c| c.get());
         let (span_total, span_shared) = crate::text::SPAN_OWNERSHIP.with(|c| c.get());
@@ -4813,8 +4814,13 @@ fn shaping_benchmark_real_fixtures_are_ready_and_equivalent() {
         );
         assert_eq!(
             crate::text::READY_KEY_WORK.with(|c| c.get().3),
-            4096,
-            "{case}: one eager plus one current key per group"
+            2048,
+            "{case}: one eager key per group"
+        );
+        assert_eq!(
+            crate::text::BORROWED_KEY_WORK.with(|c| c.get()),
+            (2048, 2048),
+            "{case}"
         );
     }
 }

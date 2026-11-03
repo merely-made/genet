@@ -274,6 +274,7 @@ pub(crate) struct ShapeResult {
 thread_local! {
     // Counts actual key-resolution call sites and key/materialization boundaries.
     pub(crate) static READY_KEY_TIMED: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    pub(crate) static BORROWED_KEY_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
     pub(crate) static READY_KEY_WORK: std::cell::Cell<(usize, usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0, 0)) };
     pub(crate) static LATE_FAULT: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
     pub(crate) static FORMAT_TIMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
@@ -841,22 +842,67 @@ impl TextSystem {
                 generation,
                 group,
             } => {
-                let key = self.shape_key(
-                    &text,
-                    &spans,
-                    &inline_boxes,
-                    parent_style,
-                    request.intrinsic_kind,
-                );
-                let selected = results
-                    .as_slice()
-                    .iter()
-                    .find(|result| {
-                        result.key == key
-                            && result.generation == generation
-                            && result.group == group
-                    })
-                    .map(|result| Arc::clone(&result.shaped));
+                let resolved = self.resolve_shape_styles(spans, parent_style);
+                let start = self
+                    .shaping_options
+                    .record_timings
+                    .then(std::time::Instant::now);
+                let borrowed = if let [result] = results.as_slice() {
+                    #[cfg(test)]
+                    BORROWED_KEY_WORK.with(|c| {
+                        let (attempts, hits) = c.get();
+                        c.set((attempts + 1, hits));
+                    });
+                    (result.generation == generation
+                        && result.group == group
+                        && result.key.input().matches_current(
+                            &text,
+                            spans,
+                            &inline_boxes,
+                            parent_style,
+                            request.intrinsic_kind,
+                            &resolved,
+                        )
+                        && result
+                            .key
+                            .fingerprint_matches(self.font_generation, &self.key_seed))
+                    .then(|| (result.key.clone(), Arc::clone(&result.shaped)))
+                } else {
+                    None
+                };
+                self.shaping_stats.key_materialize_ns = self
+                    .shaping_stats
+                    .key_materialize_ns
+                    .saturating_add(stats::elapsed_ns(start));
+                #[cfg(test)]
+                if borrowed.is_some() {
+                    BORROWED_KEY_WORK.with(|c| {
+                        let (attempts, hits) = c.get();
+                        c.set((attempts, hits + 1));
+                    });
+                }
+                let (key, selected) = if let Some((key, shaped)) = borrowed {
+                    (key, Some(shaped))
+                } else {
+                    let key = self.shape_key_with_resolved(
+                        &text,
+                        spans,
+                        &inline_boxes,
+                        parent_style,
+                        request.intrinsic_kind,
+                        &resolved,
+                    );
+                    let selected = results
+                        .as_slice()
+                        .iter()
+                        .find(|result| {
+                            result.key == key
+                                && result.generation == generation
+                                && result.group == group
+                        })
+                        .map(|result| Arc::clone(&result.shaped));
+                    (key, selected)
+                };
                 let shaped = if let Some(shaped) = selected {
                     shaped
                 } else {
@@ -2086,7 +2132,7 @@ impl TextSystem {
             defaults: prepared::properties(
                 default_style,
                 0,
-                resolved.default_features.clone(),
+                &resolved.default_features,
                 intrinsic_kind,
                 resolved.default_tab_stop,
             ),
@@ -2098,24 +2144,13 @@ impl TextSystem {
                     properties: prepared::properties(
                         &span.style,
                         source_index,
-                        resolved.span_features[source_index].clone(),
+                        &resolved.span_features[source_index],
                         intrinsic_kind,
                         resolved.span_tab_stops[source_index],
                     ),
                 })
                 .collect(),
-            slots: inline_boxes
-                .iter()
-                .enumerate()
-                .filter(|(_, atom)| !atom.marker)
-                .map(|(index, atom)| prepared::Slot {
-                    kind: prepared::SlotKind::InFlow,
-                    id: u64::try_from(index).unwrap_or(u64::MAX),
-                    index: atom.index,
-                    width: atom.line_width.to_bits(),
-                    height: (if atom.edge { 0.0 } else { atom.line_box_height }).to_bits(),
-                })
-                .collect(),
+            slots: prepared::slots(inline_boxes).collect(),
             base_level: match root_style.direction {
                 Direction::Ltr => 0,
                 Direction::Rtl => 1,
@@ -7248,7 +7283,7 @@ mod tests {
         let tab_stop = text_system.tab_stop(style);
         let input = prepared::ShapeInput {
             text: text.to_owned(),
-            defaults: prepared::properties(style, 0, features, None, tab_stop),
+            defaults: prepared::properties(style, 0, &features, None, tab_stop),
             spans: Vec::new(),
             slots: Vec::new(),
             base_level: match style.direction {
@@ -10290,7 +10325,19 @@ pub(crate) mod prepared_geometry_tests {
         let output = {
             let prepared =
                 prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
-            system
+            let key = system.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+            let mut results = system
+                .shape_batch(
+                    &[ShapeJob {
+                        group: InlineGroupId(9),
+                        generation: 11,
+                        key,
+                    }],
+                    11,
+                )
+                .unwrap();
+            BORROWED_KEY_WORK.with(|c| c.set((0, 0)));
+            let output = system
                 .format_prepared_inline_group::<Node, _>(
                     &prepared,
                     &plane,
@@ -10302,10 +10349,16 @@ pub(crate) mod prepared_geometry_tests {
                         intrinsic_kind: None,
                         line_constraints: None,
                     },
-                    Candidates::DirectNoTransaction,
+                    Candidates::Transactional {
+                        results: &mut results,
+                        generation: 11,
+                        group: InlineGroupId(9),
+                    },
                 )
                 .unwrap()
-                .unwrap()
+                .unwrap();
+            assert_eq!(BORROWED_KEY_WORK.with(|c| c.get()), (1, 1));
+            output
         };
         assert_eq!(output.text, "owned hello");
         assert!(!output.items.is_empty());
@@ -10373,6 +10426,57 @@ pub(crate) mod prepared_geometry_tests {
             intrinsic_kind: None,
             line_constraints: None,
         };
+        let mut foreign = valid.clone();
+        foreign.key = cache::ShapeKey::new(
+            system.font_generation,
+            valid.key.input().clone(),
+            &std::collections::hash_map::RandomState::new(),
+        );
+        let mut forged = valid.clone();
+        forged.key.force_fingerprint(0);
+        let mut wrong_font = valid.clone();
+        wrong_font.key = cache::ShapeKey::new(
+            system.font_generation + 1,
+            valid.key.input().clone(),
+            &system.key_seed,
+        );
+        let mut different_value = valid.clone();
+        let mut input = valid.key.input().clone();
+        input.text.push('!');
+        different_value.key = cache::ShapeKey::new(system.font_generation, input, &system.key_seed);
+        let mut collision = different_value.clone();
+        collision.key.force_fingerprint_from(&valid.key);
+        for (candidate, hit) in [
+            (valid.clone(), true),
+            (wrong_group.clone(), false),
+            (stale.clone(), false),
+            (foreign, false),
+            (forged, false),
+            (wrong_font, false),
+            (different_value, false),
+            (collision, false),
+        ] {
+            let mut choices = vec![candidate];
+            READY_KEY_WORK.with(|c| c.set((0, 0, 0, 0)));
+            BORROWED_KEY_WORK.with(|c| c.set((0, 0)));
+            system
+                .format_prepared_inline_group::<Node, _>(
+                    &prepared,
+                    &plane,
+                    LayoutDom::quirks_mode(&dom),
+                    request(),
+                    Candidates::Transactional {
+                        results: &mut choices,
+                        generation: 11,
+                        group: InlineGroupId(9),
+                    },
+                )
+                .unwrap()
+                .unwrap();
+            assert_eq!(BORROWED_KEY_WORK.with(|c| c.get()), (1, usize::from(hit)));
+            assert_eq!(READY_KEY_WORK.with(|c| c.get().3), usize::from(!hit));
+            assert_eq!(choices.len(), if hit { 1 } else { 2 });
+        }
         let mut choices = vec![wrong_group.clone(), stale.clone(), valid.clone()];
         READY_KEY_TIMED.with(|c| c.set((0, 0)));
         FORMAT_TIMED.with(|c| c.set(0));

@@ -70,3 +70,14 @@ This is a separate cut with a reviewed brief before implementation; no shared-bu
 ## Local completion status, 2026-11-03
 
 Tasks 1–3 are complete with independent task reviews and scoped fixes. Borrowed-validation production source is `5ba4d1fa282`; targeted qualification is in the canonical retained-shaping receipt. The separate shared-buffer diagnostic measured `463deba6b9a`, with test-only corrections through `00cf12c7d3a`. It supports a selective long-buffer follow-up design, while the small guard and controls argue against general adoption. Shared buffers remain experimental on their own branch. The prior whole-workload cold-equivalence goal remains open. The final broad review and local handoff are recorded in the preserved plan workspace.
+
+
+## Upstream reconciliation, 2026-11-03
+
+**Status: locally qualified, 2026-11-03.** The completed borrowed-validation pass is integrated with fetched upstream `70a54f6f43c` on a separate preserved candidate branch, `codex/shaping-upstream-20261103`.
+
+Done-conditions: preserve the automatic merge and existing shaping runtime behavior; satisfy upstream's source-size rule without new exceptions; narrowly reconcile the declared package/pin changes; pass current-source Livery default/parallel, consumer, wasm and focused style gates; independently review the integration. Existing source-specific performance and runtime limits continue to apply.
+
+Findings, 2026-11-03: upstream's changes since the shared base add RTC work, the genet-events release, docs and house-style checks, with no Livery/Buckram/Parley runtime edits. The new source-size rule applies to the shaping lane's cache, prepared-input and integration-test files. Their tests can move into smaller modules while keeping production bodies and the independent normalization oracle intact. Full-workspace offline metadata also reaches uncached RTC dependencies, beyond the selected layout qualification cone.
+
+Progress, 2026-11-03: automatic merge `b150f229f7d`, test relocation `068c3fbd020` and the test-import guard `ed891681872` are committed locally. Independent source review found no actionable issue. Current-source layout, consumer, wasm and focused style qualification passed, including covering checks for the import-only correction. The existing canonical receipt holds commands, lock provenance, gate counts and resource evidence. Full workspace hooks need the unavailable cargo-deny tool and uncached RTC dependencies; current merged-source performance and broader runtime qualification remain open.

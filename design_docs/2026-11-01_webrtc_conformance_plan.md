@@ -19,7 +19,7 @@ it does not wait for Commons calls or public Graphshell rendezvous.
 extraction and consumer cutover. Existing application-carrier qualification is
 in `mere/design_docs/mere_docs/implementation_strategy/2026-10-28_browser_carrier_plan.md`;
 call/media products remain in its sibling `2026-10-28_calls_and_media_plan.md`.
-The existing [Netfetcher wire adoption](2026-10-14_netfetcher_wire_adoption_plan.md)
+The existing [Netfetcher wire adoption](archive_docs/2026-11-03/2026-10-14_netfetcher_wire_adoption_plan.md)
 provides the dependency-direction precedent.
 
 ## Evaluation and ownership

@@ -57,7 +57,7 @@ raw logs (`Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/disk-fi
 The result maps record only `panic`. No backtraces were captured.
 
 **Defect lane validated locally, 2026-10-04:** the
-[Genet census-panic plan](2026-10-03_census_panics_plan.md) reproduces all ten
+[Genet census-panic plan](archive_docs/2026-11-03/2026-10-03_census_panics_plan.md) reproduces all ten
 records from `bcf1b08dbe6` with backtraces on both engines. Local production
 commit `876c7a2cba4` removes P1-P7 Rust panics and E1's undeclared Event failure;
 ordinary WPT failures and the missing SVG focus/ResizeObserver features remain.

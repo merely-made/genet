@@ -622,3 +622,24 @@ The dependency contracts are:
   their original route/consumer scope is retained. This document owns the
   deferred web-platform scoping; promoted plans own exact manifests, current
   code reconciliation and implementation receipts.
+
+## Completed-lane carry-forward (2026-11-03)
+
+The completed bounded migrations retain their original evidence in whole
+archives. This table records follow-on ownership and qualifications; it does
+not declare the listed historical residuals to be current reproduced defects.
+
+| Archived source | Continuing owner or qualification |
+|---|---|
+| Fleece follow-through | Fleece preservation/selector plan and the actual downstream product owners retain later preservation, polling/reading-room and distillation decisions. |
+| Servo cone retirement | The compositor and testdriver source homes remain live. The old Mere Boa patch-cleanup observation is a consumer-manifest review for Mere's current owner, not permission to remove a patch without checking its current graph. |
+| MallocSizeOf removal | Preserve its suite/native scope and explicit absence of a WPT rerun. Mere's old package-pin observation is historical; a current receiving claim needs its own cohort, not the old removal receipt. |
+| Image-decode feature | Keep the default/forwarding contract and disabled-feature behavior. Broader decoder, guest/browser and current-cohort acceptance are separate; no such gate is supplied by archiving the feature slice. |
+| Netfetcher wire adoption | Raw carriage remains beneath Genet policy. Registry packaging remains separate; HTTP/3 buffering and process-wide default pools do not prove per-persona partitioning. Explicit host pool/TLS ownership and Fetch/WebSocket security stay with the current host/request-security owners. The old macOS/WebGL limitations and named immutable supplier qualification remain scoped to that run. |
+| Dependency currency | Retain the attributed baseline failures, ignores, local ignored-lock qualifications and independent smoke-workspace exceptions. This closure runs no dependency update and claims no fresh whole-workspace acceptance. |
+| Encoding | Legacy-charset form submission belongs to the held Forms owner; legacy-charset frame navigation/parsing belongs to iframe/Realms; Encoding streams belong to the Streams frontier. The fatal-UTF-8 standard/WPT disagreement, backend capability gaps and three qualified ignores remain explicit historical limits; do not silently alter semantics or repin expectations. |
+| Census panic repair | R1/R2 and its separately qualified Vano repin remain completed bounded work. Check current XML navigable parsing/document.open behavior under parser/iframe/Realms, SVG focus under DOM/focus, ResizeObserver under observers/timing, and two stream-getter cases under Streams before assigning current defect or completion status. |
+
+The five held plans and the active RTC source/receipt remain with their current
+owners. A carry into this inventory does not close their implementation,
+conformance, runtime, human or platform checkpoints.

@@ -105,7 +105,7 @@ entries. Generic rooting may still remint; the policy's inventory-to-root
 handoff uses existing live targets before any JavaScript allocation. Its private
 hook looks up existing wrappers instead of calling `wrapNode`, and uses captured
 intrinsics and null-prototype property descriptors for ephemeron groups. See the
-[census plan](2026-10-03_census_panics_plan.md) and its qualified controls. The
+[census plan](archive_docs/2026-11-03/2026-10-03_census_panics_plan.md) and its qualified controls. The
 complete runtime gate passes 672 tests, including identity/reclamation soaks,
 and the four-directory WPT comparison loses zero passing files or subtests.
 The [final receipt](receipts/2026-10-04_genet_census_panics/receipt.md) qualifies

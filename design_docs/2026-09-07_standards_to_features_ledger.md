@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-07
 **Status:** founded, by Mark's ruling of 2026-09-07 on mere's
-[lighter recall brief](../../mere/design_docs/eidetic_docs/research/2026-09-07_lighter_recall_and_standards_ledger_brief.md)
+[lighter recall brief](../../eidetic/design_docs/eidetic_docs/research/2026-09-07_lighter_recall_and_standards_ledger_brief.md)
 (cited by path; it is the seed and the argument). Living ledger, not a plan;
 rows are added as lanes open and as consumers name a dependency.
 
@@ -166,7 +166,7 @@ and Checkpoint C remain pending;
 these targeted fixtures do not update the WPT percentage.
 
 **Encoding execution, 2026-10-05:** the
-[API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
+[API plan](archive_docs/2026-11-03/2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
 corrected API-only scope. E1 authorizes per-realm native storage, a private
 finalizer and Vano job delivery. E2's adapter guard preserves empty streaming
 state in unchanged encoding_rs 0.8.35. E3's bounded timeout/completion correction

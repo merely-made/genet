@@ -107,6 +107,14 @@ layout allocation remains on the long path. The whole-workload cold goal is
 still open; see the [qualification receipt](../../design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md)
 for paired results, allocation limits and current test boundaries.
 
+A separate shared-buffer diagnostic at `463deba6b9a` removed the long fixture's
+3,096,768 logical element bytes of cloning. Its three serial same-binary
+cohorts favored long-text frame medians, but the small-text guard became slower
+and noise and cross-binary controls limit interpretation. The experiment stays
+on its own branch; this branch retains borrowed validation without adopting
+shared buffers. Any selective sharing policy needs a separate supplier design
+and review. The receipt records the full diagnosis and preserved evidence.
+
 ## Explicit host generic resources
 
 A browser does not lend Parley its installed system fonts. Registering a face

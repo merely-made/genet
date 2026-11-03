@@ -1,3 +1,4 @@
+#[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
 use super::*;
 
 #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]

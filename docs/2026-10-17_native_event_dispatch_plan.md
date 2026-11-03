@@ -146,8 +146,9 @@ Registry (per document)         EventState (Rc, shared)         Invoker (per own
 
 - **New crate `genet-events`** (`components/genet-events`), depends on
   `genet-scripted-dom` (NodeId, tree, shadow accessors) and `layout-dom-api`;
-  **no** dependency on `script-engine-api`, Boa or Nova. `publish = false` until
-  the API settles.
+  **no** dependency on `script-engine-api`, Boa or Nova. Published at 0.0.1 on
+  2026-11-02 at Mark's instruction, while the API is still unsettled (Phases 3 to 5
+  not started), because Mere's Cambium 0.6.1 depends on it; 0.0.x signals that.
 - `script-runtime-api` depends on it and keeps only a thin binding:
   `addEventListener` registers `Listener{owner: Script, token}`; its `Invoker`
   calls the engine through `script-engine-api`; `dispatchEvent` calls the layer;

@@ -61,7 +61,7 @@ delivery while reverse traffic continues, then receives every held message.
 It does not measure a saturated receive window or induced packet loss.
 E1c adds ordinary discovery demux/deadline checks and the three controlled
 coturn checks below. Relay-only candidates conceal the physical related address.
-Receipts: `testing/webrtc-evaluation/receipts/provider-qualification.json`
+Receipts: `Code/testing/murm/testing/webrtc-evaluation/receipts/provider-qualification.json`
 and `provider-boundaries.json`; the host-driver addition is appended to
 `design_docs/archive_docs/receipts/2026-10-13_murm_family_move_plan_receipts.md`.
 Failed attempts remain in their cited locations. Genet consumes this provider

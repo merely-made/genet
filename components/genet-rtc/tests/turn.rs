@@ -78,27 +78,43 @@ fn unavailable_relay_has_a_bounded_gathering_deadline_and_no_direct_candidate() 
         .set_local_description(Instant::now(), offer)
         .unwrap();
     peer.finish_host_candidates().unwrap();
-    let deadline = Instant::now() + Duration::from_secs(2);
-    let mut errors = 0;
-    loop {
-        match peer.poll(deadline, ReadInterest::All).unwrap() {
-            Some(Output::GatheringError { code, .. }) => {
-                assert_eq!(code, 701);
-                errors += 1;
-            }
-            Some(Output::Event(RTCPeerConnectionEvent::OnIceCandidateEvent(_))) => {
-                panic!("direct candidate leaked")
-            }
-            Some(Output::Event(RTCPeerConnectionEvent::OnIceGatheringStateChangeEvent(state)))
-                if state.to_string() == "complete" =>
-            {
-                break;
-            }
-            Some(Output::Deadline | Output::Closed) => panic!("gathering did not settle"),
-            _ => std::thread::sleep(Duration::from_millis(1)),
+    for attempt in 0..2 {
+        if attempt != 0 {
+            peer.core_mut().restart_ice();
+            let offer = peer.core_mut().create_offer(None).unwrap();
+            peer.core_mut()
+                .set_local_description(Instant::now(), offer)
+                .unwrap();
+            peer.restart_gathering().unwrap();
         }
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut errors = 0;
+        loop {
+            match peer.poll(deadline, ReadInterest::All).unwrap() {
+                Some(Output::GatheringError { code, .. }) => {
+                    assert_eq!(code, 701);
+                    errors += 1;
+                }
+                Some(Output::Event(RTCPeerConnectionEvent::OnIceCandidateEvent(_))) => {
+                    panic!("direct candidate leaked")
+                }
+                Some(Output::Event(RTCPeerConnectionEvent::OnIceGatheringStateChangeEvent(
+                    state,
+                ))) if state.to_string() == "complete" => {
+                    break;
+                }
+                Some(Output::Deadline | Output::Closed) => panic!("gathering did not settle"),
+                _ => std::thread::sleep(Duration::from_millis(1)),
+            }
+        }
+        assert_eq!(errors, 1);
+        assert!(peer.core().sctp().is_none_or(|sctp| {
+            sctp.transport()
+                .ice_transport()
+                .get_local_candidates()
+                .is_empty()
+        }));
     }
-    assert_eq!(errors, 1);
     let local = peer.local_addr();
     drop(peer);
     UdpSocket::bind(local).expect("failed discovery releases its socket");

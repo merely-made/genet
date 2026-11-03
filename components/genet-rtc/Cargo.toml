@@ -20,7 +20,7 @@ udp = ["host", "dep:tokio"]
 [dependencies]
 # Published 0.21.1 loses DCEP reliability on accepted channels. This exact
 # supplier includes the upstream DCEP fix plus the bounded ICE-restart data path fix.
-rtc = { git = "https://github.com/merely-made/rtc", rev = "9767c0f6e3c2b6be7ccba93595ca7e44d3e85334", default-features = false }
+rtc = { git = "https://github.com/merely-made/rtc", rev = "d10e1295aec1b0139715a147bd9725f774d62183", default-features = false }
 bytes = { version = "1", optional = true }
 thiserror = { version = "2", optional = true }
 

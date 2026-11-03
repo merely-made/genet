@@ -98,6 +98,7 @@
     if(!state)return;
     if(state.revision<s.revision)return;
     s.revision=state.revision;
+    const wasStable=s.state.signalingState==='stable';
     s.state=state;
     const names=['currentLocalDescription','pendingLocalDescription','currentRemoteDescription','pendingRemoteDescription'];
     const pool=names.map(name=>s[name]).filter(Boolean);
@@ -108,17 +109,43 @@
     }
     s.localDescription=s.pendingLocalDescription||s.currentLocalDescription;
     s.remoteDescription=s.pendingRemoteDescription||s.currentRemoteDescription;
+    if(wasStable&&state.signalingState!=='stable')s.restartNotified=false;
+    if(state.signalingState==='stable'&&s.currentLocalDescription&&s.restartCredentials.size) {
+      if(!iceCredentials(s.currentLocalDescription).some(c=>s.restartCredentials.has(c))) {
+        s.restartCredentials.clear();s.restartNotified=false;
+      }
+    }
+    scheduleRestart(s);
     for(const meta of state.channels||[]) { const item=s.channels.get(String(meta.handle));if(item)Object.assign(dc(item).meta,meta); }
     if(state.sctp) {
       if(!s.sctp) {s.ice=new RTCIceTransport(transportToken);s.dtls=new RTCDtlsTransport(transportToken);s.sctp=new RTCSctpTransport(transportToken);transports.get(s.dtls).iceTransport=s.ice;transports.get(s.sctp).transport=s.dtls;}
       Object.assign(transports.get(s.sctp),state.sctp);Object.assign(transports.get(s.dtls),state.sctp.dtls);Object.assign(transports.get(s.ice),state.sctp.dtls.ice);
     }
   }
+  function iceCredentials(description) {
+    return description ? description.sdp.match(/^a=ice-(?:ufrag|pwd):[^\r\n]+/gm)||[] : [];
+  }
+  function scheduleRestart(s) {
+    if(s.closed||s.restartTask||!s.restartCredentials.size)return;
+    s.restartTask=true;
+    queueTask(function(){
+      s.restartTask=false;
+      if(s.closed||s.operations||s.state.signalingState!=='stable'||!s.restartCredentials.size||s.restartNotified)return;
+      const owner=live.get(s.id);if(!owner)return;
+      s.restartNotified=true;owner.dispatchEvent(new Event('negotiationneeded'));
+    },0);
+  }
   function call(s,op,data) { const r=unwrap(commandHost(s.id,op,stringify(data===undefined?null:data)));apply(s,r.state);for(const n of r.events||[])deliver(s.id,stringify(n));return r.value; }
   function queued(s,op,data) {
     if(s.closed)return PromiseCtor.reject(error('InvalidStateError','Peer connection is closed'));
-    const result=s.chain.then(function(){return new PromiseCtor(function(resolve,reject){queueTask(function(){try{if(s.closed)throw error('InvalidStateError','Peer connection is closed');resolve(call(s,op,data));}catch(e){reject(e);}},0);});});
-    s.chain=result.then(function(){},function(){});return result;
+    s.operations++;
+    const result=s.chain.then(function(){return new PromiseCtor(function(resolve,reject){queueTask(function(){try{
+      if(s.closed)throw error('InvalidStateError','Peer connection is closed');
+      if(s.restartCredentials.size&&(op==='createOffer'||(op==='setLocalDescription'&&(!data||data.type==null))))data=Object.assign({},data,{iceRestart:true});
+      resolve(call(s,op,data));
+    }catch(e){reject(e);}},0);});});
+    const settled=function(){s.operations--;scheduleRestart(s);};
+    s.chain=result.then(settled,settled);return result;
   }
   function handler(proto,type) { const slots=new WeakMap();Object.defineProperty(proto,'on'+type,{enumerable:true,configurable:true,get(){return slots.get(this)||null;},set(fn){const old=slots.get(this);if(old)this.removeEventListener(type,old);if(typeof fn==='function'){slots.set(this,fn);this.addEventListener(type,fn);}else slots.delete(this);}}); }
   function transport(value){const s=transports.get(value);if(!s)throw new TypeError('Illegal invocation');return s;}
@@ -161,7 +188,7 @@
   class RTCPeerConnection extends EventTarget {
     constructor(input={}) {
       super();if(!active)throw error('InvalidStateError','RTC document was discarded');const config=configuration(input),created=unwrap(createHost(stringify(config)));
-      const s={id:created.id,closed:false,chain:PromiseCtor.resolve(),channels:new Map(),state:{},config};
+      const s={id:created.id,closed:false,chain:PromiseCtor.resolve(),operations:0,restartCredentials:new Set(),restartTask:false,restartNotified:false,channels:new Map(),state:{},config};
       PCs.set(this,s);live.set(s.id,this);apply(s,callState(s));
     }
     createOffer(options={}){const s=pc(this);let value;try{options=options==null?{}:Object(options);value={iceRestart:!!options.iceRestart};}catch(e){return PromiseCtor.reject(e);}return queued(s,'createOffer',value);}
@@ -169,7 +196,11 @@
     setLocalDescription(init){const s=pc(this);let value;try{value=description(init,true);}catch(e){return PromiseCtor.reject(e);}return queued(s,'setLocalDescription',value).then(function(){});}
     setRemoteDescription(init){const s=pc(this);let value;try{value=description(init);}catch(e){return PromiseCtor.reject(e);}return queued(s,'setRemoteDescription',value).then(function(){});}
     addIceCandidate(init){const s=pc(this);let value;try{value=init==null?null:{candidate:init.candidate===undefined?'':string(init.candidate),sdpMid:init.sdpMid==null?null:string(init.sdpMid),sdpMLineIndex:init.sdpMLineIndex==null?null:integer(init.sdpMLineIndex,65535),usernameFragment:init.usernameFragment==null?null:string(init.usernameFragment)};if(value&&value.candidate&&value.sdpMid===null&&value.sdpMLineIndex===null)throw new TypeError('A media identifier is required');}catch(e){return PromiseCtor.reject(e);}return queued(s,'addIceCandidate',value).then(function(){});}
-    restartIce(){const s=pc(this);if(s.closed)throw error('InvalidStateError','Peer connection is closed');call(s,'restartIce',null);}
+    restartIce(){
+      const s=pc(this);if(s.closed)return;
+      s.restartCredentials=new Set([...iceCredentials(s.currentLocalDescription),...iceCredentials(s.pendingLocalDescription)]);
+      if(s.restartCredentials.size){call(s,'restartIce',null);scheduleRestart(s);}
+    }
     getConfiguration(){return parse(stringify(pc(this).config));}
     setConfiguration(input={}){const s=pc(this);if(s.closed)throw error('InvalidStateError','Peer connection is closed');const config=configuration(input);call(s,'setConfiguration',config);s.config=config;}
     createDataChannel(label,options={}) {
@@ -189,7 +220,11 @@
   Object.defineProperty(RTCPeerConnection.prototype,'sctp',{enumerable:true,configurable:true,get(){return pc(this).sctp||null;}});
   for(const name of ['negotiationneeded','icecandidate','icecandidateerror','signalingstatechange','iceconnectionstatechange','icegatheringstatechange','connectionstatechange','datachannel','track'])handler(RTCPeerConnection.prototype,name);
   function deliver(id,text){
-    const owner=live.get(id);if(!owner)return;const s=pc(owner),n=parse(text);apply(s,n.state);
+    const owner=live.get(id);if(!owner)return;const s=pc(owner),n=parse(text);
+    if(n.generation&&['icecandidate','icecandidateerror','icegatheringstatechange'].includes(n.event)&&
+      !iceCredentials(s.localDescription).includes('a=ice-ufrag:'+n.generation))return;
+    apply(s,n.state);
+    if(n.event==='negotiationneeded'&&s.restartCredentials.size){scheduleRestart(s);return;}
     if(n.event==='transportstatechange'){const t=s[n.transport];if(t)t.dispatchEvent(new Event('statechange'));return;}
     if(n.channel){const meta=(s.state.channels||[]).find(c=>c.handle===n.channel.handle)||n.channel,key=String(meta.handle);let channel=s.channels.get(key);if(!channel){channel=new RTCDataChannel(channelToken,s,meta);s.channels.set(key,channel);owner.dispatchEvent(new RTCDataChannelEvent('datachannel',{channel}));}Object.assign(dc(channel).meta,meta);if(n.event==='open'||n.event==='close'||n.event==='closing'||n.event==='bufferedamountlow')channel.dispatchEvent(new Event(n.event));return;}
     if(n.event==='message'){const channel=s.channels.get(String(n.handle));if(!channel)return;const bytes=new U8(n.data);const value=n.isString?decode(bytes):dc(channel).binaryType==='blob'?FormOps.makeBlob(bytes,''):bytes.buffer;channel.dispatchEvent(new MessageEvent('message',{data:value}));return;}
@@ -202,6 +237,7 @@
     active=false;
     eachMap(live,function(owner){
       const s=privatePc(owner);s.closed=true;s.state.signalingState='closed';s.state.connectionState='closed';s.state.iceConnectionState='closed';
+      s.restartCredentials.clear();
       eachMap(s.channels,function(channel){privateDc(channel).meta.readyState='closed';});
       if(s.sctp)privateTransport(s.sctp).state='closed';
       if(s.dtls)privateTransport(s.dtls).state='closed';

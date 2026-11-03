@@ -8,6 +8,7 @@
 //   node support/ci/webrtc_interop.mjs --server NUMERIC_WSL_IP:34790
 // Optional matrix filters: --browser chrome|firefox --engine boa|nova
 // --route direct|relay --offerer native|browser --cleanup close|navigate.
+// --restart both exercises both APIs at every negotiation step; adds configured STUN.
 // --bind selects the Windows interface explicitly. Default is the default-route
 // IPv4 interface; the UDP fixture front end accepts only local-machine clients.
 // Firefox BiDi grants local-network access only to this fixture origin and
@@ -23,11 +24,17 @@ import { readFile, writeFile, mkdir, access, appendFile } from 'node:fs/promises
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
+import { runRestartChecks } from './webrtc_restart.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
-const dimensions=[['--browser',['chrome','firefox']],['--engine',['boa','nova']],['--route',['direct','relay']],['--offerer',['native','browser']],['--cleanup',['close','navigate']]];
+const restart=args.get('--restart');
+if(restart && restart!=='both')throw Error('--restart requires both');
+const receiptMode=args.get('--receipt-mode')||'append';
+if(!['append','stdout'].includes(receiptMode))throw Error('invalid receipt mode');
+const routes=restart?['direct','stun','relay']:['direct','relay'];
+const dimensions=[['--browser',['chrome','firefox']],['--engine',['boa','nova']],['--route',routes],['--offerer',['native','browser']],['--cleanup',['close','navigate']]];
 for(const [flag,values] of dimensions)if(args.has(flag) && !values.includes(args.get(flag)))throw Error('invalid matrix selector '+flag);
 const expectedCases=dimensions.reduce((n,[flag,values])=>n*(args.has(flag)?1:values.length),1);
 const target = path.resolve(process.env.CARGO_TARGET_DIR || 'C:/t/cargo-targets/genet');
@@ -38,6 +45,7 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
+const sourceFiles=['components/genet-webrtc/examples/interop_host.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
 const receipt = path.join(repo, 'design_docs/archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -76,7 +84,7 @@ class UdpFixture {
       if(from.address!==bind && from.address!=='127.0.0.1')return;
       const key=from.address+':'+from.port;let socket=this.clients.get(key);
       if(!socket) {
-        if(this.clients.size>=8){this.error='UDP fixture client budget exceeded';return;}
+        if(this.clients.size>=16){this.error='UDP fixture client budget exceeded';return;}
         socket=createSocket('udp4');this.clients.set(key,socket);
         socket.on('error',()=>{this.error='UDP fixture backend socket failed';});
         socket.on('message',(reply,peer)=>{
@@ -280,14 +288,15 @@ class Native {
     if(this.process.exitCode===null) {this.process.stdin.end(JSON.stringify({op:'quit'})+'\n');try{await timeout(this.exit,2000,'native shutdown deadline');}catch{this.process.kill();await this.exit;}}
   }
 }
-function verifySnapshot(snapshot,other) {
+function verifySnapshot(snapshot,other,connected=true) {
   assert(!snapshot.errors.length,'peer error '+snapshot.errors.join(','));
-  assert(snapshot.connected && snapshot.sent.length===3 && snapshot.received.length===3,'incomplete application exchange');
-  assert(snapshot.received.includes(other+':text:λ🙂:reliable') && snapshot.received.includes(other+':text:λ🙂:unreliable') && snapshot.received.includes('binary:48000'),'message content mismatch');
+  assert((!connected||snapshot.connected) && snapshot.sent.length===3 && snapshot.received.length===3,'incomplete application exchange');
+  assert(snapshot.received.includes(other+':text:λ🙂:reliable:'+snapshot.round) && snapshot.received.includes(other+':text:λ🙂:unreliable:'+snapshot.round) && snapshot.received.includes('binary:48000:'+snapshot.round),'message content mismatch');
   assert(snapshot.modes.some(c=>c.label==='reliable' && c.ordered && c.maxRetransmits===null),'reliable mode mismatch');
   assert(snapshot.modes.some(c=>c.label==='unreliable' && !c.ordered && c.maxRetransmits===0),'partial reliability mismatch');
 }
 function verifyStats(a,b,route) {
+  assert(a.candidateReferencesValid===true,'native stats retained a dangling candidate reference');
   assert(a.remoteAddressesRedacted===true && a.peerReflexiveInRemoteList===false,'native ICE observation exposed an unsignaled address');
   for(const stats of [a,b]) {
     assert(stats.pair && stats.pair.state==='succeeded','selected candidate pair unavailable');
@@ -303,6 +312,9 @@ function verifyStats(a,b,route) {
   }
 }
 
+const sourceAtStart={};for(const file of sourceFiles)sourceAtStart[file]=hash(await readFile(path.join(repo,file)));
+const binaryAtStart=hash(await readFile(nativeExe));
+const lockAtStart=hash(await readFile(path.join(repo,'Cargo.lock')));
 const http=createServer((request,response)=>{response.writeHead(200,{'Content-Type':'text/html','Cache-Control':'no-store'});response.end('<!doctype html><title>RTC interoperability fixture</title><h1>RTC interoperability fixture</h1><p>Automated data-channel peer. No media capture.</p>');});
 await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
 const url=`http://127.0.0.1:${http.address().port}/`;
@@ -314,13 +326,13 @@ try {
     const browser=new Browser();
     try {
       phase='browser startup';await browser.start(browserName,url);
-      for(const engine of choose('--engine',['boa','nova']))for(const route of choose('--route',['direct','relay']))
+      for(const engine of choose('--engine',['boa','nova']))for(const route of choose('--route',routes))
       for(const offerer of choose('--offerer',['native','browser']))for(const cleanup of choose('--cleanup',['close','navigate'])) {
         current={browser:browserName,engine,route,offerer,cleanup}; const native=new Native();const start=Date.now();let a,b;
         try {
           phase='peer startup';await browser.reset(url+'?case='+cases.length);native.start(engine,bind);await timeout(native.ready,45000,'native initialization deadline');
           const config={iceTransportPolicy:route==='relay'?'relay':'all',iceServers:route==='relay'?
-            [{urls:[`turn:${frontend}?transport=udp`],username:'rtc-test',credential:'rtc-test-password'}]:[]};
+            [{urls:[`turn:${frontend}?transport=udp`],username:'rtc-test',credential:'rtc-test-password'}]:route==='stun'?[{urls:[`stun:${frontend}`]}]:[]};
           await native.evaluate(source);await browser.evaluate(source);
           await native.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(config)},'native',${offerer==='native'});__interop.start()`);
           await browser.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(config)},'browser',${offerer==='browser'});__interop.start()`);
@@ -339,7 +351,20 @@ try {
           let aStats,bStats;
           for(let i=0;i<100;i++){aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');if(aStats&&bStats)break;await delay(15);}
           assert(aStats&&bStats,'stats deadline');verifyStats(aStats,bStats,route);
+          const initialSockets=restart?ownedUdp(native.process.pid):null;
+          let restarts;
+          if(restart) {
+            phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats});
+            a=await native.value('__interop.snapshot()');b=await browser.value('__interop.snapshot()');
+            aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');verifyStats(aStats,bStats,route);
+            phase='restart interruption';
+            await native.evaluate('__interop.captureRestart();__interop.restart("method")');
+            const deadline=Date.now()+15000;let pending;
+            while(Date.now()<deadline){pending=await native.value('__interop.snapshot()');if(pending.signaling==='have-local-offer'&&pending.localCredentialsChanged)break;await delay(10);}
+            assert(pending.signaling==='have-local-offer'&&pending.localCredentialsChanged,'interrupted restart did not apply an offer');
+          }
           phase='native cleanup';const sockets=ownedUdp(native.process.pid);assert(sockets.length===1,'expected one owned RTC socket');
+          if(restart)assert(initialSockets.length===1&&sockets[0].address===initialSockets[0].address&&sockets[0].port===initialSockets[0].port,'restart replaced or leaked the native socket');
           let cleaned;
           if(cleanup==='navigate') {
             cleaned=await native.request('navigate');assert(cleaned.pending===0,'navigation retained a peer');
@@ -353,13 +378,13 @@ try {
           const summary=(snapshot,stats)=>({connected:snapshot.connected,textMessagesVerified:2,binaryBytesVerified:48000,modes:snapshot.modes,refused:snapshot.refused,gatheringErrors:snapshot.gatheringErrors,
             pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint,
             remoteAddressesRedacted:stats.remoteAddressesRedacted,peerReflexiveInRemoteList:stats.peerReflexiveInRemoteList});
-          cases.push({...current,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),cleanupVerified:true,socketRebound:true});
+          cases.push({...current,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
         } catch(error) {
           try { await native.evaluate('__interop.inspect()'); await browser.evaluate('__interop.inspect()'); await delay(100); } catch {}
           let observedStats; try {observedStats={native:await native.value('__interop.stats'),browser:await browser.value('__interop.stats')};} catch {}
           for(const stats of Object.values(observedStats||{}))if(stats){stats.remoteDER_SHA256=(stats.remoteCertificates||[]).map(bytes=>hash(Buffer.from(bytes)));delete stats.remoteCertificates;}
-          cases.push({...current,status:'fail',phase,error:error.message.slice(0,180),observed:{native:a,browser:b},observedStats,trace:native.stderr.split('\n').filter(s=>s.startsWith('RTC poll variant:')).slice(-8)});throw error;
+          cases.push({...current,status:'fail',phase,error:error.message.slice(0,180),observed:{native:a,browser:b},observedStats,restartDiagnostics:error.restartDiagnostics,trace:native.stderr.split('\n').filter(s=>s.startsWith('RTC poll variant:')).slice(-8)});throw error;
         } finally {
           try {await browser.evaluate('globalThis.__interop?.close()');}catch{}
           await native.close();await delay(100);await udpFixture.clear();
@@ -371,11 +396,22 @@ try {
 finally {
   await udpFixture.close();
   await new Promise(resolve=>http.close(resolve));
-  const files=['components/genet-webrtc/examples/interop_host.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/script-runtime-api/webrtc/bootstrap.js'];
-  const hashes={};for(const file of files)hashes[file]=hash(await readFile(path.join(repo,file)));
-  const record={schema:1,gate:'E2h',utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===32&&cases.length===32&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 8 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:'native Windows to installed headed browsers, controlled WSL UDP server; no DNS/TCP/TLS/restart/media/carrier acceptance'};
-  const old=await readFile(receipt,'utf8'),marker='\n\n## E2h automated browser interoperability';const index=old.indexOf(marker);const base=index<0?Buffer.byteLength(old):Buffer.byteLength(old.slice(0,index));
+  const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
+  const sourceStable=JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
+  if(!sourceStable){failure={phase:'source identity',error:'source or fixture binary changed during qualification'};process.exitCode=1;}
+  const gate=restart?'E2r':'E2h';
+  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:restart?'native Windows headed data-channel restart on fixed direct/STUN/UDP-TURN routes; DNS/mDNS, server replacement, TCP/TLS, interface rebinding, media and carrier acceptance remain open':'native Windows headed data channels, controlled WSL UDP server'};
+  if(receiptMode==='stdout') {
+    console.log(`${gate} ${cases.filter(c=>c.status==='pass').length}/${cases.length} passed; receipt emitted`);
+    console.log('RTC_RECEIPT '+JSON.stringify(record));
+  } else {
+  const old=await readFile(receipt,'utf8'),marker='\n\n## '+gate+' automated browser interoperability';
+  const laneStart=old.indexOf(restart?'\n\n## E2r ':'\n\n## E2h automated browser interoperability');
+  const base=laneStart<0?Buffer.byteLength(old):Buffer.byteLength(old.slice(0,laneStart));
   const entry=marker+' - '+record.utc+'\n\n```json\n'+JSON.stringify(record)+'\n```\n';
-  assert(Buffer.byteLength(old+entry)<=1000000 && Buffer.byteLength(old+entry)-base<=256000,'E2h receipt byte cap exceeded');
-  await appendFile(receipt,entry);console.log(`E2h ${cases.filter(c=>c.status==='pass').length}/${cases.length} passed; compact receipt appended`);
+  const laneEnd=restart?-1:old.indexOf('\n\n## E2r ',laneStart);
+  const historical=laneEnd<0?Buffer.byteLength(old)-base:Buffer.byteLength(old.slice(laneStart,laneEnd));
+  assert(Buffer.byteLength(old+entry)<=1000000 && historical+Buffer.byteLength(entry)<=(restart?220000:256000),gate+' receipt byte cap exceeded');
+  await appendFile(receipt,entry);console.log(`${gate} ${cases.filter(c=>c.status==='pass').length}/${cases.length} passed; compact receipt appended`);
+  }
 }

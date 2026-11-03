@@ -40,7 +40,8 @@ The pending batch holds no strong Core or application borrow. Device loss
 cancels admission eagerly so an unpolled frame cannot hold the shared recovery
 barrier indefinitely. A canceled batch drops its staged values and leaves its
 qualification to drain on the existing shared completion worker. No worker
-is created per frame, and no destructor waits for the GPU. A timeout or otherwise unprovable outcome
+is created per frame. No frame-token destructor waits for the GPU; explicit Core
+shutdown joins the worker. A timeout or otherwise unprovable outcome
 refuses attribution rather than making the next batch inherit stale counters.
 
 **Done conditions:** actual shader refusal never publishes a value; a later
@@ -107,3 +108,61 @@ establish another machine's throughput or a physical driver-reset guarantee.
   using checked drawing. The status-only busy hint exposes canceled work still
   retiring after a host drops staging, without admitting another draw or
   polling the GPU. Host scheduling remains responsible for fair window turns.
+
+- 2026-11-03: supplier shutdown qualification at `adfa1905d9e` adds an
+  explicit shared-Core close that seals admission and joins completion workers
+  for current and retired generations. It waits for a publication already in
+  progress, rejects reentrant close, and revokes accepted frames after close.
+  Timeout diagnostics report admission, seal and worker elapsed times and the
+  last observed scope/backlog counts, or `unknown` before observation. The
+  five-second qualification deadline and channel-only UI collection remain.
+  The CPU gate passed 5 tests; the actual-GPU native-frame gate passed 16.
+  The original process-exit crash has not been rerun, and the new tests were not
+  observed failing before implementation.
+
+  The initial offline CPU attempt failed before compilation because this fresh
+  worktree had no ignored `Cargo.lock` and resolution rejected yanked
+  `clipboard-win 5.4.1`. The retry copied the ignored lock from
+  `/home/markik/Code/worktrees/genet-native-render-20261103/Cargo.lock`; the
+  copied lock's SHA-256 was
+  `1f981cb6af462aafdcefec737dff310af2f8bde8f155a490437f967c379482ff`.
+  No lockfile change is part of the supplier commit. All runs used the same
+  wrapper and environment below, from
+  `/home/markik/Code/worktrees/genet-native-shutdown-20261103`, with shell
+  `pipefail` and output captured through `tee`:
+
+  ```sh
+  flock /home/markik/Code/testing/machine-heavy.lock \
+    systemd-run --user --scope --quiet -p MemoryMax=3G -p MemorySwapMax=0 \
+    -p CPUQuota=150% nice -n 10 timeout 600 env CARGO_BUILD_JOBS=1 \
+    RUST_TEST_THREADS=1 CARGO_TARGET_DIR=/home/markik/Code/target \
+    CARGO_BUILD_BUILD_DIR=/home/markik/Code/target CARGO_INCREMENTAL=0 \
+    CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 \
+    cargo test --locked --offline -p genet-presenter native_frame::tests --lib -- --test-threads=1
+  ```
+
+  The GPU gate used the same command with `--ignored` before
+  `--test-threads=1`. Evidence is retained under
+  `/home/markik/Code/testing/genet-native-shutdown-20261103/`:
+
+  | Artifact | SHA-256 |
+  | --- | --- |
+  | `cpu-tests.log` (initial failure) | `3edc042165b571307540a36db5bc8645797d7639f07851c147588305e5f7c025` |
+  | `cpu-tests-retry.log` | `ff93d3fb50ce76506477417c5a1c2210b3ae79c02b0e9b632490c230d61f7caa` |
+  | `gpu-tests.log` | `fbba5330982d1626a9ebd0c6e545497d0f802d9551819d5398cdfb71a01f7d65` |
+  | `inventory.json` | `bf4973ab3a56ce1e27c35a52e72d88afa2a15ccb3d0a4ea37289c209128dad20` |
+
+  Changed-file `line-ceiling` passed. Scoped Clippy used the same wrapper and
+  environment with `cargo clippy --locked --offline -p genet-presenter
+  --all-targets`; it exited successfully with warnings. Those include missing
+  Errors/Panics documentation for the new shutdown APIs and a collapsible
+  conditional, alongside pre-existing package and dependency warnings.
+  `cargo deny --locked check bans` was not run because `cargo-deny` was not
+  installed. The source and dependency graph were otherwise unchanged by these
+  checks. Further evidence under the same artifact directory:
+
+  | Artifact | SHA-256 |
+  | --- | --- |
+  | `line-ceiling.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+  | `clippy.log` | `8dfc8c6107c90b624ded27e6817d1a3407c1029dac33de71b1f3b7d49616d72d` |
+  | `source-checks.json` | `3a3c7873f04f4653f59ec076fc74500a49dde6f203280f7bd1d6d10b006329cc` |

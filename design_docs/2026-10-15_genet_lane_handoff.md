@@ -65,7 +65,7 @@ add 'em to the handoff."
 | Commits | What | Record |
 |---|---|---|
 | `33348b8dd49`..`85252e20bee` | The accessibility projection walks the flat tree, so shadow-tree content reaches AccessKit. `aria-labelledby`, `aria-describedby` and `<label for>` resolve per tree. Scroll ancestors climb via the flat-tree parent. | [Shadow DOM plan](2026-09-07_shadow_dom_plan.md), residual 11, rulings 11.1–11.3 |
-| `297f58b9bbc`..`0ce8e65ff6f` | genet-wpt implements `test_driver.get_computed_label`. AccName goes from 0 to 352/405 subtests. | [Accessible names plan](2026-09-26_accessible_names_plan.md); `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/` |
+| `297f58b9bbc`..`0ce8e65ff6f` | genet-wpt implements `test_driver.get_computed_label`. AccName goes from 0 to 352/405 subtests. | [Accessible names plan](archive_docs/2026-11-03/2026-09-26_accessible_names_plan.md); `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/` |
 | `061e54c8aa2` | Button-type inputs are named from `value`, image inputs from `alt`. AccName reaches about 356/405. | Accessible names plan |
 | `15174020fdc`, `eeb9774ada9` | Group, dialog, alertdialog, article and table stop taking names from content. The heading rule applies to roles and native elements; a table takes its caption; `abbr` is title-first. AccName reaches 365/405. genet-render passes 55/55 after rebasing onto the Netrender adoption. | Accessible names plan |
 | `cb735d928a8`, `273431eff73` | **Forms Phase C paused.** Rulings F11–F14 and the ThinkPad's R19–R26 are recorded as history. Two Boa/Nova tests for the post-redirect subresource base are `#[ignore]`d: they compile (checked) but have never run. | [Forms plan](2026-10-07_forms_value_validation_submission_plan.md), "Paused 2026-10-15" |

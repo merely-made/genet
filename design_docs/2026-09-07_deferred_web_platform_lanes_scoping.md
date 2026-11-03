@@ -10,7 +10,7 @@ and names the proof a promoted execution plan must carry.
 **Parent:** [Web platform WPT census](2026-09-06_web_platform_wpt_census.md).
 The [harness repair](2026-09-07_wpt_harness_repair_plan.md),
 [IDL interfaces](2026-09-07_idl_interface_table_plan.md),
-[cheap globals](2026-09-07_cheap_globals_plan.md),
+[cheap globals](2026-11-03_globals_clone_timing_frontier_plan.md),
 [MutationObserver](2026-09-07_mutation_observer_plan.md),
 [XMLHttpRequest](2026-09-07_xhr_plan.md), and
 [Selection and Range](2026-09-07_selection_range_plan.md) have dated plans
@@ -362,7 +362,7 @@ a thread-confined runtime through the selected engine factory, exchanges
 messages and resource requests, and reports acknowledged idle. The S5/S6
 receipts below prove a narrow real Boa delivery path.
 
-The [cheap-globals lane](2026-09-07_cheap_globals_plan.md)'s in-agent APIs remain.
+The [cheap-globals lane](2026-11-03_globals_clone_timing_frontier_plan.md)'s in-agent APIs remain.
 `structured_clone.rs` now contains both its fused clone walk and a transportable
 tagged record through `__scSerialize`/`__scDeserialize`. Their existence does
 not close the transfer-custody gates: actual buffer detachment, receiving-port

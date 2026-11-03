@@ -6,7 +6,7 @@ conformance acceptance remains open as of 2026-09-09.
 The dedicated-worker section of
 [`2026-09-07_deferred_web_platform_lanes_scoping.md`](2026-09-07_deferred_web_platform_lanes_scoping.md#dedicated-worker),
 promoted to a dated plan and executed. It builds directly on the
-[cheap-globals lane](2026-09-07_cheap_globals_plan.md): `structured_clone.rs`
+[cheap-globals lane](2026-11-03_globals_clone_timing_frontier_plan.md): `structured_clone.rs`
 supplies the value walk this lane splits into a transportable record, and
 `messaging.rs` supplies the `MessagePort` this lane teaches to cross a thread.
 

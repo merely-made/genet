@@ -2304,7 +2304,7 @@ fn decode_script_bytes(bytes: &[u8], charset: Option<&str>) -> String {
 /// `livery_render_tests` module: Livery is the crate's one live render route
 /// now that the old genet-layout route (`#[cfg(feature = "render")]`, a
 /// feature this crate never declared) is gone. See
-/// `design_docs/2026-09-08_parser_script_interleaving_plan.md`'s Findings
+/// `design_docs/archive_docs/2026-11-03/2026-09-08_parser_script_interleaving_plan.md`'s Findings
 /// entry for what was ported, deleted, or left `#[ignore]`d and why.
 #[cfg(test)]
 mod tests {

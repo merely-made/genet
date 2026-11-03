@@ -115,7 +115,7 @@ Two later rulings the same day are recorded in the
   ruling C3: the two stream getter traps (`stream-safe-creation` and
   `patched-global`) move to the Streams lane.
   **2026-10-06 assessment:** the
-  [Streams plan](2026-10-06_whatwg_streams_plan.md) records fresh merged-runner
+  [Streams plan](archive_docs/2026-11-03/2026-10-06_whatwg_streams_plan.md) records fresh merged-runner
   subsets: both C3 files remain ERROR/evaluation-threw on both engines, with
   zero observed subtests. Their original census attribution remains historical.
   Real ArrayBuffer transfer is missing on both current engine builds, so the
@@ -393,7 +393,7 @@ These are first errors only. A file that dies on `crypto` may also need
 `Worker`; the true demand for each interface is at least this count.
 
 > **Partly closed 2026-09-07** by
-> [`2026-09-07_cheap_globals_plan.md`](2026-09-07_cheap_globals_plan.md):
+> [`2026-09-07_cheap_globals_plan.md`](archive_docs/2026-11-03/2026-09-07_cheap_globals_plan.md):
 > `crypto` (86), `performance` (22), `BroadcastChannel` (14), `MessageChannel`
 > (8), `PerformanceObserver` (4), `queueMicrotask` (3) and `Image` / `Option` /
 > `Audio` are now present, as is `structuredClone`. `XMLHttpRequest` (83) was

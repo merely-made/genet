@@ -12,7 +12,7 @@ Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md) row 14
 documents), picked as a conformance target by Mark on 2026-10-20 ("Fetch and
 request security cluster (Recommended),WebCrypto,Component model"). It
 continues the landed [Shadow DOM plan](2026-09-07_shadow_dom_plan.md) and
-[parser/script interleaving plan](2026-09-08_parser_script_interleaving_plan.md),
+[parser/script interleaving plan](2026-11-03_parser_script_frontier_plan.md),
 and is bound by the arena semantic contract
 [G5](../docs/2026-06-11_gc_arena_dom_plan.md#g5-arena-semantic-contract-partially-implemented-2026-09-08).
 Form-associated custom elements touch the

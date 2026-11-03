@@ -47,7 +47,7 @@ Comparison with the archived full-CSS map finds 10 named break changes
 (175 gains, five losses), and 42 grid changes (26 gains, sixteen losses).
 Multicol, tables, position, and page have identical named results. Thus net
 flex/grid gains conceal 21 former guard passes that now fail; these predate
-K6a and belong in the [Row 18 review](../design_docs/2026-08-25_livery_flex_shorthand_plan.md#2026-09-06-guard-regression-review).
+K6a and belong in the [Row 18 review](../design_docs/archive_docs/2026-11-03/2026-08-25_livery_flex_shorthand_plan.md#2026-09-06-guard-regression-review).
 The causes have not been isolated. Aggregate equality is not a named-result
 stability receipt.
 

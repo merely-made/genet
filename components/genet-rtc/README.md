@@ -51,7 +51,7 @@ profile. It does not depend on Genet, Personae, Notochord, Luggage, storage,
 
 Canonical receiving and validation plan:
 `genet/design_docs/2026-11-01_webrtc_conformance_plan.md`, E1.
-Supplier integration: `murm/design_docs/2026-10-13_murm_family_move_plan.md`,
+Supplier integration: `murm/design_docs/archive_docs/2026-11-02/2026-10-13_murm_family_move_plan.md`,
 WebRTC provider section. Native UDP tests are not headed-browser or WPT
 qualification.
 

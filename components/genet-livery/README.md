@@ -99,6 +99,14 @@ pooled layout medians improved in three cohorts, while pooled frame and cycle
 medians varied in direction. A consistent small end-to-end pool gain is not
 established.
 
+The borrowed-validation checkpoint `5ba4d1fa282` avoids rebuilding an owned key
+for a validated single prepared result. Three bounded CPU 0,2 cold cohorts
+showed small and article serial layout improvements against both original
+processes, while mixed and single-long comparisons varied. A retained Parley
+layout allocation remains on the long path. The whole-workload cold goal is
+still open; see the [qualification receipt](../../design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md)
+for paired results, allocation limits and current test boundaries.
+
 ## Explicit host generic resources
 
 A browser does not lend Parley its installed system fonts. Registering a face

@@ -1,11 +1,13 @@
 # WebRTC conformance and shared transport evaluation
 
-**Status (2026-11-01): E0/E1a qualified; native Genet data-channel intake
-qualified; application-carrier cutover, broader E2 acceptance and E3 remain open.**
+**Status (2026-11-02): E0/E1a qualified; native Genet data-channel intake and
+E2h headed interoperability qualified; broader E2, carrier cutover and E3 remain open.**
 The native receiving path is checked on both engines against selected unmodified
-WPT and direct encrypted data transfer. Ortet's scripted host compiles with the
-capability. Headed Chrome/Firefox, browser-guest, discovery/relay and media
-acceptance remain separate gates.
+WPT and encrypted direct/UDP-relay transfer. Ortet's scripted host compiles with
+the capability. IP-literal UDP STUN/TURN is implemented; DNS, TCP/TLS, restart,
+browser-guest and media acceptance remain separate gates. Installed headed
+Chrome and Firefox qualify the bounded direct/forced-UDP-TURN data-channel
+matrix; this is distinct from Genet running inside a browser guest.
 
 **Brief:** Mark asked to evaluate webrtc-rs against the existing stack, inspect
 Murm for duplication and dependency direction, and place the implementation
@@ -13,7 +15,7 @@ where Genet needs it for WPT conformance. Browser support is an engine feature;
 it does not wait for Commons calls or public Graphshell rendezvous.
 
 **Homes:** this plan owns Genet's conformance requirements and the evaluation.
-`murm/design_docs/2026-10-13_murm_family_move_plan.md` owns any shared supplier
+`murm/design_docs/2026-11-02_murm_family_move_plan.md` owns any shared supplier
 extraction and consumer cutover. Existing application-carrier qualification is
 in `mere/design_docs/mere_docs/implementation_strategy/2026-10-28_browser_carrier_plan.md`;
 call/media products remain in its sibling `2026-10-28_calls_and_media_plan.md`.
@@ -44,8 +46,9 @@ and a universal transport trait are not prerequisites for this evaluation.
 The provider implementation lives in `murm/wire/crates/rtc` (`murm-rtc`): a
 shared protocol API plus an optional caller-owned UDP adapter. Genet's host
 binding now consumes this exact Git supplier through `components/genet-webrtc`;
-the application carrier has not changed. Host-only candidate
-gathering is implemented; broader discovery and relaying remain explicit work.
+the application carrier has not changed. Host candidates and IP-literal UDP
+STUN/TURN use one caller-driven socket driver. Broader discovery and network
+fallbacks remain explicit work.
 
 Genet owns WebIDL conversion, exceptions, promises and the operations chain,
 stable JS wrapper identities, task/event ordering, per-realm connection
@@ -168,6 +171,52 @@ privacy, DTLS/SCTP transport events, renegotiation and network fallback remain
 explicit gaps until exercised. Expand beyond `webrtc/` only against named
 interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
 
+### E2h. Automated headed browser interoperability
+
+Use the installed Chrome and Firefox with their own dedicated, marker-owned
+profiles and built-in CDP/WebDriver BiDi endpoints, and a native Genet runtime
+fixture using the real factory. No microphone/camera permission is needed for
+data channels. Reuse the controlled IP-literal UDP coturn fixture. Keep the
+application carrier and browser-guest qualification separate.
+
+For a repeat run, start `murm/wire/crates/rtc/tests/coturn.sh` in WSL and use
+its printed numeric endpoint below. The runner shuts down its own peers and
+browsers; stop the foreground coturn fixture after the run.
+
+```powershell
+$env:CARGO_TARGET_DIR = 'C:\t\cargo-targets\genet'
+$env:CARGO_BUILD_BUILD_DIR = 'C:\t\cargo-targets\genet\build'
+$env:CARGO_PROFILE_DEV_DEBUG = '0'
+cargo build -p genet-webrtc --example interop_host --locked --offline -j 1
+node support/ci/webrtc_interop.mjs --server NUMERIC_WSL_IP:34790
+```
+
+The receiving fixture exposes coturn through a bounded Windows-facing UDP
+front end, forwarding unchanged datagrams to the WSL server with one backend
+socket per client. Direct cases use no discovery server. Firefox receives an
+origin-scoped local/loopback-network permission through BiDi, reset on shutdown;
+WebRTC preferences remain at their defaults. This qualifies the named local
+network path, not public TURN or arbitrary interface routing.
+
+Done: both Boa and Vano exchange text and fragmented binary with each headed
+browser, directly and through forced TURN, in both offer/answer roles. Verify
+the selected candidate pair, remote certificate fingerprints, channel modes,
+and native close/navigation revocation plus actual UDP socket release. Record
+default-browser mDNS refusals explicitly if the successful pair uses another
+candidate. Require an OS-visible window for each automation-owned browser;
+headless runs do not satisfy this gate. The complete matrix is 32 cases across
+engine, browser, route, offerer and cleanup mode, with bounded case deadlines.
+
+Append compact per-case results and source/tool identities to the existing
+receipt file, at most 256 KB additional and within its existing 1 MB total cap.
+Keep raw SDP, ICE credentials, browser profiles and exploratory logs out of
+receipts. Build artifacts reuse the stable Genet target. Automatic approval
+review rejected recursive deletion of a verified, exited test profile; retain
+the two bounded marker-owned profile caches for reuse, with their browser
+owners stopped. Failure remains recorded even when a later fix
+passes. DNS, mDNS resolution, restart/server replacement, TURN TCP/TLS, public
+deployment and media remain open unless separately qualified.
+
 ## Findings (2026-11-01)
 
 - `components/script-runtime-api/webrtc.rs` and its bootstrap now install
@@ -199,10 +248,15 @@ interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
   and checkpoints microtasks after each observation. SDP operations run as tasks,
   with signaling events before promise completion. Revisioned observations cannot
   overwrite a newer command result; description getters preserve slot aliases.
-- The first native route gathers host candidates. Relay-only construction owns
-  no socket and registers no direct candidate; changing route policy after
-  construction refuses with `NotSupportedError`. ICE server configuration is
-  retained, but discovery/allocation is not yet driven. Custom certificates,
+- The native route gathers host and configured IP-literal UDP STUN/TURN
+  candidates. Relay-only construction owns no route when no usable relay is
+  configured; otherwise it owns a control socket and relay candidates, suppresses
+  direct traffic, and conceals the physical related address in candidates/SDP.
+  Gathering waits for server results or a caller-selected deadline, with typed,
+  sanitized `icecandidateerror` events and a final null candidate. Local server
+  URL/relay protocol metadata stays out of candidate signaling JSON. Route-policy
+  changes, ICE-server replacement and configured-server restarts refuse with
+  `NotSupportedError`. DNS, TCP/TLS and mDNS are still open. Custom certificates,
   complete media/IDL, and full stats and transport event qualification remain
   open. `bufferedAmount` currently reflects the core's outstanding send bytes;
   exact web-visible timing and send-buffer saturation need their own coverage.
@@ -261,6 +315,32 @@ interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
   provider features and wire/API suitability remain separate decisions. No
   crypto implementation or shipping dependency was changed.
 
+## Headed interoperability findings (2026-11-02)
+
+- `support/ci/webrtc_interop.mjs` controls installed headed browsers through
+  CDP/BiDi and checks OS-visible windows. Its JSONL native fixture runs the real
+  runtime and factory. Both channel modes, Unicode text, a fragmented binary
+  payload, selected UDP route, independently observed remote certificate and
+  close/navigation socket release are asserted. Tests retain compact failures
+  and source identities in the existing receipt.
+- The pinned core enables mDNS queries by default. A multicast query cannot
+  use the provider's single unicast UDP route and could retain a refused packet
+  ahead of usable traffic. The native factory disables that unsupported path
+  and explicitly refuses unresolved `.local` candidates. Working numeric and
+  peer-reflexive paths remain usable; mDNS resolution is still open.
+- Core candidate-pair references used a different ID namespace from candidate
+  stats rows, and internally learned peer-reflexive candidates lacked rows.
+  The native adapter now supplies observations from actual ICE candidates and
+  resolves those references. Remote stats addresses are conservatively null;
+  remote server URL/relay-protocol fields and peer-reflexive candidates in
+  `getRemoteCandidates()` are omitted, preserving the web API's privacy boundary.
+  See the [stats address rule](https://www.w3.org/TR/webrtc-stats/#dom-rtcicecandidatestats-address)
+  and [remote-candidate getter](https://www.w3.org/TR/webrtc/#dom-rtcicetransport-getremotecandidates).
+- In this receiving environment Firefox's direct WSL server path timed out.
+  The bounded Windows UDP front end makes both browsers reach the same real
+  coturn fixture. Scoped browser network permission is recorded separately
+  from ICE gathering errors; permission alone did not establish that WSL path.
+
 ## Progress
 
 - 2026-11-01: E0 selected rtc and established the independent provider boundary.
@@ -274,6 +354,34 @@ interfaces/tests such as `webrtc-stats`, encoded transforms and media capture.
   retained. Strict native-adapter Clippy and Ortet all-target receiving checks
   pass. Concurrent upstream runtime/runner work was merged before final
   qualification.
+- 2026-11-01: Murm E1c now feeds IP-literal UDP STUN/TURN into Genet's native
+  host. Both engines qualify encrypted forced-relay transfer, private related
+  addresses, local-only server metadata, gathering errors/completion and
+  allocation lifecycle against controlled coturn. The original selected WPT
+  cases retain their identities/results; the additional ICE-error constructor
+  case and Ortet receiving check pass. Native discovery remains distinct from
+  headed/browser-guest, public TURN, DNS/TCP/TLS, restart and carrier acceptance.
+- 2026-11-02: E2h qualifies the installed headed Chrome/Firefox data-channel
+  matrix against Boa and Vano through direct and forced-UDP-relay routes,
+  both offerer roles, and native close/navigation teardown. The same pass
+  fixes an undriven mDNS query path, candidate stats references and remote
+  observation privacy. Targeted privacy checks and native regression gates
+  accompany the full matrix in the existing receipt; broader E2 and E3 remain open.
+
+## UDP STUN and TURN receiving gate
+
+Receive Murm E1c with IP-literal UDP servers, bounded gathering and allocation
+refresh. Start discovery on local-description gathering, preserve candidate
+server metadata, and surface sanitized gathering errors. Relay-only construction
+must retain its no-direct-route guarantee, including refusal and timeout paths.
+Changed server configuration must refuse until replacement/restart is supported.
+Host name resolution, TCP/TLS, mDNS, restart and carrier cutover remain open.
+Headed direct/relay interop is qualified separately by E2h. Done: both engines
+exchange encrypted messages using forced relay
+against coturn; failure/close paths release their sockets; existing native and
+selected WPT gates retain their case identities and results. Append compact
+evidence to the existing receipt file within its 1 MB total cap; record supplier
+and root-lock deltas rather than duplicating the full lock.
 
 ## Decisions
 

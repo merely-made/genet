@@ -20,3 +20,6 @@ system = ["dep:arboard"]
 
 [dependencies]
 arboard = { workspace = true, optional = true }
+
+[lints]
+workspace = true

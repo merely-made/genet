@@ -19,3 +19,6 @@ path = "lib.rs"
 # -> WGSL (wgsl-out). Pinned to the naga that ships with wgpu 29.
 naga = { version = "30", default-features = false, features = ["spv-in", "wgsl-in", "wgsl-out"] }
 rspirv = "0.13"
+
+[lints]
+workspace = true

@@ -35,3 +35,6 @@ version = "1"
 
 [dependencies.num-traits]
 version = "0.2"
+
+[lints]
+workspace = true

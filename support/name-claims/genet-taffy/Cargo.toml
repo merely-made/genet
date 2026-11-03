@@ -7,3 +7,13 @@ repository = "https://github.com/merely-made/genet"
 description = "The genet engine's taffy fork (vendored 0.12.x line with genet-side patches). NAME CLAIM: the real crate lives in mark-ik/serval (support/patches/taffy); consume it as a git dependency."
 
 [workspace]
+
+[workspace.lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"
+
+[lints]
+workspace = true

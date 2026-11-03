@@ -8,21 +8,28 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
 use std::net::{IpAddr, SocketAddr};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use murm_rtc::rtc::crypto::{RTCCryptoProvider, default_provider};
 use murm_rtc::rtc::data_channel::RTCDataChannelInit;
+use murm_rtc::rtc::ice::mdns::MulticastDnsMode;
+use murm_rtc::rtc::ice::url::{ProtoType, SchemeType, Url};
+use murm_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use murm_rtc::rtc::peer_connection::configuration::{
     RTCBundlePolicy, RTCConfiguration, RTCConfigurationBuilder, RTCIceTransportPolicy,
 };
 use murm_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
 use murm_rtc::rtc::peer_connection::message::RTCMessage;
 use murm_rtc::rtc::peer_connection::sdp::RTCSessionDescription;
-use murm_rtc::rtc::peer_connection::transport::{RTCIceCandidateInit, RTCIceServer};
+use murm_rtc::rtc::peer_connection::transport::{
+    RTCIceCandidate, RTCIceCandidateInit, RTCIceServer,
+};
 use murm_rtc::rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder};
 use murm_rtc::rtc::sansio::Protocol;
 use murm_rtc::rtc::statistics::StatsSelector;
 use murm_rtc::rtc::statistics::report::RTCStatsReportEntry;
-use murm_rtc::udp::{IoLimits, Output, ReadInterest, UdpPeer};
+use murm_rtc::udp::{DiscoveryConfig, IoLimits, Output, ReadInterest, Server, UdpPeer};
 use script_runtime_api::{WebRtcError, WebRtcFactory, WebRtcOperation, WebRtcPeer};
 use serde_json::{Value, json};
 
@@ -35,6 +42,8 @@ pub struct Settings {
     pub max_channels: usize,
     pub max_notifications: usize,
     pub poll_interval: Duration,
+    pub gathering_timeout: Duration,
+    pub allocation_refresh_interval_cap: Option<Duration>,
 }
 
 impl Default for Settings {
@@ -50,6 +59,8 @@ impl Default for Settings {
             max_channels: 256,
             max_notifications: 256,
             poll_interval: Duration::from_millis(1),
+            gathering_timeout: Duration::from_secs(8),
+            allocation_refresh_interval_cap: None,
         }
     }
 }
@@ -67,6 +78,7 @@ impl NativeWebRtcFactory {
             || settings.max_channels == 0
             || settings.max_notifications < 4
             || settings.poll_interval.is_zero()
+            || settings.gathering_timeout.is_zero()
         {
             return Err(failure("TypeError", "Invalid RTC host budgets"));
         }
@@ -77,6 +89,70 @@ impl NativeWebRtcFactory {
     }
 }
 
+fn discovery(
+    config: &Value,
+    settings: Settings,
+    crypto: Arc<dyn RTCCryptoProvider>,
+) -> Result<(DiscoveryConfig, Vec<String>), WebRtcError> {
+    let mut servers: Vec<Server> = Vec::new();
+    let mut refused = Vec::new();
+    let relay_only = config["iceTransportPolicy"] == "relay";
+    let mut count = 0;
+    for server in config["iceServers"].as_array().into_iter().flatten() {
+        for raw in server["urls"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+        {
+            count += 1;
+            if count > 32 {
+                return Err(failure(
+                    "QuotaExceededError",
+                    "RTC ICE server limit reached",
+                ));
+            }
+            let mut url = Url::parse_url(raw).map_err(protocol_error)?;
+            if relay_only && matches!(url.scheme, SchemeType::Stun | SchemeType::Stuns) {
+                continue;
+            }
+            url.username = server["username"].as_str().unwrap_or("").into();
+            url.password = server["credential"].as_str().unwrap_or("").into();
+            let ip = url.host.parse::<IpAddr>().ok();
+            if url.proto != ProtoType::Udp
+                || !matches!(url.scheme, SchemeType::Stun | SchemeType::Turn)
+                || ip
+                    .is_none_or(|ip| ip.is_unspecified() || ip.is_ipv4() != settings.bind.is_ipv4())
+            {
+                refused.push(url.to_string());
+                continue;
+            }
+            let address = SocketAddr::new(ip.expect("validated numeric host"), url.port);
+            if url.scheme == SchemeType::Turn
+                && servers
+                    .iter()
+                    .any(|s| s.url.scheme == SchemeType::Turn && s.address == address)
+            {
+                // One allocation per physical socket/server five-tuple. Preserve
+                // getConfiguration, and report the extra unsupported attempt.
+                refused.push(url.to_string());
+                continue;
+            }
+            servers.push(Server { url, address });
+        }
+    }
+    Ok((
+        DiscoveryConfig {
+            servers,
+            relay_only,
+            timeout: settings.gathering_timeout,
+            allocation_refresh_interval_cap: settings.allocation_refresh_interval_cap,
+            crypto_provider: crypto,
+        },
+        refused,
+    ))
+}
+
 fn failure(name: &'static str, message: &str) -> WebRtcError {
     WebRtcError {
         name,
@@ -85,6 +161,19 @@ fn failure(name: &'static str, message: &str) -> WebRtcError {
 }
 fn protocol_error(_: impl std::fmt::Display) -> WebRtcError {
     failure("OperationError", "RTC protocol operation failed")
+}
+fn candidate_value(candidate: RTCIceCandidate, local: bool) -> Option<Value> {
+    let mut value = serde_json::to_value(candidate.to_json().ok()?).ok()?;
+    if local {
+        value["url"] = json!(candidate.url);
+        if value["candidate"]
+            .as_str()
+            .is_some_and(|s| s.contains(" typ relay "))
+        {
+            value["relayProtocol"] = json!("udp");
+        }
+    }
+    Some(value)
 }
 fn configuration(v: &Value) -> Result<RTCConfiguration, WebRtcError> {
     let servers = v["iceServers"]
@@ -123,8 +212,8 @@ fn configuration(v: &Value) -> Result<RTCConfiguration, WebRtcError> {
 
 enum Endpoint {
     Host(Box<UdpPeer>),
-    // Host-only carriage cannot satisfy relay-only policy. Keep negotiation
-    // available without registering or transmitting a direct host candidate.
+    // No usable relay server is configured. Keep negotiation available without
+    // registering a local candidate or owning a direct route.
     NoRoute(Box<RTCPeerConnection>),
 }
 impl Endpoint {
@@ -157,6 +246,8 @@ struct State {
     held_candidates: Vec<Value>,
     transports: Value,
     revision: u64,
+    refused_servers: Vec<String>,
+    candidate_urls: BTreeMap<String, String>,
 }
 
 impl WebRtcFactory for NativeWebRtcFactory {
@@ -165,26 +256,35 @@ impl WebRtcFactory for NativeWebRtcFactory {
             return Err(failure("QuotaExceededError", "RTC peer limit reached"));
         }
         let config: Value = serde_json::from_str(configuration_json).map_err(protocol_error)?;
+        let crypto = default_provider().map_err(protocol_error)?;
+        let (discovery, refused_servers) = discovery(&config, self.settings, crypto.clone())?;
+        // mDNS requires its own multicast socket. Enabling the core's default
+        // QueryOnly mode without that route wedges the single UDP output queue.
+        let settings_engine = SettingEngineBuilder::new()
+            .with_crypto_provider(crypto)
+            .with_multicast_dns_mode(MulticastDnsMode::Disabled)
+            .build();
         let mut engine_config = config.clone();
         // The core rejects relay-only configurations with no TURN server,
-        // whereas WebRTC permits creating them. NoRoute never has a socket or
-        // local candidate, so relaxing this internal validation cannot dial a
-        // direct route or violate the page's relay-only policy.
+        // whereas WebRTC permits creating them. The I/O driver enforces relay
+        // policy independently, and NoRoute owns no socket or local candidate.
         if config["iceTransportPolicy"] == "relay" {
             engine_config["iceTransportPolicy"] = json!("all");
         }
         let core = RTCPeerConnectionBuilder::new()
+            .with_setting_engine(settings_engine)
             .with_configuration(configuration(&engine_config)?)
             .build(Instant::now())
             .map_err(protocol_error)?;
-        let endpoint = if config["iceTransportPolicy"] == "relay" {
+        let endpoint = if config["iceTransportPolicy"] == "relay" && discovery.servers.is_empty() {
             Endpoint::NoRoute(Box::new(core))
         } else {
             Endpoint::Host(Box::new(
-                UdpPeer::bind_host(
+                UdpPeer::bind_host_with_discovery(
                     core,
                     SocketAddr::new(self.settings.bind, 0),
                     self.settings.io,
+                    discovery,
                 )
                 .map_err(protocol_error)?,
             ))
@@ -202,6 +302,8 @@ impl WebRtcFactory for NativeWebRtcFactory {
                 held_candidates: Vec::new(),
                 transports: Value::Null,
                 revision: 0,
+                refused_servers,
+                candidate_urls: BTreeMap::new(),
                 observable: json!({"signalingState":"stable","iceGatheringState":"new","iceConnectionState":"new","connectionState":"new"}),
             }),
         }))
@@ -224,12 +326,18 @@ impl State {
             if state=="connected" && self.transports["state"]!="connected" && self.channels.values().any(|c|c["id"].is_null() && c["readyState"]!="closed") {
                 state="connecting".into();
             }
-            let candidates=|values:Vec<murm_rtc::rtc::peer_connection::transport::RTCIceCandidate>| values.into_iter().filter_map(|c|c.to_json().ok()).collect::<Vec<_>>();
+            let candidates=|values:Vec<RTCIceCandidate>,local:bool| values.into_iter().filter_map(|mut c|{
+                // getRemoteCandidates exposes signaled candidates, not the
+                // peer-reflexive addresses ICE learns from incoming traffic.
+                if !local && c.typ==murm_rtc::rtc::peer_connection::transport::RTCIceCandidateType::Prflx { return None; }
+                if local { c.url=self.candidate_urls.get(&c.id).cloned(); }
+                candidate_value(c,local)
+            }).collect::<Vec<_>>();
             json!({"state":state,"maxMessageSize":sctp.max_message_size(),"maxChannels":sctp.max_channels(),
                 "dtls":{"state":dtls.state().to_string(),"certificates":dtls.get_remote_certificates(),
                     "ice":{"state":ice.state().to_string(),"gatheringState":ice.gathering_state().to_string(),
                         "role":ice.role().to_string(),"component":ice.component().to_string(),
-                        "localCandidates":candidates(ice.get_local_candidates()),"remoteCandidates":candidates(ice.get_remote_candidates()),
+                        "localCandidates":candidates(ice.get_local_candidates(),true),"remoteCandidates":candidates(ice.get_remote_candidates(),false),
                         "localParameters":ice.get_local_parameters(),"remoteParameters":ice.get_remote_parameters()}}})
         })
     }
@@ -326,15 +434,21 @@ impl State {
                     return;
                 }
                 self.observable["iceGatheringState"] = json!(state.to_string());
+                if state.to_string() == "complete" {
+                    self.notify(json!({"event":"icegatheringstatechange"}));
+                    self.notify(json!({"event":"icecandidate","candidate":null}));
+                    return;
+                }
                 "icegatheringstatechange"
             },
             RTCPeerConnectionEvent::OnIceCandidateEvent(event) => {
-                let mut value = event
-                    .candidate
-                    .to_json()
-                    .ok()
-                    .and_then(|c| serde_json::to_value(c).ok())
-                    .unwrap_or(Value::Null);
+                let mut candidate = event.candidate;
+                if !event.url.is_empty() {
+                    self.candidate_urls
+                        .insert(candidate.id.clone(), event.url.clone());
+                    candidate.url = Some(event.url);
+                }
+                let mut value = candidate_value(candidate, true).unwrap_or(Value::Null);
                 if value["candidate"].as_str().is_some_and(str::is_empty) {
                     value = Value::Null;
                 }
@@ -414,6 +528,15 @@ impl WebRtcPeer for NativePeer {
             WebRtcOperation::Snapshot => Value::Null,
             WebRtcOperation::CreateOffer => {
                 if data["iceRestart"] == true {
+                    if state.config["iceServers"]
+                        .as_array()
+                        .is_some_and(|s| !s.is_empty())
+                    {
+                        return Err(failure(
+                            "NotSupportedError",
+                            "ICE server restart is not yet supported",
+                        ));
+                    }
                     state.endpoint.core_mut().restart_ice();
                 }
                 json!(
@@ -486,6 +609,17 @@ impl WebRtcPeer for NativePeer {
                 } else {
                     serde_json::from_value(data).map_err(protocol_error)?
                 };
+                if candidate
+                    .candidate
+                    .split_whitespace()
+                    .nth(4)
+                    .is_some_and(|address| address.to_ascii_lowercase().ends_with(".local"))
+                {
+                    return Err(failure(
+                        "OperationError",
+                        "mDNS ICE candidate resolution is not yet supported",
+                    ));
+                }
                 state
                     .endpoint
                     .core_mut()
@@ -494,6 +628,15 @@ impl WebRtcPeer for NativePeer {
                 Value::Null
             },
             WebRtcOperation::RestartIce => {
+                if state.config["iceServers"]
+                    .as_array()
+                    .is_some_and(|s| !s.is_empty())
+                {
+                    return Err(failure(
+                        "NotSupportedError",
+                        "ICE server restart is not yet supported",
+                    ));
+                }
                 state.endpoint.core_mut().restart_ice();
                 Value::Null
             },
@@ -503,6 +646,12 @@ impl WebRtcPeer for NativePeer {
                     return Err(failure(
                         "NotSupportedError",
                         "Changing the host route policy is not yet supported",
+                    ));
+                }
+                if state.config["iceServers"] != data["iceServers"] {
+                    return Err(failure(
+                        "NotSupportedError",
+                        "Replacing ICE servers is not yet supported",
                     ));
                 }
                 state
@@ -597,7 +746,7 @@ impl WebRtcPeer for NativePeer {
                     .endpoint
                     .core_mut()
                     .get_stats(now, StatsSelector::None);
-                let entries: Vec<Value> = report
+                let mut entries: Vec<Value> = report
                     .iter()
                     .filter_map(|entry| match entry {
                         RTCStatsReportEntry::PeerConnection(v) => serde_json::to_value(v).ok(),
@@ -610,6 +759,89 @@ impl WebRtcPeer for NativePeer {
                         _ => None,
                     })
                     .collect();
+                // Peer-reflexive candidates can be discovered inside ICE,
+                // without passing through the core's stats registration hook.
+                // Describe those real candidates before repairing references.
+                if let Some(sctp) = state.endpoint.core().sctp() {
+                    let ice = sctp.transport().ice_transport();
+                    let pairs: Vec<Value> = entries
+                        .iter()
+                        .filter(|v| v["type"] == "candidate-pair")
+                        .cloned()
+                        .collect();
+                    for (local, candidates, field, prefix) in [
+                        (
+                            true,
+                            ice.get_local_candidates(),
+                            "localCandidateId",
+                            "RTCLocalIceCandidate_",
+                        ),
+                        (
+                            false,
+                            ice.get_remote_candidates(),
+                            "remoteCandidateId",
+                            "RTCRemoteIceCandidate_",
+                        ),
+                    ] {
+                        for pair in &pairs {
+                            let Some(id) = pair[field].as_str() else {
+                                continue;
+                            };
+                            let raw = id.strip_prefix(prefix).unwrap_or(id);
+                            let registered = format!("{prefix}{raw}");
+                            if entries
+                                .iter()
+                                .any(|v| v["id"] == id || v["id"] == registered)
+                            {
+                                continue;
+                            }
+                            if let Some(candidate) = candidates.iter().find(|c| c.id == raw) {
+                                entries.push(json!({
+                                    "id":registered,"type":if local {"local-candidate"} else {"remote-candidate"},
+                                    "timestamp":pair["timestamp"],"transportId":pair["transportId"],
+                                    "address":candidate.address,"port":candidate.port,
+                                    "protocol":candidate.protocol.to_string(),"candidateType":candidate.typ.to_string(),
+                                    "priority":candidate.priority,"foundation":candidate.foundation,
+                                }));
+                            }
+                        }
+                    }
+                }
+                // The current core registers namespaced candidate statistics
+                // but its pair accumulator still refers to raw candidate IDs.
+                // Every web-visible reference must identify an actual map row.
+                let ids: std::collections::BTreeSet<String> = entries
+                    .iter()
+                    .filter_map(|v| v["id"].as_str().map(str::to_owned))
+                    .collect();
+                for entry in &mut entries {
+                    // W3C RTCIceCandidateStats defaults remote addresses to
+                    // null. Keep this conservative even for signaled addresses;
+                    // remote server URLs and relay protocols are never exposed.
+                    if entry["type"] == "remote-candidate"
+                        && let Some(object) = entry.as_object_mut()
+                    {
+                        object.insert("address".into(), Value::Null);
+                        object.remove("url");
+                        object.remove("relayProtocol");
+                    }
+                    if entry["type"] != "candidate-pair" {
+                        continue;
+                    }
+                    for (field, prefix) in [
+                        ("localCandidateId", "RTCLocalIceCandidate_"),
+                        ("remoteCandidateId", "RTCRemoteIceCandidate_"),
+                    ] {
+                        if let Some(raw) = entry[field].as_str()
+                            && !ids.contains(raw)
+                        {
+                            let registered = format!("{prefix}{raw}");
+                            if ids.contains(&registered) {
+                                entry[field] = json!(registered);
+                            }
+                        }
+                    }
+                }
                 json!(entries)
             },
             WebRtcOperation::Close => {
@@ -659,6 +891,17 @@ impl WebRtcPeer for NativePeer {
                 out.push(value.to_string());
                 continue;
             }
+            if state.gathering && !state.refused_servers.is_empty() {
+                let url = state.refused_servers.remove(0);
+                state.notify(
+                    json!({"event":"icecandidateerror","url":url,"errorCode":701,
+                    "errorText":"ICE server transport or address is not supported by this host"}),
+                );
+                if let Some(value) = state.notifications.pop_front() {
+                    out.push(value.to_string());
+                }
+                continue;
+            }
             let output = match &mut state.endpoint {
                 Endpoint::Host(peer) => peer.poll(
                     Instant::now() + Duration::from_millis(10),
@@ -685,6 +928,9 @@ impl WebRtcPeer for NativePeer {
                 },
             };
             match output {
+                Ok(Some(Output::GatheringError { url, code })) => state.notify(json!({
+                    "event":"icecandidateerror","url":url,"errorCode":code,
+                    "errorText":"ICE server gathering failed"})),
                 Ok(Some(Output::Event(event))) => state.observe(event),
                 Ok(Some(Output::Message(message))) => {
                     if let RTCMessage::DataChannelMessage(id, message) = message.message {

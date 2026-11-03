@@ -4,7 +4,7 @@
 **Status:** implemented and focused-verified 2026-08-23. First scope of
 the reader/extraction capability; before this work nothing else in genet or
 mere had planned it beyond the one-line U3 item in Turnstone's
-[user-agent taxonomy](../../turnstone/design_docs/2026-08-03_user_agent_taxonomy_plan.md).
+[user-agent taxonomy](../../turnstone/design_docs/archive_docs/2026-11-02/2026-08-03_user_agent_taxonomy_plan.md).
 Mere-side context: the port law in the
 [family composition thesis](../../mere/design_docs/2026-08-12_family_composition_thesis_brief.md).
 

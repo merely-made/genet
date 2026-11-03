@@ -60,3 +60,6 @@ tokio-tungstenite = { version = "0.30", optional = true }
 mockito = "1"
 # Used only to build gzip fixtures in tests; decode itself is async-compression.
 flate2 = "1"
+
+[lints]
+workspace = true

@@ -19,3 +19,6 @@ serde = { workspace = true, features = ["derive"] }
 ipc-channel = { workspace = true }
 servo-media-streams = { workspace = true }
 servo-media-traits = { workspace = true }
+
+[lints]
+workspace = true

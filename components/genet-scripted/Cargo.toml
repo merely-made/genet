@@ -69,3 +69,6 @@ genet-bole = { path = "../script-engine-boa" }
 # Nova backend on all 64-bit targets, including wasm64. Optional, gated by
 # `scripted-nova` (see [features]).
 genet-vano = { path = "../script-engine-nova", optional = true }
+
+[lints]
+workspace = true

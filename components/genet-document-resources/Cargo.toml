@@ -19,3 +19,6 @@ layout_dom_api = { workspace = true }
 
 [dev-dependencies]
 genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
+
+[lints]
+workspace = true

@@ -61,3 +61,6 @@ url = { workspace = true, optional = true }
 # Livery resource tests encode small PNG fixtures even when the smolweb
 # feature (which owns the optional production dependency) is disabled.
 image = { workspace = true }
+
+[lints]
+workspace = true

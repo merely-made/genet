@@ -46,3 +46,6 @@ accesskit = { workspace = true, optional = true }
 [dev-dependencies]
 # A parsed HTML document for the content-introspection (`inspect`) tests.
 genet-static-dom = { path = "../genet-static-dom" }
+
+[lints]
+workspace = true

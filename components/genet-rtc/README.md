@@ -17,11 +17,13 @@ timer driver. Dropping the peer releases the socket; it spawns no tasks.
 `next_with_interest` lets a full data consumer keep servicing protocol I/O,
 timers and media while leaving data-channel reads under SCTP backpressure.
 
-The engine is pinned to upstream commit
-`70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38`, which fixes DCEP reliability on
-accepted channels (upstream #280). The published 0.21.1 release failed our
+The engine is pinned to `merely-made/rtc` commit
+`3e03d99e5226952faf547b35b07c30ca2fdbaaa4`, based on upstream
+`70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38`. It retains the upstream DCEP fix
+(#280) and fixes the bounded restart data path and continuing DTLS answer role.
+The published 0.21.1 release failed our
 real-packet partial-reliability check; the frozen E0 comparison still describes
-that release. This is an immutable upstream source dependency, not a local
+that release. This is an immutable maintained source dependency, not a local
 registry edit or a root-only Cargo patch that consumers would lose.
 
 `bind_host_with_discovery` / `bind_with_discovery` additionally take resolved
@@ -32,9 +34,20 @@ direct peer packets. TURN authentication, permissions and refresh use the pinned
 protocol client. One retained protocol datagram and one socket datagram bound
 pending sends, including permission waits. Close/drop attempts authenticated
 allocation release without waiting. Server errors are observations, not invented
-peer-close events. DNS, interface discovery, mDNS, TCP/TLS, ICE restart/server
-replacement and multiple-interface routing remain open host work. A remote
+peer-close events. DNS, interface discovery, mDNS, TCP/TLS, server replacement
+and multiple-interface routing remain open host work. A remote
 candidate is not authorization to ignore the consumer's network policy.
+
+After applying a new local ICE generation, republish retained local candidates
+and call `restart_gathering()`. It restarts bounded STUN transactions while
+retaining TURN allocations, permissions and refresh on the same socket. The
+core retains only the previous nominated data route during negotiation, outside
+the fresh candidate/check tables, until replacement, failure or a bounded
+deadline. Old consent requests are authenticated and answered only on that
+retained route; they cannot populate fresh checks or extend its deadline.
+This supports fixed-server ICE restart; it does not rebind interfaces
+or replace configured servers. Genet owns sticky requests, event ordering and
+candidate generation validation at its web boundary.
 
 The core defaults to querying mDNS, which needs a separate multicast route.
 For this single-socket adapter, build its SettingEngine with
@@ -51,8 +64,8 @@ profile. It does not depend on Genet, Personae, Notochord, Luggage, storage,
 
 Canonical receiving and validation plan:
 `genet/design_docs/2026-11-01_webrtc_conformance_plan.md`, E1.
-Supplier integration: `murm/design_docs/archive_docs/2026-11-02/2026-10-13_murm_family_move_plan.md`,
-WebRTC provider section. Native UDP tests are not headed-browser or WPT
+Supplier integration: `murm/design_docs/2026-11-02_murm_family_move_plan.md`,
+RTC ICE restart section. Native UDP tests are not headed-browser or WPT
 qualification.
 
 The original five native tests cover both host polling and async waits on working Rust

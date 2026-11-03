@@ -22,6 +22,7 @@ use rtc::turn::proto::chandata::ChannelData;
 use super::Error;
 
 /// An ICE server resolved by the host. Credentials are deliberately not Debug.
+#[derive(Clone)]
 pub struct Server {
     /// Parsed URL, including TURN credentials. Its display form omits credentials.
     pub url: Url,
@@ -30,6 +31,7 @@ pub struct Server {
 }
 
 /// Discovery policy supplied by the host, independently of the protocol engine.
+#[derive(Clone)]
 pub struct DiscoveryConfig {
     /// At most 32 resolved UDP servers. Duplicate TURN endpoints are refused.
     pub servers: Vec<Server>,
@@ -51,9 +53,11 @@ struct Managed {
     reflexive: Option<SocketAddr>,
     done: bool,
     turn: bool,
+    started: bool,
 }
 
 pub(super) struct Discovery {
+    config: DiscoveryConfig,
     clients: Vec<Managed>,
     relay_only: bool,
     timeout: Duration,
@@ -72,7 +76,7 @@ impl Discovery {
             return Err(Error::Configuration("invalid discovery budgets"));
         }
         let mut clients: Vec<Managed> = Vec::new();
-        for server in config.servers {
+        for server in config.servers.iter().cloned() {
             let turn = server.url.scheme == SchemeType::Turn;
             if server.url.proto != ProtoType::Udp
                 || !matches!(server.url.scheme, SchemeType::Stun | SchemeType::Turn)
@@ -121,6 +125,7 @@ impl Discovery {
                 reflexive: None,
                 done: false,
                 turn,
+                started: false,
             });
         }
         Ok(Self {
@@ -131,6 +136,7 @@ impl Discovery {
             started: false,
             finished: false,
             errors: VecDeque::new(),
+            config,
         })
     }
 
@@ -145,6 +151,10 @@ impl Discovery {
         self.started = true;
         self.deadline = now.checked_add(self.timeout);
         for managed in &mut self.clients {
+            if managed.started {
+                continue;
+            }
+            managed.started = true;
             if let Some(client) = &mut managed.client {
                 if managed.turn {
                     client.allocate(now)?;
@@ -154,6 +164,20 @@ impl Discovery {
             }
         }
         Ok(())
+    }
+
+    /// Recheck STUN mappings while retaining TURN allocations, their pending
+    /// transactions, permissions and refresh deadlines on the same five-tuple.
+    pub fn restart(&mut self, local: SocketAddr, now: Instant) -> Result<(), Error> {
+        let mut next = Self::new(local, self.config.clone())?;
+        for (old, new) in self.clients.iter_mut().zip(&mut next.clients) {
+            if old.turn && old.client.is_some() {
+                std::mem::swap(old, new);
+            }
+        }
+        self.close();
+        *self = next;
+        self.start(now)
     }
 
     pub fn next_deadline(&mut self) -> Option<Instant> {
@@ -382,6 +406,62 @@ impl Discovery {
 mod tests {
     use super::*;
     use rtc::stun::message::BINDING_SUCCESS;
+
+    #[test]
+    fn restarted_stun_discards_the_old_transaction_but_preserves_ice_demux() {
+        let local = "127.0.0.1:10000".parse().unwrap();
+        let server = "127.0.0.1:3478".parse().unwrap();
+        let mut discovery = Discovery::new(
+            local,
+            DiscoveryConfig {
+                servers: vec![Server {
+                    url: Url::parse_url("stun:127.0.0.1:3478").unwrap(),
+                    address: server,
+                }],
+                relay_only: false,
+                timeout: Duration::from_secs(1),
+                allocation_refresh_interval_cap: None,
+                crypto_provider: rtc::crypto::default_provider().unwrap(),
+            },
+        )
+        .unwrap();
+        discovery.start(Instant::now()).unwrap();
+        let transaction = |packet: TaggedBytesMut| {
+            let mut message = Message::new();
+            message.raw = packet.message.to_vec();
+            message.decode().unwrap();
+            message.transaction_id
+        };
+        let old = transaction(discovery.poll_write().unwrap());
+        discovery.restart(local, Instant::now()).unwrap();
+        let fresh = transaction(discovery.poll_write().unwrap());
+        assert_ne!(old, fresh);
+        let response = |tid| {
+            let mut message = Message::new();
+            message
+                .build(&[Box::new(tid), Box::new(BINDING_SUCCESS)])
+                .unwrap();
+            TaggedBytesMut {
+                now: Instant::now(),
+                message: bytes::BytesMut::from(message.raw.as_slice()),
+                transport: TransportContext {
+                    local_addr: local,
+                    peer_addr: server,
+                    transport_protocol: TransportProtocol::UDP,
+                    ecn: None,
+                },
+            }
+        };
+        assert!(discovery.read(response(old)).unwrap().is_some());
+        assert!(
+            discovery.clients[0]
+                .client
+                .as_ref()
+                .unwrap()
+                .has_transaction(&fresh)
+        );
+        assert!(discovery.read(response(fresh)).unwrap().is_none());
+    }
 
     #[test]
     fn shared_server_response_demux_checks_transaction_and_source_but_preserves_ice_requests() {

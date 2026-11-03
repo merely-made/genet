@@ -48,10 +48,15 @@ fn certificate_fingerprint(peer: &UdpPeer) -> String {
         .join(":")
 }
 
-#[tokio::test]
-async fn encrypted_udp_preserves_multiple_channel_modes_and_message_boundaries() {
-    let mut left = peer().await;
-    let mut right = peer().await;
+fn negotiate_modes(
+    left: &mut UdpPeer,
+    right: &mut UdpPeer,
+) -> (
+    usize,
+    usize,
+    murm_rtc::rtc::peer_connection::sdp::RTCSessionDescription,
+    murm_rtc::rtc::peer_connection::sdp::RTCSessionDescription,
+) {
     let ordered = left
         .core_mut()
         .create_data_channel("ordered", None)
@@ -86,6 +91,15 @@ async fn encrypted_udp_preserves_multiple_channel_modes_and_message_boundaries()
     left.core_mut()
         .set_remote_description(now, answer.clone())
         .unwrap();
+
+    (ordered, unordered, offer, answer)
+}
+
+#[tokio::test]
+async fn encrypted_udp_preserves_multiple_channel_modes_and_message_boundaries() {
+    let mut left = peer().await;
+    let mut right = peer().await;
+    let (ordered, unordered, offer, answer) = negotiate_modes(&mut left, &mut right);
 
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut opened_left = Vec::new();
@@ -176,6 +190,10 @@ async fn encrypted_udp_preserves_multiple_channel_modes_and_message_boundaries()
     assert_eq!(certificate_fingerprint(&left), fingerprint(&answer.sdp));
     assert_eq!(certificate_fingerprint(&right), fingerprint(&offer.sdp));
 
+    close_pair(&mut left, &mut right).await;
+}
+
+async fn close_pair(left: &mut UdpPeer, right: &mut UdpPeer) {
     left.close().unwrap();
     let close_deadline = Instant::now() + Duration::from_secs(2);
     let mut left_closed = false;

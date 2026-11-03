@@ -167,6 +167,9 @@ impl UdpPeer {
     /// this adapter cannot invent the destination interface of received UDP.
     /// This creates no thread/task and performs no STUN, TURN or DNS discovery.
     /// Call [`Self::finish_host_candidates`] when host-only gathering is done.
+    ///
+    /// # Errors
+    /// Returns an error for invalid budgets, a failed bind or invalid candidates.
     #[cfg(feature = "udp")]
     pub async fn bind(
         core: RTCPeerConnection,
@@ -180,6 +183,9 @@ impl UdpPeer {
 
     /// Bind a nonblocking host socket without a Tokio runtime or background task.
     /// Drive it through [`Self::poll`] and schedule its [`Self::next_deadline`].
+    ///
+    /// # Errors
+    /// Returns an error for invalid budgets, a failed bind or invalid candidates.
     pub fn bind_host(
         core: RTCPeerConnection,
         bind: SocketAddr,
@@ -193,6 +199,9 @@ impl UdpPeer {
 
     /// Bind with host-resolved UDP discovery. Gathering starts only when
     /// [`Self::finish_host_candidates`] is called. This performs no DNS lookup.
+    ///
+    /// # Errors
+    /// Returns an error for invalid discovery/budgets, socket bind or candidates.
     pub fn bind_host_with_discovery(
         core: RTCPeerConnection,
         bind: SocketAddr,
@@ -206,6 +215,9 @@ impl UdpPeer {
     }
 
     /// Async socket counterpart of [`Self::bind_host_with_discovery`].
+    ///
+    /// # Errors
+    /// Returns an error for invalid discovery/budgets, socket bind or candidates.
     #[cfg(feature = "udp")]
     pub async fn bind_with_discovery(
         core: RTCPeerConnection,
@@ -296,6 +308,9 @@ impl UdpPeer {
     /// Finish supplying host candidates and start configured server discovery.
     /// With no servers, gathering completes immediately. Otherwise completion
     /// waits for every server's result or the configured gathering deadline.
+    ///
+    /// # Errors
+    /// Returns a discovery-client or candidate-registration error.
     pub fn finish_host_candidates(&mut self) -> Result<(), Error> {
         if let Some(discovery) = &mut self.discovery {
             discovery.start(Instant::now())?;
@@ -306,8 +321,33 @@ impl UdpPeer {
         Ok(())
     }
 
+    /// Finish gathering for a newly applied ICE generation on the same socket.
+    ///
+    /// Call after applying a restart description in the core. Existing local
+    /// candidates and TURN allocations remain usable; STUN gets fresh bounded
+    /// transactions. This does not replace servers, rebind interfaces or restart
+    /// DTLS/SCTP. The caller publishes retained candidates for the new generation.
+    ///
+    /// # Errors
+    /// Returns a configuration error after close, or a discovery/protocol error.
+    pub fn restart_gathering(&mut self) -> Result<(), Error> {
+        if self.closed {
+            return Err(Error::Configuration("cannot gather on a closed peer"));
+        }
+        if let Some(discovery) = &mut self.discovery {
+            discovery.restart(self.local_addr, Instant::now())?;
+            discovery.advance(&mut self.core, self.local_addr)?;
+        } else {
+            self.core.add_local_candidate(Default::default())?;
+        }
+        Ok(())
+    }
+
     /// Start graceful protocol close; continue polling to flush close packets.
     /// Dropping the peer instead immediately releases the socket.
+    ///
+    /// # Errors
+    /// Returns the protocol engine's close error.
     pub fn close(&mut self) -> Result<(), Error> {
         self.core.close()?;
         self.closed = true;
@@ -405,6 +445,9 @@ impl UdpPeer {
     /// Process one bounded, nonblocking host turn. `None` means wait for socket
     /// readiness or [`Self::next_deadline`]. Both native socket adapters use
     /// this same packet, timer, event, message and backpressure machinery.
+    ///
+    /// # Errors
+    /// Returns socket, route, datagram-budget, discovery or protocol errors.
     pub fn poll(
         &mut self,
         deadline: Instant,
@@ -493,6 +536,9 @@ impl UdpPeer {
     }
 
     /// Deliver an observation or await native I/O until the host's deadline.
+    ///
+    /// # Errors
+    /// Returns the errors from polling or waiting for the socket.
     #[cfg(feature = "udp")]
     pub async fn next(&mut self, deadline: Instant) -> Result<Output, Error> {
         self.next_with_interest(deadline, ReadInterest::All).await
@@ -500,6 +546,9 @@ impl UdpPeer {
 
     /// Await I/O while honoring the host's current receive capacity. A full
     /// data consumer can keep servicing protocol timers, I/O and media.
+    ///
+    /// # Errors
+    /// Returns the errors from polling or waiting for the socket.
     #[cfg(feature = "udp")]
     pub async fn next_with_interest(
         &mut self,

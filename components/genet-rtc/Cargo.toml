@@ -19,8 +19,8 @@ udp = ["host", "dep:tokio"]
 
 [dependencies]
 # Published 0.21.1 loses DCEP reliability on accepted channels. This exact
-# upstream fix configures the accepted SCTP stream and its public attributes.
-rtc = { git = "https://github.com/webrtc-rs/rtc", rev = "70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38", default-features = false }
+# supplier includes the upstream DCEP fix plus the bounded ICE-restart data path fix.
+rtc = { git = "https://github.com/merely-made/rtc", rev = "7d54e3a269c59a2ed859582581586c6e661b57f1", default-features = false }
 bytes = { version = "1", optional = true }
 thiserror = { version = "2", optional = true }
 

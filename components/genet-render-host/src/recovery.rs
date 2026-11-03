@@ -468,6 +468,8 @@ pub struct SharedRenderCore {
     hub: Arc<WakeHub>,
     factory: Factory,
     next_attempt: AtomicU64,
+    #[cfg(not(target_arch = "wasm32"))]
+    native_shutdown: Mutex<(bool, Vec<crate::native_frame::NativeFrameShutdown>)>,
 }
 impl SharedRenderCore {
     /// First attachment wins. Reattaching an already-owned core returns its
@@ -496,6 +498,8 @@ impl SharedRenderCore {
             hub: Arc::new(WakeHub::default()),
             factory,
             next_attempt: AtomicU64::new(1),
+            #[cfg(not(target_arch = "wasm32"))]
+            native_shutdown: Mutex::new((false, vec![core.native_frame_shutdown_handle()])),
         });
         *association = Arc::downgrade(&owner);
         drop(association);
@@ -524,7 +528,31 @@ impl SharedRenderCore {
             hub: Arc::new(WakeHub::default()),
             factory,
             next_attempt: AtomicU64::new(1),
+            #[cfg(not(target_arch = "wasm32"))]
+            native_shutdown: Mutex::new((false, Vec::new())),
         })
+    }
+    /// Close and join completion workers for every generation in this owner.
+    /// Drop active submissions first. Waits for active publication callbacks;
+    /// returns an error for reentrant closure or an active submission. Call
+    /// before host GPU resources are released.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn close_native_frames(&self) -> Result<(), String> {
+        let handles = {
+            let mut registry = self
+                .native_shutdown
+                .lock()
+                .expect("native shutdown poisoned");
+            registry.0 = true;
+            registry.1.clone()
+        };
+        let mut first_error = None;
+        for handle in handles {
+            if let Err(error) = handle.close() {
+                first_error.get_or_insert(error);
+            }
+        }
+        first_error.map_or(Ok(()), Err)
     }
     pub fn subscribe(&self, wake: Wake) -> RecoverySubscription {
         let subscription = self.hub.subscribe(wake);
@@ -718,6 +746,8 @@ impl SharedRenderCore {
         });
         let mut retired = None;
         let mut foreign_owner = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut close_retired = false;
         let retired_waker;
         let monitor;
         {
@@ -757,6 +787,22 @@ impl SharedRenderCore {
                 )
                 .ok();
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Ok(core) = &replacement {
+                let mut registry = self
+                    .native_shutdown
+                    .lock()
+                    .expect("native shutdown poisoned");
+                registry.1.push(core.native_frame_shutdown_handle());
+                if registry.0 {
+                    close_retired = true;
+                    retired = std::mem::replace(
+                        &mut replacement,
+                        Err("native frame owner is closed".into()),
+                    )
+                    .ok();
+                }
+            }
             monitor = replacement.as_ref().ok().map(|core| core.loss.clone());
             retired_waker = match &mut *state {
                 State::Recovering { waker, .. } => waker.take(),
@@ -770,6 +816,12 @@ impl SharedRenderCore {
                 },
             };
             claim.active = false;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if close_retired {
+            if let Some(core) = &retired {
+                let _ = core.close_native_frames();
+            }
         }
         drop(retired);
         drop(foreign_owner);

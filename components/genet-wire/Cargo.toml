@@ -33,3 +33,6 @@ hyper = { version = "1", features = ["server", "http2"] }
 tokio-rustls = "0.26"
 rcgen = "0.14"
 mockito = "1"
+
+[lints]
+workspace = true

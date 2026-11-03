@@ -74,3 +74,10 @@ worker cases (including real initial-document headers, redirect identity and
 BOM decoding). Metadata selects one wire supplier, no engine back-edge into
 Genet/Netfetcher and no foreign worktree Git manifest. Source hashes and gates:
 `design_docs/receipts/2026-10-14_netfetcher_wire/qualification.json`.
+
+
+## Follow-up findings, 2026-11-03
+
+The repository hook exposed a remaining protocol-type ownership mismatch in `components/netfetcher/src/websocket.rs`: the pinned Murm connector exports tungstenite 0.29, while Netfetcher's direct dependency selected 0.30. Browser message, close and handshake-error handling must use the connector's exported protocol types. The separate Tokio/Tungstenite loopback peer belongs in dev-dependencies, with its own close-frame types. This preserves the public browser-policy API while allowing the provider and peer versions to differ.
+
+Progress, 2026-11-03: production imports and signatures now use `murm_wire::websocket::tungstenite`; the direct 0.30 dependency is test-only. Existing Netfetcher tests and the transport-free library check pass on the working compiler. Repository hook requalification follows; broader runtime and MSRV results are not inferred from this repair. Detailed receipts accompany the current shaping/upstream qualification pass.

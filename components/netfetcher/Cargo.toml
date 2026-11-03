@@ -20,7 +20,7 @@ default = ["hyper-transport", "h3", "websocket"]
 # The default transport: hyper 1 (h1/h2) over rustls, one process-wide pool.
 hyper-transport = ["dep:murm-wire", "murm-wire/http"]
 h3 = ["hyper-transport", "murm-wire/h3"]
-websocket = ["dep:tokio-tungstenite", "dep:murm-wire", "murm-wire/websocket"]
+websocket = ["dep:murm-wire", "murm-wire/websocket"]
 
 [dependencies]
 genet-host-api = { path = "../genet-host-api", version = "0.2.0" }
@@ -53,10 +53,9 @@ httpdate = "1"
 # at eTLD edges (e.g. *.github.io), replacing the last-two-labels approximation.
 psl = "2"
 
-# WebSocket (increment 5): native-only (tokio + rustls for wss://).
-tokio-tungstenite = { version = "0.30", optional = true }
-
 [dev-dependencies]
+# Independent loopback peer; production types come from Murm's connector.
+tokio-tungstenite = "0.30"
 mockito = "1"
 # Used only to build gzip fixtures in tests; decode itself is async-compression.
 flate2 = "1"

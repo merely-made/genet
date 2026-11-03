@@ -81,3 +81,12 @@ Done-conditions: preserve the automatic merge and existing shaping runtime behav
 Findings, 2026-11-03: upstream's changes since the shared base add RTC work, the genet-events release, docs and house-style checks, with no Livery/Buckram/Parley runtime edits. The new source-size rule applies to the shaping lane's cache, prepared-input and integration-test files. Their tests can move into smaller modules while keeping production bodies and the independent normalization oracle intact. Full-workspace offline metadata also reaches uncached RTC dependencies, beyond the selected layout qualification cone.
 
 Progress, 2026-11-03: automatic merge `b150f229f7d`, test relocation `068c3fbd020` and the test-import guard `ed891681872` are committed locally. Independent source review found no actionable issue. Current-source layout, consumer, wasm and focused style qualification passed, including covering checks for the import-only correction. The existing canonical receipt holds commands, lock provenance, gate counts and resource evidence. Full workspace hooks need the unavailable cargo-deny tool and uncached RTC dependencies; current merged-source performance and broader runtime qualification remain open.
+
+
+## Remaining repository checks and performance refresh, 2026-11-03
+
+**Status: in progress, 2026-11-03.** Finish the declared repository hooks with the pinned graph, then measure the selected clean source. Done-conditions: all configured `prek run --all-files` hooks pass with the frozen lock; bounded current-source sanity and three balanced cohorts preserve paint, full font bytes and work counts; direct frame/layout/cycle comparisons and controls are recorded; a fresh review accepts the combined evidence.
+
+The refresh uses original A/B controls, the pre-upstream borrowed-validation build and current serial/two-worker builds on the four targeted cold fixtures. Builds and checks retain 150% CPU; timings alone use 200% and CPU 0,2 with the same 3 GiB/zero-swap/shared-lock envelope. The existing cold-equivalence criterion and experimental shared-buffer boundary continue to apply.
+
+Findings, 2026-11-03: filling the pinned package cache makes full locked/offline metadata available. The broader Ortet Clippy hook exposed Netfetcher's mixed WebSocket protocol types, outside the prior layout qualification cone. The supplier-type repair is recorded in the Netfetcher wire-adoption plan; shaping runtime remains unchanged. Performance builds wait until hook fixes establish the final source checkpoint.

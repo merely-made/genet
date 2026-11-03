@@ -15,7 +15,7 @@ where Genet needs it for WPT conformance. Browser support is an engine feature;
 it does not wait for Commons calls or public Graphshell rendezvous.
 
 **Homes:** this plan owns Genet's conformance requirements and the evaluation.
-`murm/design_docs/2026-10-13_murm_family_move_plan.md` owns any shared supplier
+`murm/design_docs/2026-11-02_murm_family_move_plan.md` owns any shared supplier
 extraction and consumer cutover. Existing application-carrier qualification is
 in `mere/design_docs/mere_docs/implementation_strategy/2026-10-28_browser_carrier_plan.md`;
 call/media products remain in its sibling `2026-10-28_calls_and_media_plan.md`.

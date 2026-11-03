@@ -6,7 +6,7 @@ policy/host checks pass through the immutable Git supplier. Mere host adoption
 is qualified before publication and receives this Genet commit next.
 
 Canonical migration authority:
-`murm/design_docs/2026-10-13_murm_family_move_plan.md`, MOVE5 and R3. This
+`murm/design_docs/archive_docs/2026-11-02/2026-10-13_murm_family_move_plan.md`, MOVE5 and R3. This
 receiving plan owns Genet's adapter and policy validation, not a second wire
 specification.
 

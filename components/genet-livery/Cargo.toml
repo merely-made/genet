@@ -53,3 +53,6 @@ postcard = { version = "1", features = ["alloc"] }
 [[test]]
 name = "replaced_image"
 required-features = ["image-decode"]
+
+[lints]
+workspace = true

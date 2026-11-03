@@ -9,3 +9,6 @@ description = "Versioned Unicode text boundaries and explicit text offsets for G
 
 [dependencies]
 unicode-segmentation = "=1.13.3"
+
+[lints]
+workspace = true

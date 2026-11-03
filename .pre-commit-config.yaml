@@ -1,0 +1,26 @@
+# mere/design_docs/mere_docs/implementation_strategy/2026-10-30_house_style_plan.md
+fail_fast: true
+repos:
+  - repo: local
+    hooks:
+      - id: line-ceiling
+        name: line ceiling
+        entry: line-ceiling
+        language: rust
+        # Match the declared exclusions before classifying the imported corpus.
+        exclude: '^(?:support/patches(?:/|$)|tests/wpt(?:/|$)|tests/blink_perf_tests(?:/|$)|components/genet\-scripted\-dom/forms_directionality_data\.rs(?:/|$)|components/script\-runtime\-api/dom/html_interfaces_generated\.rs(?:/|$))'
+        types: [text]
+        always_run: true
+        additional_dependencies: ["cli:https://github.com/merely-made/eidetic:line-ceiling-v0.0.2:line-ceiling"]
+      - id: clippy
+        name: clippy
+        entry: cargo clippy --all-targets
+        language: system
+        files: '(^|/)(Cargo\.(toml|lock)|[^/]+\.rs)$'
+        pass_filenames: false
+      - id: dependency-bans
+        name: dependency bans
+        entry: cargo deny --locked check bans
+        language: system
+        pass_filenames: false
+        always_run: true

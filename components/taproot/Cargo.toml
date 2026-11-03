@@ -32,3 +32,6 @@ layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
 
 [dev-dependencies]
 genet-render = { path = "../genet-render", default-features = false, features = ["accesskit"] }
+
+[lints]
+workspace = true

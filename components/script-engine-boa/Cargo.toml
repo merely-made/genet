@@ -28,3 +28,6 @@ boa_gc = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.gi
 [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dependencies]
 # Browser host glue provides randomness and time on wasm32-unknown-unknown.
 boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "ddf4e31b0d6cf86c11ea8907b0d07e4799d62368", features = ["js"] }
+
+[lints]
+workspace = true

@@ -7,3 +7,13 @@ repository = "https://github.com/merely-made/genet"
 description = "Frisket: the pane frame for Genet applications — splits, tab-stacks, dividers, and per-tile content holes over the genet-host-api tile contract. NAME CLAIM: the real thing is the `frisket` module of the `cambium` crate (0.3.2+); this package holds the name. 0.0.1 was Turnstone's pane-model crate, since folded into that app."
 
 [workspace]
+
+[workspace.lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"
+
+[lints]
+workspace = true

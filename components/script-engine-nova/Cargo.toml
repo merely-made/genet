@@ -39,3 +39,6 @@ nova_vm = { version = "1", git = "https://github.com/merely-made/vano.git", rev 
     "set",
     "annex-b",
 ] }
+
+[lints]
+workspace = true

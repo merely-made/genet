@@ -7,3 +7,13 @@ repository = "https://github.com/merely-made/genet"
 description = "Sprigging: custom-paint widget leaves applied to the genet engine's render passes (formerly chisel, published as serval-chisel). NAME CLAIM: the real crate lives in mark-ik/serval (components/chisel); consume it as a git dependency."
 
 [workspace]
+
+[workspace.lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"
+
+[lints]
+workspace = true

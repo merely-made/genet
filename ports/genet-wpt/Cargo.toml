@@ -89,3 +89,6 @@ image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode", "gen
 [dev-dependencies]
 # Offline mock server for the fetch()->netfetcher integration test.
 mockito = "1"
+
+[lints]
+workspace = true

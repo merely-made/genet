@@ -40,3 +40,6 @@ encoding_rs = { workspace = true }
 
 [dev-dependencies]
 postcard = { workspace = true }
+
+[lints]
+workspace = true

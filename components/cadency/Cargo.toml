@@ -12,3 +12,6 @@ categories = ["web-programming", "parser-implementations"]
 
 [dependencies]
 cssparser.workspace = true
+
+[lints]
+workspace = true

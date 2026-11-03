@@ -19,3 +19,6 @@ html5ever = { workspace = true }
 # so it drives the same StaticTreeSink. See docs/2026-05-31_css_rendering_conformance_plan.md.
 xml5ever = { workspace = true }
 layout_dom_api = { workspace = true }
+
+[lints]
+workspace = true

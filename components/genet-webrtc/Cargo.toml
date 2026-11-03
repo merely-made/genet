@@ -22,3 +22,6 @@ genet-bole = { path = "../script-engine-boa" }
 
 [target.'cfg(target_pointer_width = "64")'.dev-dependencies]
 genet-vano = { path = "../script-engine-nova" }
+
+[lints]
+workspace = true

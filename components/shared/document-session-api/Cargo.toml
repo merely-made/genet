@@ -23,3 +23,6 @@ accesskit = ["dep:accesskit"]
 [dependencies]
 accesskit = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
+
+[lints]
+workspace = true

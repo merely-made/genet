@@ -114,7 +114,7 @@ The full **Vano** refresh completed all 82 archived shards with recorded
 source/dependency revisions, unchanged WPT content/manifest and a frozen
 runner. The isolated worker's snapshot/window-proxy reporting defect was
 fixed and published as `0c4aa9f60b8`; real synchronous/microtask sentinels pass
-on both engines and both GC modes. The [census receipt](receipts/2026-09-29_vano_wpt_census/receipt.md)
+on both engines and both GC modes. The [census receipt](../../../testing/genet/design_docs/receipts/2026-09-29_vano_wpt_census/receipt.md)
 keeps the broken pristine evidence separate from the repaired run.
 
 It reports 23,999 current records and 33824/144238 passing reported subtests,
@@ -256,7 +256,7 @@ and the read-only Forms Phase A preparation with its pending paint-scope choice.
 
 Mark asked for the next lanes to come from WPT and specification
 conformance. These targets were chosen from the 2026-09-29 Vano census
-(`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by
+(`Code/testing/genet/design_docs/receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`), broken down by
 subdirectory, and from the code. Shards that need server mode to pass were
 set aside; disk mode cannot measure them: `referrer-policy` 2/8,448,
 `mixed-content` 2/2,281, `upgrade-insecure-requests` 0/1,000 and `cookies`

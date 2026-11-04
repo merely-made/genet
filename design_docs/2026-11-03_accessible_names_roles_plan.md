@@ -25,7 +25,7 @@ Bounded DOM names/descriptions and retained generated text work in scripted Boa/
 
 ## Evidence and references
 
-Algorithm references: `https://www.w3.org/TR/2026/WD-accname-1.2-20260923/` and `https://www.w3.org/TR/html-aam-1.0/` (moving HTML-AAM). Historical label baseline `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/`; families F/B/E/K/A and exact source, lock, runner and matched-map identities remain in the original plan and its receipts. A source-bound receipt is `genet/design_docs/receipts/2026-10-16_accname_embedded_controls.json`; K is `genet/design_docs/receipts/2026-10-15_accname_layout_panic.json`. Preserve these as dated evidence; no new receipt is created by this adoption.
+Algorithm references: `https://www.w3.org/TR/2026/WD-accname-1.2-20260923/` and `https://www.w3.org/TR/html-aam-1.0/` (moving HTML-AAM). Historical label baseline `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/`; families F/B/E/K/A and exact source, lock, runner and matched-map identities remain in the original plan and its receipts. A source-bound receipt is `Code/testing/genet/design_docs/receipts/2026-10-16_accname_embedded_controls.json`; K is `Code/testing/genet/design_docs/receipts/2026-10-15_accname_layout_panic.json`. Preserve these as dated evidence; no new receipt is created by this adoption.
 
 ## Adoption record
 

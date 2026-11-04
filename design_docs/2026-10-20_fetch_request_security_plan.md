@@ -18,7 +18,7 @@ Boa and Vano (Nova), both gated; zero lost passes on either.
 
 Evidence lives in `Code/testing/genet/fetch-security/` (frozen runner, maps,
 logs). Census source:
-`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`.
+`Code/testing/genet/design_docs/receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`.
 
 ## Findings (2026-10-20)
 

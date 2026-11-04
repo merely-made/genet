@@ -47,7 +47,7 @@ smoke uses the same sources.
 
 Fresh Windows gates pass: 746 native tests, zero failures, 13 existing ignores;
 wasm opt-out compilation; the expected native opt-out rejection; and standalone
-smoke compilation. [Source identities, locks and raw logs](receipts/2026-10-15_netrender_adoption/README.md)
+smoke compilation. [Source identities, locks and raw logs](../../../testing/genet/design_docs/receipts/2026-10-15_netrender_adoption/README.md)
 retain the actual gate basis. Browser runtime and delivery size were not rerun.
 
 Mere's receiving adoption and retirement of its four temporary bridge tables

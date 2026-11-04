@@ -222,4 +222,4 @@ connector delegate to `murm-wire`; Fetch and browser WebSocket policy remain
 here. `WireTransport` adapts a host-selected engine with explicit trust and
 pool partitioning. The public crate name/version, default feature names and
 Fetch/WebSocket entry points are unchanged. See
-`genet/design_docs/2026-10-14_netfetcher_wire_adoption_plan.md`.
+`genet/design_docs/archive_docs/2026-11-03/2026-10-14_netfetcher_wire_adoption_plan.md`.

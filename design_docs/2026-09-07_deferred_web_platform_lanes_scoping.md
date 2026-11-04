@@ -404,9 +404,9 @@ Record unsupported worker globals and module variants as named residuals;
 retain the cheap-globals messaging regression manifest.
 
 **S5/S6 continuation, 2026-09-08.** The
-[actual Boa runtime receipt](receipts/2026-09-08_s2_s5_backend/receipt.md)
+[actual Boa runtime receipt](../../../testing/genet/design_docs/receipts/2026-09-08_s2_s5_backend/receipt.md)
 separates timer/microtask-only non-delivery from worker pumping and acknowledged
-idle. The [scripted-document receipt](receipts/2026-09-08_s6_document_workers/receipt.md)
+idle. The [scripted-document receipt](../../../testing/genet/design_docs/receipts/2026-09-08_s6_document_workers/receipt.md)
 then proves exact reply/Promise DOM changes, freeze/resume refusal and recovery,
 and missing-route error/quiescence on the real headless Boa document. Both
 scripted-document implementations now forward worker service and expose an

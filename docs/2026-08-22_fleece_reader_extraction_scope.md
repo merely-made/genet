@@ -50,7 +50,7 @@ open.
   to "a themed, rendered, selectable page," and it is the path a reader
   rendering should reuse rather than growing a second renderer.
 - Downstream wants the text and does not have it: the
-  [search surface wiring plan](../../mere/design_docs/mere_docs/implementation_strategy/2026-08-12_search_surface_wiring_plan.md)
+  [search surface wiring plan](../../mere/design_docs/archive_docs/2026-10-28/2026-08-12_search_surface_wiring_plan.md)
   landed W1 capture, but `BrowsingTrace` carries `PageRef`s and transitions,
   not page text; W2/W3 need a corpus. The
   [gazette brief](../../mere/design_docs/mere_docs/research/2026-08-10_credential_port_gazette_brief.md)

@@ -232,7 +232,7 @@ exercised through the real UIAutomation bridge); the 2026-09-05 receipt's
 shown on 2026-09-10 to be a harness artefact (a 640x400 physical window on a
 2.0-scale display puts the links below the fold, where Click is correctly
 stripped), so that acceptance stands and no code residual remains -- see the
-correction in `design_docs/receipts/2026-09-09_o2_bridge_action/receipt.md`. Browser-hosted
+correction in `Code/testing/genet/design_docs/receipts/2026-09-09_o2_bridge_action/receipt.md`. Browser-hosted
 scripting remains open: the wasm host still constructs only
 `LiverySessionEngine`.
 Crates.io publication is a later packaging precondition: this workspace
@@ -1152,7 +1152,7 @@ is already accepted by O2's UIAutomation receipt below.
   `components/genet-livery` or `components/genet-documents` to bisect it;
   that is left to the layout lane. Full detail, reproduction commands, and
   environment are in
-  `design_docs/receipts/2026-09-09_o2_bridge_action/receipt.md`, including an
+  `Code/testing/genet/design_docs/receipts/2026-09-09_o2_bridge_action/receipt.md`, including an
   open question: this receipt's own scripted synthetic-pointer-click attempt
   at the link's screen coordinates did not navigate to `notes.html`, which
   qualifies rather than confirms an earlier claim that the pointer pipeline

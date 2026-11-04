@@ -244,29 +244,50 @@ pub(super) fn cancellation<E: ScriptEngine>() {
 }
 
 pub(super) fn errors<E: ScriptEngine>() {
-    let mut dns = Dns::new(Vec::new());
-    let resolver = dns.resolver();
-    let mut rt = runtime::<E>(resolver.clone(), Ipv4Addr::LOCALHOST.into());
-    run(
-        &mut rt,
-        r#"
-      var problem='',done=false,errors=[],p=new RTCPeerConnection({iceTransportPolicy:'relay',iceServers:[{
+    for available in [true, false] {
+        let mut dns = Dns::new(Vec::new());
+        let resolver = if available {
+            dns.resolver()
+        } else {
+            Arc::new(
+                DnsResolver::new(DnsConfig {
+                    servers: Vec::new(),
+                    limits: DnsLimits::default(),
+                })
+                .unwrap(),
+            )
+        };
+        let mut rt = runtime::<E>(resolver.clone(), Ipv4Addr::LOCALHOST.into());
+        run(
+            &mut rt,
+            r#"
+      var problem='',done=false,errors=[],order=[],p=new RTCPeerConnection({iceTransportPolicy:'relay',iceServers:[{
         urls:['turn:missing.example.test:3478','turn:portless.example.test','turn:tcp.example.test:3478?transport=tcp'],username:'private-user',credential:'private-password'}]});
-      p.createDataChannel('errors');p.onicecandidate=e=>{if(e.candidate)problem='direct leak';else done=true;};
-      p.onicecandidateerror=e=>{if(e.errorCode!==701||e.address!==null||e.port!==null||/private/.test(e.url+e.errorText))problem='error privacy';errors.push(e.url);};
+      p.createDataChannel('errors');p.onicecandidate=e=>{if(e.candidate)problem='direct leak';else{order.push('null');done=true;}};
+      p.onicegatheringstatechange=()=>{if(p.iceGatheringState==='complete')order.push('complete');};
+      p.onicecandidateerror=e=>{order.push('error');if(e.errorCode!==701||e.address!==null||e.port!==null||/private/.test(e.url+e.errorText))problem='error privacy';errors.push(e.url);};
       p.setLocalDescription().catch(e=>problem=String(e));
     "#,
-    );
-    drive(&mut rt, &mut dns, "done || problem!==''", || {});
-    assert_eq!(read(&mut rt, "problem"), "");
-    assert_eq!(
-        read(&mut rt, "new Set(errors).size===3&&errors.length===3"),
-        "true"
-    );
-    assert_eq!(dns.requests.len(), 1, "unsupported URLs must not start DNS");
-    assert_eq!(resolver.pending(), 0);
-    run(&mut rt, "p.close()");
-    assert_eq!(rt.pending_webrtc(), 0);
+        );
+        drive(&mut rt, &mut dns, "done || problem!==''", || {});
+        assert_eq!(read(&mut rt, "problem"), "");
+        assert_eq!(
+            read(&mut rt, "new Set(errors).size===3&&errors.length===3"),
+            "true"
+        );
+        assert_eq!(
+            read(&mut rt, "order.join(',')"),
+            "error,error,error,complete,null"
+        );
+        assert_eq!(
+            dns.requests.len(),
+            usize::from(available),
+            "unsupported URLs must not start DNS"
+        );
+        assert_eq!(resolver.pending(), 0);
+        run(&mut rt, "p.close()");
+        assert_eq!(rt.pending_webrtc(), 0);
+    }
 }
 
 pub(super) fn coturn<E: ScriptEngine>() {

@@ -129,6 +129,12 @@ The independent host path must retain its runtime-free boundary.
 
 ## Progress
 
+- 2026-11-03: the new immediate resolver-refusal case failed on both engines:
+  completion overtook queued 701 events. Provider
+  `c018fee13f417867cd3bbfe3ebca167257e34dc0` defers completion until terminal
+  server errors are drained; its 20 ordinary working/MSRV checks, three coturn
+  checks and strict wire Clippy pass. Genet's actual-DNS/immediate-refusal
+  ordering test now passes on both engines. Final receiving reruns follow.
 - 2026-11-03: provider `c59b530ff8da2703d58657c6339c8d5eb4e873d5`
   implements bounded owned DNS and address fallback. Its 19 ordinary checks
   pass on Rust 1.99.1 and MSRV 1.97.1; strict all-target wire Clippy and three

@@ -6,6 +6,9 @@ const fields=['browser','engine','route','offerer','cleanup'];
 const key=c=>fields.map(f=>c[f]).join('/');
 const assert=(value,message)=>{if(!value)throw Error(message);};
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export function assertWritablePacket(text) {
+  assert(!text.includes('Packet closed after the final qualified run'),'qualification packet is closed; select a fresh receipt path');
+}
 function records(text) {
   const result=[];
   for(const match of text.matchAll(/```json\r?\n([\s\S]*?)\r?\n```/g)) {
@@ -47,6 +50,7 @@ export class RestartJournal {
     assert(!['2026-11-01','2026-11-03'].some(date=>file.endsWith(date+'_webrtc_conformance_plan_receipts.md')),'baseline receipt is frozen');
     const gate=identity.gate||'E2s';
     const old=await readFile(file,'utf8'),rows=records(old),signature=digest(identity);
+    assertWritablePacket(old);
     const start=resume?rows.findLast(r=>r.gate===gate+'-run'&&(resume==='latest'||r.run===resume)):null;
     if(resume)assert(start&&start.signature===signature,'restart resume requires identical source, binary, lock and fixture profile');
     const journal=new RestartJournal();
@@ -112,6 +116,7 @@ export class RestartJournal {
   }
   async append(kind,data) {
     const old=await readFile(this.file,'utf8');
+    assertWritablePacket(old);
     // A killed writer may leave one incomplete block. Preserve it and begin a
     // fresh block; only complete, parsed records can count as passed cases.
     const lastFence=[...old.matchAll(/(?:^|\n)```[^\n]*(?:\n|$)/g)].at(-1)?.[0].trim();

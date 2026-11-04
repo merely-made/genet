@@ -25,6 +25,11 @@ test('run metadata preserves its record type and can resume', async()=>{
     await resumed.finish('simulated interruption',true);
     const end=(await rows()).at(-1);
     assert.equal(end.gate,'E2d-run-end');assert.equal(end.completeSelectedMatrix,false);
+    await writeFile(file,'\nPacket closed after the final qualified run and restoration checks.\n',{flag:'a'});
+    const frozen=await readFile(file,'utf8');
+    await assert.rejects(RestartJournal.open(file,identity,'fixture-source'),/packet is closed/);
+    await assert.rejects(resumed.append('resume',{}),/packet is closed/);
+    assert.equal(await readFile(file,'utf8'),frozen);
   } finally {
     assert.equal(path.dirname(path.resolve(file)),directory);
     assert.ok((await readFile(file,'utf8')).startsWith(marker));

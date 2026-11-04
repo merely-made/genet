@@ -64,6 +64,8 @@ def main():
     if args.receipt.resolve() in [RECEIPT.resolve(), REFERENCE.resolve()]:
         parser.error("completed baseline packets are read-only; select a fresh receipt")
     text = args.receipt.read_text(encoding="utf-8")
+    if "Packet closed after the final qualified run" in text:
+        parser.error("qualification packet is closed; select a fresh receipt path")
     reference_text = args.reference_receipt.read_text(encoding="utf-8")
     tests = ROOT / "tests/wpt/tests"
     sources = [tests / "webrtc" / name for name in FILES]

@@ -33,7 +33,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { runRestartChecks } from './webrtc_restart.mjs';
-import { RestartJournal } from './webrtc_receipts.mjs';
+import { RestartJournal, assertWritablePacket } from './webrtc_receipts.mjs';
 import { DnsFixture } from './webrtc_dns_fixture.mjs';
 import { settledStats } from './webrtc_stats.mjs';
 
@@ -68,6 +68,7 @@ const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js
 const sourceFiles=['support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
 const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md'));
 if(['2026-11-01','2026-11-03'].some(date=>receipt.endsWith(date+'_webrtc_conformance_plan_receipts.md')))throw Error('baseline receipt is frozen');
+if(receiptMode==='append')assertWritablePacket(await readFile(receipt,'utf8'));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = data => createHash('sha256').update(data).digest('hex');
 const assert = (value, message) => { if (!value) throw Error(message); };

@@ -1,6 +1,6 @@
 # genet Documentation Index
 
-- [WebRTC conformance continuation](2026-11-04_webrtc_conformance_plan.md): UDP SRV/NAPTR service discovery in progress; explicit-port baseline retains 30 native checks, unchanged WPT maps and 48 headed cases. mDNS, TCP/TLS, server/interface replacement, browser-guest, media and carrier adoption remain separate gates.
+- [WebRTC conformance continuation](2026-11-04_webrtc_conformance_plan.md): E2s UDP SRV/S-NAPTR discovery qualified with 38 native checks, unchanged selected WPT maps and 48 headed Chrome/Firefox cases. Portless native URLs use nondefault discovered ports on a fixed IPv4 interface. mDNS, TURN TCP/TLS, server/interface replacement, browser-guest, media and carrier adoption retain separate gates.
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 
@@ -75,8 +75,8 @@ requirements; do not run their writers against frozen evidence.
 
 The completed [WebRTC baseline packet](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md)
 is frozen at its cited path. The [closed E2d packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md)
-and [current E2s packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md)
-lives under `Code/testing/genet/`. Earlier qualification keeps its original
+and [closed E2s packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md)
+live under `Code/testing/genet/`. Earlier qualification keeps its original
 scope and identities; never overwrite a cited receipt.
 
 The shaping [qualification receipt](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md) is also frozen externally with exact original Git bytes. Its [export manifest](../../../testing/genet/shaping-publish-20261103/receipt-export.json) records the source commit and SHA-256; [publication checks](../../../testing/genet/shaping-publish-20261103/report.md) hold the new continuation. Future outputs use new files rather than overwrite the frozen receipt.

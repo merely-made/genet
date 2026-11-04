@@ -1,6 +1,6 @@
 # WebRTC conformance continuation
 
-**Status (2026-11-04): E2s UDP service discovery in progress.** The
+**Status (2026-11-04): E2s UDP service discovery qualified at the controlled native/headed boundary.** The
 [previous plan](archive_docs/2026-11-04/2026-11-03_webrtc_conformance_plan.md)
 is archived whole, retaining decisions D1-D3 and exact earlier boundaries.
 
@@ -32,7 +32,7 @@ Preserve whether the original URL supplies a port and transport. The core's
 `Url` normalizes both, so Genet must pass omission explicitly across the host
 boundary. Numeric and explicit-port paths retain E2d behavior.
 
-Implement UDP SRV discovery for portless STUN names, and RFC 5928's UDP-only
+Implemented UDP SRV discovery for portless STUN names, and RFC 5928's UDP-only
 supported-transport profile for TURN: explicit `transport=udp` starts SRV;
 omitting transport starts S-NAPTR. Support NAPTR order/preference,
 nonterminal delegation and terminal S/A records, bounded backtracking, SRV
@@ -96,8 +96,8 @@ summaries and exact deltas, not raw SDP, credentials, captures or full compiler
 logs. The E2d and earlier packets are frozen; new writers refuse those paths.
 
 Reuse `C:\t\cargo-targets\genet` and `C:\t\cargo-targets\retinue` and their
-`build` directories, debug=0/jobs=1. No new isolated target/home/worktree is
-planned. The marked RTC browser profiles and old MSRV home retain their prior
+`build` directories, debug=0/jobs=1. No new isolated target/home/worktree was
+created. The marked RTC browser profiles and old MSRV home retain their prior
 automatic-approval deletion rejection; do not retry or bypass it.
 
 ## Remaining work
@@ -118,30 +118,62 @@ automatic-approval deletion rejection; do not retry or bypass it.
 
 ## Findings (2026-11-04)
 
-The E2d host accepts only explicit-port names. `murm-rtc::resolve::Lookup`
-yields IP addresses, and discovery adds one fixed URL port. Service discovery
-therefore needs endpoint batches and preserved URL omission; it cannot safely
-be added by silently replacing the default port. The existing DNS wire codec,
-nonblocking sockets and query leases are reusable. No duplicate HTTP resolver
-or application transport is needed.
+- [Genet URL placement](../components/genet-webrtc/src/discovery.rs) preserves
+  port/transport omission as `NamedServer`, because the core parser fills defaults.
+  The independent supplier's `resolve/native/service.rs` owns lazy endpoint
+  batches and backtracking, reusing the DNS codec, nonblocking sockets and leases.
+- Provider `ef2d18fadbbdca3847ad99040af14f2bc7693a47` passes 29 ordinary and
+  three controlled coturn checks on Rust 1.99.1 and MSRV 1.97.1. Strict all-target
+  wire Clippy and the host-only DNS graph pass without Tokio. The core pin stays
+  `479995928668d0db1f8cfb2aa26f818b9f03919f`.
+- Genet product source `ff958976f2a904d250d00ee10335696c62f749b1` passes
+  38 native checks across Boa/Vano, including actual discovered-port fallback,
+  pending NAPTR/SRV/A cancellation and eight controlled coturn checks. Ortet's
+  scripted host compiles; strict adapter Clippy and required hooks pass.
+- Headed recorder source `7abebdda633bac2d91bd05b4976f2bf65ea525cb` passes
+  all 48 Chrome/Firefox cases: 96 completed restarts and 48 interrupted cleanups.
+  Sixteen cases release pending SRV work; all 64 native RTC/DNS sockets rebind.
+  Native peers use portless URLs at nondefault discovered ports; browser peers
+  use equivalent numeric endpoints. This remains fixed-interface IPv4 evidence.
+- Every selected WPT identity/status is unchanged: 93/127 assertions per engine
+  pass in the same seven files, retaining the same 34 media-dependent failures.
+  Resolver wire tests cover IPv6, while headed IPv6/public NAT remains unqualified.
+- The initial headed recorder used a one-shot stats capture. Its retained failed
+  attempt prompted bounded initial resampling, matching post-restart treatment.
+  Three helper regressions keep missing pairs and invalid stats as failures.
+  Route, certificate and privacy acceptance assertions remain unchanged.
+- The controlled fixture is stopped; its service is inactive/disabled, owned
+  browser/native/controller processes are gone and Firefox network grants are
+  zero. The external E2s packet is closed, preserving the earlier failed run.
+
+
+- Post-qualification writer guards reject closed packets before starting a
+  browser or WPT run, and reject appending through an already-open journal.
+  The regression verifies the closed file remains byte-identical. Reproduction
+  requires a fresh `--receipt` path; the qualified source above remains exact.
 
 ## Progress
 
 - 2026-11-04: archived the completed E2d plan whole and opened E2s; source and
   dependency state rechecked before product changes. The fresh WPT baseline is retained.
-- Supplier `ef2d18fadbbdca3847ad99040af14f2bc7693a47` is published and received
+- 2026-11-04: supplier `ef2d18fadbbdca3847ad99040af14f2bc7693a47` is published and received
   by Genet `ff958976f2a904d250d00ee10335696c62f749b1`. Provider checks pass
   29 ordinary plus three controlled coturn tests on working Rust/MSRV, strict
   Clippy and the host-only graph. Genet passes 38 native tests across Boa/Vano,
   strict adapter Clippy, Ortet scripted-host compilation and required hooks.
   The seven selected WPT files retain every baseline case/status. Headed
-  service-discovery qualification is running against that committed source.
-- The first headed attempt retained 17 passing cases, then stopped when its
+  service-discovery qualification ran against that committed source.
+- 2026-11-04: the first headed attempt retained 17 passing cases, then stopped when its
   initial one-shot statistics capture lacked a succeeded pair. Added bounded
   initial resampling, preserving route/certificate/privacy acceptance checks
-  and failure diagnostics. Three helper regressions pass; a new complete
-  headed matrix must qualify the revised recorder. The first attempt remains
+  and failure diagnostics. Three helper regressions passed; a fresh complete
+  headed matrix was required for the revised recorder. The first attempt remains
   in the packet and does not count toward that fresh matrix.
+
+- 2026-11-04: the fresh headed matrix passed all 48 cases against recorder
+  `7abebdda633bac2d91bd05b4976f2bf65ea525cb`. Closed the packet after fixture,
+  permission and socket restoration checks. mDNS, TURN TCP/TLS and the remaining
+  conformance/consumer gates above stay separate.
 
 ## Decisions
 

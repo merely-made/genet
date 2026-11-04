@@ -17,7 +17,7 @@ function compact(c) {
   if(c.status!=='pass') {
     const d=c.restartDiagnostics;
     return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'fail',phase:c.phase,error:c.error,
-      diagnostics:d?{step:d.step,method:d.method,initiator:d.initiator,iceBefore:d.iceBefore,iceAfter:d.iceAfter,
+      diagnostics:d?{step:d.step,method:d.method,initiator:d.initiator,iceBefore:d.iceBefore,iceAfter:d.iceAfter,statsObserved:d.statsObserved,
         peers:Object.fromEntries(Object.entries(d.snapshots||{}).map(([name,s])=>[name,{
           connection:s.connectionState,ice:s.iceState,signaling:s.signaling,gathering:s.gathering,
           receivedMessages:s.received.length,channelStates:s.channelStates,
@@ -32,12 +32,13 @@ function compact(c) {
   const a=c.native,b=c.browserPeer;
   assert(a.connected&&b.connected&&a.remoteAddressesRedacted&&!a.peerReflexiveInRemoteList,'restart observation evidence missing');
   const counts=values=>Object.fromEntries([...new Set(values)].map(v=>[v,values.filter(x=>x===v).length]));
+  const codes={native:a.gatheringErrors.map(e=>e.code),browser:b.gatheringErrors.map(e=>e.code)};
   return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'pass',seconds:c.seconds,
     pairs:{native:[a.pair.local,a.pair.remote],browser:[b.pair.local,b.pair.remote]},
-    nominated:[a.pair.nominated,b.pair.nominated],certificateSHA256:{native:a.localFingerprint,browser:b.localFingerprint},
+    nominated:[a.pair.nominated,b.pair.nominated],certificatePairSHA256:digest([a.localFingerprint,b.localFingerprint]),
     refusals:{native:counts(a.refused),browser:counts(b.refused)},
-    gatheringErrorCodes:{native:a.gatheringErrors.map(e=>e.code),browser:b.gatheringErrors.map(e=>e.code)},
-    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,nativeNegotiationEvents:r.nativeNegotiationEvents})),
+    gatheringErrorCodes:codes.native.length||codes.browser.length?codes:undefined,
+    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,nativeNegotiationEvents:r.nativeNegotiationEvents,statsSettling:r.statsSettling})),
     commonAssertionsVerified:true};
 }
 
@@ -62,6 +63,8 @@ export class RestartJournal {
         binaryBytesPerPeerPerRestart:192000,unicodeAndEveryBinaryByteChecked:true,
         changedLocalAndRemoteCredentials:true,sameChannelsAndCertificates:true,staleNativeCandidateRefused:true,
         nativeStatsReferencesAndPrivacyChecked:true,nativeRelayAllocationReused:true,
+        certificateEvidence:'SHA256 of JSON [native SHA256 fingerprint,browser SHA256 fingerprint]',
+        omittedGatheringErrorCodesMeansNone:true,
         pendingRestartInterruptedBeforeCleanup:true,sameNativeSocketThenReleasedAndRebound:true},
       scope:'Windows native data channels, fixed numeric UDP STUN/TURN and unchanged interface; broader DNS/mDNS, server/interface replacement, TCP/TLS, media and carrier gates remain separate'});
     return journal;

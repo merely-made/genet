@@ -4,7 +4,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
   const peers={native,browser}, opposite=name=>name==='native'?'browser':'native';
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  const results=[];let probeRound=0,step='capture',snapshots,method,initiator,iceBefore;
+  const results=[];let probeRound=0,step='capture',snapshots,method,initiator,iceBefore,statsObserved;
   async function stats(peer) {
     await peer.evaluate('__interop.inspect()');
     for(let i=0;i<200;i++){const value=await peer.value('__interop.stats');if(value)return value;await delay(10);}
@@ -61,17 +61,27 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       await probe('after remote answer',true);
       await native.evaluate('__interop.rejectStale()');
       await wait(()=>snapshots.native.staleRefused,'stale candidate refusal');
-      const a=await stats(native),b=await stats(browser);verifyStats(a,b,route);
+      let a,b,attempts=0;statsObserved=[];
+      const statsDeadline=Date.now()+15000;
+      while(Date.now()<statsDeadline) {
+        a=await stats(native);b=await stats(browser);attempts++;
+        const pairStates=[a.pair?.state||null,b.pair?.state||null];
+        if(statsObserved.length<8&&JSON.stringify(pairStates)!==JSON.stringify(statsObserved.at(-1)))statsObserved.push(pairStates);
+        assert(a.candidateReferencesValid&&a.remoteAddressesRedacted,'restart stats graph or privacy failed');
+        if(pairStates.every(state=>state==='succeeded'))break;
+        await delay(25);
+      }
+      verifyStats(a,b,route);
       assert(a.localFingerprint===before.localFingerprint&&a.remoteFingerprint===before.remoteFingerprint,'restart changed certificate identity');
       const expectedEvents=method==='method'&&initiator==='native'?1:0;
       assert(snapshots.native.restartNegotiations===expectedEvents,'restart negotiationneeded count mismatch');
       const relayAllocationReused=route!=='relay'||(a.localEndpoint!==null&&a.localEndpoint===before.localEndpoint);
       assert(relayAllocationReused,'native TURN allocation replaced during restart');
-      results.push({method,initiator,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused});
+      results.push({method,initiator,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
       assert(!descriptions.length,'unexpected duplicate negotiation');
     }
     return results;
   } catch(error) {
-    error.restartDiagnostics={step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice};throw error;
+    error.restartDiagnostics={step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
   }
 }

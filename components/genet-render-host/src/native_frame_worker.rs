@@ -7,6 +7,7 @@ impl Job {
     pub(super) fn run(mut self) {
         self.qualification.worker_started = Some(Instant::now());
         let result = self.observe();
+        self.qualification.progress.worker_finished = Some(Instant::now());
         self.complete(result);
     }
 
@@ -31,12 +32,17 @@ impl Job {
         .map(|filter| device.push_error_scope(filter))
         .collect::<Vec<_>>();
         let result = self.qualification.wait();
+        self.qualification.progress.wait_returned = Some(Instant::now());
+        let started = Instant::now();
         while let Some(scope) = scopes.pop() {
             self.qualification.scopes.push(Box::pin(scope.pop()));
         }
+        self.qualification.progress.worker_scope_pop = Some(started.elapsed());
         // Scope futures on native wgpu-core are observed without issuing
         // another GPU operation after their worker-local scopes have closed.
+        let started = Instant::now();
         self.qualification.observe_scopes();
+        self.qualification.progress.worker_scope_observe = Some(started.elapsed());
         let result = if let Err(error) = self.qualification.check() {
             Err(error)
         } else if !self.qualification.scopes.is_empty() {

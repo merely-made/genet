@@ -365,7 +365,10 @@ impl Discovery {
             }
         }
         self.collect_errors();
-        if !self.finished && self.clients.iter().all(|m| m.done) {
+        // Expose every terminal server error before completing gathering. In
+        // particular, a synchronous resolver refusal must not let a consumer
+        // harvest completion from the core before it can drain the 701 queue.
+        if !self.finished && self.errors.is_empty() && self.clients.iter().all(|m| m.done) {
             self.finished = true;
             self.deadline = None;
             core.add_local_candidate(Default::default())?;

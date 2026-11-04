@@ -302,6 +302,7 @@ class Native {
   start(engine,bind,dns) {
     this.process=spawn(nativeExe,[engine,bind,...(dns?[dns]:[])],{stdio:['pipe','pipe','pipe'],windowsHide:true});
     this.next=0;this.pending=new Map();this.stderr='';
+    this.process.stdin.on('error',()=>{for(const item of this.pending.values())item.reject(Error('native control pipe closed'));this.pending.clear();});
     this.ready=new Promise(resolve=>{this.markReady=resolve;});
     this.process.stderr.on('data',chunk=>{this.stderr=(this.stderr+chunk.toString()).slice(-4096);});
     this.exit=new Promise(resolve=>this.process.once('exit',code=>{for(const item of this.pending.values())item.reject(Error('native fixture exited '+code));this.pending.clear();resolve(code);}));
@@ -312,6 +313,7 @@ class Native {
     });
   }
   request(op,extra={}) {
+    if(this.process.exitCode!==null||this.process.stdin.destroyed)return Promise.reject(Error('native fixture is closed'));
     const kind=op==='eval'?(extra.source.startsWith('JSON.stringify(')?'value':'evaluate'):op;
     const id=++this.next;return timeout(new Promise((resolve,reject)=>{this.pending.set(id,{resolve,reject});this.process.stdin.write(JSON.stringify({id,op,...extra})+'\n');}),15000,'native '+kind+' control deadline');
   }

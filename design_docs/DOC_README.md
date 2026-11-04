@@ -1,6 +1,6 @@
 # genet Documentation Index
 
-- [WebRTC remote mDNS candidates](2026-11-04_webrtc_mdns_plan.md): bounded fixed-IPv4 remote UUID receiving qualified with 44 native checks, unchanged selected WPT maps and 48 controlled headed Chrome/Firefox cases. Chrome names stay untouched; Firefox uses controlled aliases for observed IPv4 sockets. Firefox native responder acceptance, local mDNS advertisement, IPv6 multicast, TURN TCP/TLS, server/interface replacement, browser-guest, media and carriers remain open.
+- [WebRTC mDNS candidates](2026-11-04_webrtc_mdns_plan.md): remote fixed-IPv4 UUID receiving qualified with 44 native checks, unchanged selected WPT maps and 48 controlled headed cases. The socket-free local core responder passes 114 checks and strict Clippy on both Rust versions; native registration and browser privacy adoption remain open. Chrome names stay untouched; Firefox uses controlled aliases for observed IPv4 sockets. Firefox native responder acceptance, IPv6 multicast, TURN TCP/TLS, server/interface replacement, browser-guest, media and carriers remain open.
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 

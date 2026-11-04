@@ -1,6 +1,6 @@
-# WebRTC remote mDNS candidates
+# WebRTC mDNS candidates
 
-**Status (2026-11-04): bounded IPv4 remote receiving qualified.** The completed E2s plan is
+**Status (2026-11-04): remote receiving and the socket-free local responder qualified; native registration and browser privacy adoption open.** The completed E2s plan is
 [archived whole](archive_docs/2026-11-04/2026-11-04_webrtc_conformance_plan.md).
 Earlier rulings and qualification boundaries remain in that archive chain.
 
@@ -261,3 +261,68 @@ in 5.1; the platform check now uses the shared .NET API. Both runtimes pass the
 actual native `-Install -WhatIf` preview without changing firewall rules. A
 Windows PowerShell 5.1 subprocess regression is part of the runner test suite.
 The fresh compatibility receipt shares the operational 12 KB retained cap.
+
+## E2a. Local advertisement
+
+This is the next bounded slice under the user's continued RTC authorization.
+It can advance without opening sockets while the Native application firewall
+rule is installed separately. E2m receiving evidence stays closed and unchanged.
+
+### Protocol primitive
+
+**Qualified, 2026-11-04.** The caller-driven, bounded responder in `rtc/rtc-mdns`
+reuses its existing DNS name/header/record codec. One registration owns one UUID-v4 `.local` name
+and one IPv4 address. This follows the ICE candidate draft's unique-name
+profile, including its recommendation to skip probing, rather than introducing
+a generic DNS-SD registry. The draft remains work in progress:
+[draft-ietf-mmusic-mdns-ice-candidates-03 section 3.1.1](https://datatracker.ietf.org/doc/html/draft-ietf-mmusic-mdns-ice-candidates-03#section-3.1.1).
+Packet behavior follows [RFC 6762](https://www.rfc-editor.org/rfc/rfc6762.html).
+
+Done conditions: pure tests cover announcements, multicast and requested/legacy
+unicast answers, cache-flush and legacy TTL/question rules, known-answer
+suppression, bounded decoding/output and pacing, conflict withdrawal, and
+close cancellation followed by one goodbye. Use a caller-supplied clock and
+response jitter. Keep unsupported multipacket truncated queries explicit.
+No socket, timer task, recursive resolver or second packet parser is added.
+Run the mDNS unit/integration suite on working Rust 1.99.1 and MSRV 1.97.1,
+strict library Clippy and formatting. Additive core API qualification does not
+repin the browser's supplier chain before a consumer exists.
+
+### Native registration and browser privacy
+
+Next, Murm's independent provider will own selected-interface, source-port-5353
+I/O, registration quotas and cancellable tickets. Genet will own configurable
+local-address exposure, SDP/event/statistics projections and document lifetime.
+Keep the core's numeric ICE route separate from the exposed name. Registration
+failure or conflict must not reveal a numeric address as a fallback. Close,
+navigation, restart and drop require explicit receiving tests. These host and
+browser phases remain open until implemented and qualified; neither the pure
+responder nor the earlier remote receiving matrix establishes them. Native
+Firefox responder acceptance remains a distinct open gate.
+
+### Evidence and resources
+
+E2a retains at most 20,000 bytes of new compact evidence in the external
+`testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_advertisement_receipts.md`.
+Record source identities, commands, counts and limits; retain no packet captures
+or raw interface inventory. Reuse `C:\t\cargo-targets\retinue` for the core.
+No isolated Cargo home, target, worktree or running fixture is required.
+
+### Findings and progress
+
+- 2026-11-04: `rtc-mdns/src/proto/mod.rs` already provides a basic responder;
+  it lacks the registration and bounded response lifecycle needed here. Reuse
+  the private codec instead of duplicating it in Murm or Genet.
+- 2026-11-04: Windows PowerShell 5.1 setup compatibility is fixed independently;
+  preview verification did not install or modify firewall rules.
+- 2026-11-04: `rtc-mdns/src/responder.rs` and its bounded incremental decoder
+  implement the protocol primitive. The complete crate suite passes on both
+  Rust versions: 68 unit tests, 16 packet-only integration tests and 30 doc
+  tests, with eight existing ignored doc examples. These include 26 new
+  responder checks and one new public-API client round trip covering standard
+  and legacy queries. Strict all-target Clippy passes on both versions after
+  small existing example/test style fixes. No example executables ran and no
+  sockets were opened; the existing socket-builder tests only inspect settings.
+- 2026-11-04: the fresh Native read-only preflight still reports no covering
+  rule on the current Public profile. Host registration and browser receiving
+  remain open; the earlier supplier pins and closed E2m packet are unchanged.

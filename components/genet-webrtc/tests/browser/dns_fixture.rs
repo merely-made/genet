@@ -65,7 +65,7 @@ pub(super) fn drive<E: ScriptEngine>(
     while read(rt, expression) != "true" {
         assert!(
             Instant::now() < deadline,
-            "DNS browser deadline: {}",
+            "DNS browser deadline ({expression}): {}",
             read(rt, "problem")
         );
         io(rt);

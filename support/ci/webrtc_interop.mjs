@@ -36,6 +36,7 @@ import { runRestartChecks } from './webrtc_restart.mjs';
 import { RestartJournal, assertWritablePacket } from './webrtc_receipts.mjs';
 import { DnsFixture } from './webrtc_dns_fixture.mjs';
 import { settledStats } from './webrtc_stats.mjs';
+import { MdnsFixture } from './webrtc_mdns_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const execFileAsync = promisify(execFile);
@@ -44,8 +45,11 @@ for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], proce
 const restart=args.get('--restart');
 const dnsMode=args.get('--dns')||null;
 const dnsEnabled=dnsMode!==null;
+const mdnsEnabled=args.get('--mdns')==='controlled';
+if(args.has('--mdns')&&!mdnsEnabled)throw Error('--mdns requires controlled');
+if(mdnsEnabled&&restart!=='both')throw Error('--mdns requires --restart both');
 if(dnsEnabled&&!['controlled','service'].includes(dnsMode))throw Error('--dns requires controlled or service');
-const gate=dnsMode==='service'?'E2s':dnsEnabled?'E2d':restart?'E2r':'E2h';
+const gate=mdnsEnabled?'E2m':dnsMode==='service'?'E2s':dnsEnabled?'E2d':restart?'E2r':'E2h';
 if(restart && restart!=='both')throw Error('--restart requires both');
 // Diagnostic signaling delay, bounded below the retained-route deadline.
 const answerDelayMs=Number(args.get('--answer-delay-ms')||0);
@@ -65,8 +69,8 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
-const sourceFiles=['support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
-const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md'));
+const sourceFiles=['support/ci/webrtc_mdns_fixture.test.mjs','components/genet-webrtc/src/mdns.rs','support/ci/webrtc_mdns_fixture.mjs','support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
+const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md'));
 if(['2026-11-01','2026-11-03'].some(date=>receipt.endsWith(date+'_webrtc_conformance_plan_receipts.md')))throw Error('baseline receipt is frozen');
 if(receiptMode==='append')assertWritablePacket(await readFile(receipt,'utf8'));
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -139,7 +143,9 @@ async function ownedUdp(pid) {
 }
 async function released(routes) {
   for (const route of routes) {
-    const socket = createSocket('udp4');
+    // Port 5353 is deliberately shared with browser/system responders. Native
+    // ownership is independently checked as zero before this shared rebind.
+    const socket = createSocket({type:'udp4',reuseAddr:route.port===5353});
     try { await new Promise((resolve,reject) => { socket.once('error',reject); socket.bind(route.port,route.address,resolve); }); }
     finally { socket.close(); }
   }
@@ -351,7 +357,7 @@ const sourceStableNow=async()=>{
   return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
-  gate,dns:dnsEnabled,dnsMode,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
+  gate,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
@@ -359,6 +365,9 @@ const udpFixture=new UdpFixture();
 const frontend=await udpFixture.start(bind);
 const dnsFixture=dnsEnabled?new DnsFixture():null;
 const dnsServer=dnsFixture?await dnsFixture.start(bind,dnsMode==='service'?Number(frontend.split(':')[1]):null):null;
+const mdnsFixture=mdnsEnabled?new MdnsFixture():null;
+if(mdnsFixture)await mdnsFixture.start(bind);
+const mapBrowserSignal=signal=>mdnsFixture?mdnsFixture.rewrite(signal):signal;
 try {
   for(const browserName of choose('--browser',['chrome','firefox'])) {
     const browser=new Browser();
@@ -371,6 +380,7 @@ try {
         if(journal?.has(current))continue;
         const native=new Native();const start=Date.now();let a,b;
         const dnsBefore=dnsFixture?.snapshot();
+        const mdnsBefore=mdnsFixture?.snapshot();
         try {
           phase='peer startup';await browser.reset(url+'?case='+cases.length);native.start(engine,bind,dnsServer);await timeout(native.ready,45000,'native initialization deadline');
           const config={iceTransportPolicy:route==='relay'?'relay':'all',iceServers:route==='relay'?
@@ -383,7 +393,7 @@ try {
           phase='negotiation and transfer';const exchangeStart=Date.now();
           for(let i=0;i<600;i++) {
             for(const signal of await native.value('__interop.takeSignals()'))await browser.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
-            for(const signal of await browser.value('__interop.takeSignals()'))await native.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
+            for(const signal of await browser.value('__interop.takeSignals()'))await native.evaluate(`__interop.receive(${JSON.stringify(mapBrowserSignal(signal))})`);
             a=await native.value('__interop.snapshot()');b=await browser.value('__interop.snapshot()');
             assert(!udpFixture.error,udpFixture.error);
             assert(!a.errors.length && !b.errors.length,'peer error '+[...a.errors,...b.errors].join(','));
@@ -400,10 +410,16 @@ try {
             assert(local.every(c=>!c.signalingKeys.includes('url')&&!c.signalingKeys.includes('relayProtocol')),'local metadata leaked into signaling');
             if(route==='relay')assert(local.every(c=>c.type==='relay'&&c.relayProtocol==='udp'&&c.relatedAddress==='0.0.0.0'&&c.relatedPort===0),'hostname relay privacy failed');
           }
+          if(mdnsEnabled){
+            const deadline=Date.now()+8000;
+            while((await native.request('metrics')).dnsPending&&Date.now()<deadline)await delay(25);
+            assert((await native.request('metrics')).dnsPending===0,'initial name resolution did not settle');
+            if(route!=='relay')assert((await native.value('__interop.pc.sctp.transport.iceTransport.getRemoteCandidates().filter(c=>c.address?.endsWith(".local")).length'))>=1,'signaled mDNS names were not preserved');
+          }
           const initialSockets=restart?await ownedUdp(native.process.pid):null;
           let restarts;
           if(restart) {
-            phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs});
+            phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs,mapBrowserSignal,requireMdns:mdnsEnabled});
             a=await native.value('__interop.snapshot()');b=await browser.value('__interop.snapshot()');
             aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');verifyStats(aStats,bStats,route);
             phase='restart interruption';
@@ -414,11 +430,19 @@ try {
             assert(pending.signaling==='have-local-offer'&&pending.localCredentialsChanged,'interrupted restart did not apply an offer');
           }
           phase='native cleanup';
-          const dnsPending=(await native.request('metrics')).dnsPending;
+          const beforeMdns=await native.request('metrics');
+          if(mdnsEnabled){
+            assert(route==='relay'?beforeMdns.mdnsStarted===0:beforeMdns.mdnsResolved>=1,'missing mDNS resolution or relay suppression');
+            const name=mdnsFixture.heldName();
+            await native.evaluate(`__interop.pc.addIceCandidate({candidate:'candidate:held 1 udp 123456 ${name} 50000 typ host',sdpMLineIndex:0}).catch(e=>{throw e;})`);
+            await delay(30);
+          }
+          const metrics=await native.request('metrics'),dnsPending=metrics.dnsPending;
           const interruptedDns=dnsEnabled&&restart&&route==='stun';
-          assert(dnsPending===(interruptedDns?1:0),'unexpected pending DNS ownership');
+          const interruptedMdns=mdnsEnabled&&route!=='relay';
+          assert(dnsPending===Number(interruptedDns)+Number(interruptedMdns),'unexpected pending DNS ownership');
           const sockets=await ownedUdp(native.process.pid);
-          assert(sockets.length===(interruptedDns?2:1),'unexpected RTC/DNS socket ownership');
+          assert(sockets.length===1+dnsPending+Number(interruptedMdns),'unexpected RTC/DNS socket ownership');
           if(restart)assert(initialSockets.length===1&&sockets.some(s=>s.address===initialSockets[0].address&&s.port===initialSockets[0].port),'restart replaced the native RTC socket');
           let cleaned;
           if(cleanup==='navigate') {
@@ -437,19 +461,22 @@ try {
           const dns=dnsFixture?{mode:dnsMode,queries:dnsFixture.queries-dnsBefore.queries,answers:dnsFixture.answers-dnsBefore.answers,held:dnsFixture.held-dnsBefore.held,types:Object.fromEntries(Object.entries(dnsFixture.types).map(([type,count])=>[type,count-dnsBefore.types[type]])),pendingAtCleanup:dnsPending,socketsReleased:sockets.length,originalUrlAndPrivacyChecked:route!=='direct'}:undefined;
           if(dns){assert(!dnsFixture.error,dnsFixture.error);assert(route==='direct'?dns.queries===0:dns.answers>=1,'missing controlled DNS exchange');assert(!a.gatheringErrors.length,'hostname gathering failed');if(interruptedDns)assert(dns.held>=1,'missing held DNS request at interruption');}
           if(dnsMode==='service'&&route!=='direct'){assert(dns.types.srv>=1&&dns.types.a>=1,'missing service lookup');assert(route==='relay'?dns.types.naptr===1:dns.types.naptr===0,'unexpected S-NAPTR ownership');}
-          cases.push({...current,dns,initialStatsSettling:initialStats.settling,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
+          const mdns=mdnsFixture?{started:metrics.mdnsStarted,resolved:metrics.mdnsResolved,controlledNames:mdnsFixture.endpoints.size,browserNames:mdnsFixture.browserNames.size,answers:mdnsFixture.answers-mdnsBefore.answers,held:mdnsFixture.held-mdnsBefore.held,pendingAtCleanup:Number(interruptedMdns),relaySuppressed:route==='relay',namesAndStatsPrivate:true}:undefined;
+          if(mdnsFixture)assert(!mdnsFixture.error,mdnsFixture.error);
+          cases.push({...current,dns,mdns,initialStatsSettling:initialStats.settling,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
           if(journal)await journal.case(cases.at(-1),await sourceStableNow());
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
         } catch(error) {
+          let resolution;try{const m=await native.request('metrics');resolution={started:m.mdnsStarted,resolved:m.mdnsResolved,pending:m.dnsPending,fixture:mdnsFixture?.snapshot()};}catch{}
           try { await native.evaluate('__interop.inspect()'); await browser.evaluate('__interop.inspect()'); await delay(100); } catch {}
           let observedStats; try {observedStats={native:await native.value('__interop.stats'),browser:await browser.value('__interop.stats')};} catch {}
           for(const stats of Object.values(observedStats||{}))if(stats){stats.remoteDER_SHA256=(stats.remoteCertificates||[]).map(bytes=>hash(Buffer.from(bytes)));delete stats.remoteCertificates;}
-          cases.push({...current,status:'fail',phase,error:error.message.slice(0,180),observed:{native:a,browser:b},observedStats,initialStatsDiagnostics:error.initialStatsDiagnostics,restartDiagnostics:error.restartDiagnostics,trace:native.stderr.split('\n').filter(s=>s.startsWith('RTC poll variant:')).slice(-8)});
+          cases.push({...current,status:'fail',phase,error:error.message.slice(0,180),resolution,observed:{native:a,browser:b},observedStats,initialStatsDiagnostics:error.initialStatsDiagnostics,restartDiagnostics:error.restartDiagnostics,trace:native.stderr.split('\n').filter(s=>s.startsWith('RTC poll variant:')).slice(-8)});
           if(journal)await journal.case(cases.at(-1),await sourceStableNow());
           throw error;
         } finally {
           try {await browser.evaluate('globalThis.__interop?.close()');}catch{}
-          await native.close();if(dnsFixture)dnsFixture.pause=false;await delay(100);await udpFixture.clear();
+          await native.close();if(dnsFixture)dnsFixture.pause=false;if(mdnsFixture)mdnsFixture.clear();await delay(100);await udpFixture.clear();
         }
       }
     } finally {await browser.close();}
@@ -457,12 +484,13 @@ try {
 } catch(error) {failure={phase,case:current,error:error.message.slice(0,180)};console.error(JSON.stringify(failure));process.exitCode=1;}
 finally {
   if(dnsFixture)await dnsFixture.close();
+  if(mdnsFixture)await mdnsFixture.close();
   await udpFixture.close();
   await new Promise(resolve=>http.close(resolve));
   const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
   const sourceStable=JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
   if(!sourceStable){failure={phase:'source identity',error:'source or fixture binary changed during qualification'};process.exitCode=1;}
-  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:dnsMode==='service'?'native Windows headed restart with portless STUN/UDP-TURN and controlled SRV/S-NAPTR at nondefault discovered ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
+  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:mdnsEnabled?'native Windows remote UUID mDNS resolution, controlled numeric-host aliases and untouched browser mDNS names, fixed-interface IPv4; relay policy suppression, restart and realm cleanup. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.':dnsMode==='service'?'native Windows headed restart with portless STUN/UDP-TURN and controlled SRV/S-NAPTR at nondefault discovered ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
   if(journal) {
     await journal.finish(failure,sourceStable);
     console.log(`${gate} ${journal.passed.size}/${expectedCases} durable cases passed; run ${journal.run}`);

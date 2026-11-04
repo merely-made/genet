@@ -20,6 +20,7 @@ pub(super) fn report(state: &mut State, now: Instant) -> Value {
         })
         .collect();
     add_missing_candidates(state, &mut entries);
+    state.mdns.stats(&mut entries);
     normalize_references(&mut entries);
     json!(entries)
 }

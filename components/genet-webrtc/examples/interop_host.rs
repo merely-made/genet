@@ -1,7 +1,7 @@
 //! Test-only JSONL host for the headed browser interoperability runner.
 //! Uses the real per-document runtime/factory, with no signaling network service.
 
-use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver};
+use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, MdnsConfig};
 use std::io::{self, BufRead, Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::rc::Rc;
@@ -41,13 +41,22 @@ fn runtime<E: ScriptEngine>(
             limits,
         },
     );
-    let resolver = Arc::new(DnsResolver::new(config).map_err(|_| "DNS configuration failed")?);
+    let mut resolver = DnsResolver::new(config).map_err(|_| "DNS configuration failed")?;
+    if let IpAddr::V4(ip) = bind {
+        let mut mdns = MdnsConfig::for_interface(ip).map_err(|_| "mDNS interface unavailable")?;
+        mdns.timeout = Duration::from_secs(5);
+        resolver = resolver
+            .with_mdns(mdns)
+            .map_err(|_| "mDNS configuration failed")?;
+    }
+    let resolver = Arc::new(resolver);
     rt.set_webrtc_factory(Rc::new(
         NativeWebRtcFactory::with_resolver(
             Settings {
                 bind,
                 gathering_timeout: Duration::from_secs(5),
                 allocation_refresh_interval_cap: Some(Duration::from_secs(1)),
+                mdns_timeout: Duration::from_secs(5),
                 ..Settings::default()
             },
             resolver.clone(),
@@ -110,7 +119,7 @@ fn run<E: ScriptEngine>(bind: IpAddr, dns_server: Option<SocketAddr>) -> Result<
                 }
             },
             Some("metrics") => Ok(
-                json!({"pending":rt.pending_webrtc(),"dnsPending":resolver.pending(),"ice":trace::snapshot()}),
+                json!({"pending":rt.pending_webrtc(),"dnsPending":resolver.pending(),"mdnsStarted":resolver.mdns_counts().0,"mdnsResolved":resolver.mdns_counts().1,"ice":trace::snapshot()}),
             ),
             Some("navigate") => {
                 let stale = rt

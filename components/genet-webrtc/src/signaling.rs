@@ -34,6 +34,19 @@ pub(super) fn perform(
                 .core_mut()
                 .set_remote_description(now, description)
                 .map_err(protocol_error)?;
+            if let Some(sdp) = state
+                .endpoint
+                .core()
+                .remote_description()
+                .map(|d| d.sdp.clone())
+            {
+                state.mdns.remote_description(
+                    &sdp,
+                    state.settings,
+                    state.config["iceTransportPolicy"] == "relay",
+                    now,
+                );
+            }
             Value::Null
         },
         WebRtcOperation::AddIceCandidate => add_candidate(state, data, now)?,
@@ -68,18 +81,19 @@ fn set_local(state: &mut State, data: Value, now: Instant) -> Result<Value, WebR
     } else {
         serde_json::from_value::<RTCSessionDescription>(data).map_err(protocol_error)?
     };
+    let is_offer = description.sdp_type.to_string() == "offer";
     state
         .endpoint
         .core_mut()
         .set_local_description(now, description)
         .map_err(protocol_error)?;
     if !rollback {
-        state.begin_gathering()?;
+        state.begin_gathering(is_offer)?;
     }
     Ok(Value::Null)
 }
 
-fn add_candidate(state: &mut State, data: Value, _now: Instant) -> Result<Value, WebRtcError> {
+fn add_candidate(state: &mut State, data: Value, now: Instant) -> Result<Value, WebRtcError> {
     if let Some(ufrag) = data["usernameFragment"].as_str()
         && state.endpoint.core().remote_description().is_some_and(|d| {
             !d.sdp
@@ -97,16 +111,17 @@ fn add_candidate(state: &mut State, data: Value, _now: Instant) -> Result<Value,
     } else {
         serde_json::from_value(data).map_err(protocol_error)?
     };
-    if candidate
-        .candidate
-        .split_whitespace()
-        .nth(4)
-        .is_some_and(|address| address.to_ascii_lowercase().ends_with(".local"))
-    {
-        return Err(failure(
-            "OperationError",
-            "mDNS ICE candidate resolution is not yet supported",
-        ));
+    if mdns::address_is_local(&candidate.candidate) {
+        if state.endpoint.core().remote_description().is_none() {
+            return Err(failure("InvalidStateError", "Remote description required"));
+        }
+        state.mdns.submit(
+            candidate,
+            state.settings,
+            state.config["iceTransportPolicy"] == "relay",
+            now,
+        )?;
+        return Ok(Value::Null);
     }
     state
         .endpoint

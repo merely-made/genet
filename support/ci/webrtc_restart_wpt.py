@@ -14,8 +14,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 RECEIPT = ROOT / "design_docs/archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md"
-REFERENCE = ROOT.parents[1] / "testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md"
-CURRENT = ROOT.parents[1] / "testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md"
+FULL_REFERENCE = ROOT.parents[1] / "testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md"
+REFERENCE = ROOT.parents[1] / "testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md"
+CURRENT = ROOT.parents[1] / "testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md"
 FILES = [
     "RTCPeerConnection-constructor.html",
     "RTCIceCandidate-constructor.html",
@@ -57,11 +58,11 @@ def main():
     parser.add_argument("--compact", action="store_true", help="retain deltas against an archived complete after map")
     parser.add_argument("--receipt", type=Path, default=CURRENT)
     parser.add_argument("--reference-receipt", type=Path, default=REFERENCE)
-    parser.add_argument("--gate", choices=["E2s", "E2d", "E2r"], default="E2s")
+    parser.add_argument("--gate", choices=["E2m", "E2s", "E2d", "E2r"], default="E2m")
     args = parser.parse_args()
     if args.compact and args.phase != "after":
         parser.error("--compact requires --phase after")
-    if args.receipt.resolve() in [RECEIPT.resolve(), REFERENCE.resolve()]:
+    if args.receipt.resolve() in [RECEIPT.resolve(), FULL_REFERENCE.resolve(), REFERENCE.resolve()]:
         parser.error("completed baseline packets are read-only; select a fresh receipt")
     text = args.receipt.read_text(encoding="utf-8")
     if "Packet closed after the final qualified run" in text:
@@ -125,7 +126,7 @@ def main():
         failure = str(error)[:300]
     result["failure"] = failure
     if args.compact:
-        reference = next(r for r in reversed(list(records(reference_text)) + list(records(text))) if r.get("gate") in ["E2r-WPT", "E2d-WPT", result["gate"]] and r.get("phase") == "after" and not r.get("failure") and all("subtests" in o for o in r["outcomes"]))
+        reference = next(r for r in reversed(list(records(FULL_REFERENCE.read_text(encoding="utf-8"))) + list(records(reference_text)) + list(records(text))) if r.get("gate") in ["E2r-WPT", "E2d-WPT", "E2s-WPT", result["gate"]] and r.get("phase") == "after" and not r.get("failure") and all("subtests" in o for o in r["outcomes"]))
         result["caseMapReference"] = {key: reference[key] for key in ["utc", "binarySHA256"]}
         normalized = lambda rows: json.dumps([{**row, "changed": sorted(row["changed"])} for row in rows], sort_keys=True, separators=(",", ":"))
         comparison = normalized(result["comparisons"])

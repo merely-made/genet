@@ -7,6 +7,10 @@ use script_runtime_api::Runtime;
 
 #[path = "browser/dns_fixture.rs"]
 mod dns_fixture;
+#[path = "browser/mdns.rs"]
+mod mdns;
+#[path = "browser/mdns_fixture.rs"]
+mod mdns_fixture;
 #[path = "browser/service.rs"]
 mod service;
 
@@ -130,7 +134,7 @@ fn encrypted_browser_exchange<E: ScriptEngine>() {
         a.close();b.close();done=true;
       }).catch(e=>problem=String(e));}};
       (async()=>{await a.setLocalDescription();await b.setRemoteDescription(a.localDescription);
-        try{await b.addIceCandidate({candidate:'candidate:mdns 1 udp 123456 unresolved.local 50000 typ host',sdpMLineIndex:0});problem='mDNS accepted without a resolver';}catch(e){if(e.name!=='OperationError')problem=String(e);}
+        await b.addIceCandidate({candidate:'candidate:mdns 1 udp 123456 unresolved.local 50000 typ host',sdpMLineIndex:0});
         await b.setLocalDescription();await a.setRemoteDescription(b.localDescription);
         var checkId=()=>{if(a.sctp.state==='connected'&&ch.id===null)problem='SCTP connected before stream ID assignment';};a.sctp.onstatechange=checkId;checkId();
       })().catch(e=>problem=String(e));
@@ -434,6 +438,18 @@ macro_rules! both {
             #[test]
             fn service_errors() {
                 super::service::errors::<$engine>();
+            }
+            #[test]
+            fn mdns_exchange() {
+                super::mdns::exchange::<$engine>();
+            }
+            #[test]
+            fn mdns_cancellation() {
+                super::mdns::cancellation::<$engine>();
+            }
+            #[test]
+            fn mdns_ignored_and_quotas() {
+                super::mdns::ignored_and_quotas::<$engine>();
             }
             #[test]
             fn restart() {

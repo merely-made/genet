@@ -1,6 +1,6 @@
 // ICE-restart checks shared by the installed-browser receiving runner.
 // Signaling descriptions stay in memory; receipts contain only assertions.
-export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0}) {
+export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0,mapBrowserSignal=signal=>signal,requireMdns=false}) {
   const peers={native,browser}, opposite=name=>name==='native'?'browser':'native';
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -12,10 +12,12 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
   }
   try {
     for([method,initiator] of [['method',offerer],['offer',opposite(offerer)]]) {
-      iceBefore=(await native.request('metrics')).ice;
+      const metricsBefore=await native.request('metrics');
+      iceBefore=metricsBefore.ice;
       const descriptions=[];
       async function pump() {
-        for(const name of ['native','browser'])for(const signal of await peers[name].value('__interop.takeSignals()')) {
+        for(const name of ['native','browser'])for(let signal of await peers[name].value('__interop.takeSignals()')) {
+          if(name==='browser')signal=mapBrowserSignal(signal);
           if(signal.description)descriptions.push({from:name,signal});
           else await peers[opposite(name)].evaluate(`__interop.receive(${JSON.stringify(signal)})`);
         }
@@ -73,12 +75,18 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
         await delay(25);
       }
       verifyStats(a,b,route);
+      let mdnsResolved;
+      if(requireMdns&&route!=='relay'){
+        const deadline=Date.now()+6000;
+        do{mdnsResolved=(await native.request('metrics')).mdnsResolved-metricsBefore.mdnsResolved;if(mdnsResolved>=1)break;await delay(25);}while(Date.now()<deadline);
+        assert(mdnsResolved>=1,'fresh restart lacked successful mDNS resolution');
+      }
       assert(a.localFingerprint===before.localFingerprint&&a.remoteFingerprint===before.remoteFingerprint,'restart changed certificate identity');
       const expectedEvents=method==='method'&&initiator==='native'?1:0;
       assert(snapshots.native.restartNegotiations===expectedEvents,'restart negotiationneeded count mismatch');
       const relayAllocationReused=route!=='relay'||(a.localEndpoint!==null&&a.localEndpoint===before.localEndpoint);
       assert(relayAllocationReused,'native TURN allocation replaced during restart');
-      results.push({method,initiator,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
+      results.push({method,initiator,mdnsResolved,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
       assert(!descriptions.length,'unexpected duplicate negotiation');
     }
     return results;

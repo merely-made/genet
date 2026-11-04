@@ -6,6 +6,7 @@
 
 mod channels;
 mod discovery;
+mod mdns;
 mod signaling;
 mod stats;
 
@@ -16,7 +17,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, Resolver};
+use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, MdnsConfig, Resolver};
 use murm_rtc::rtc::crypto::default_provider;
 use murm_rtc::rtc::data_channel::RTCDataChannelInit;
 use murm_rtc::rtc::ice::mdns::MulticastDnsMode;
@@ -50,6 +51,9 @@ pub struct Settings {
     pub poll_interval: Duration,
     pub gathering_timeout: Duration,
     pub allocation_refresh_interval_cap: Option<Duration>,
+    pub max_remote_candidates: usize,
+    pub max_candidate_bytes: usize,
+    pub mdns_timeout: Duration,
 }
 
 impl Default for Settings {
@@ -67,6 +71,9 @@ impl Default for Settings {
             poll_interval: Duration::from_millis(1),
             gathering_timeout: Duration::from_secs(8),
             allocation_refresh_interval_cap: None,
+            max_remote_candidates: 128,
+            max_candidate_bytes: 4096,
+            mdns_timeout: Duration::from_secs(3),
         }
     }
 }
@@ -84,8 +91,15 @@ impl NativeWebRtcFactory {
     /// # Errors
     /// Returns `TypeError` for an unspecified bind address or invalid resource budgets.
     pub fn new(settings: Settings) -> Result<Self, WebRtcError> {
-        let resolver = DnsResolver::new(DnsConfig::system(DnsLimits::default()))
+        let mut resolver = DnsResolver::new(DnsConfig::system(DnsLimits::default()))
             .map_err(|_| failure("TypeError", "Invalid RTC resolver budgets"))?;
+        if let IpAddr::V4(ip) = settings.bind
+            && let Ok(config) = MdnsConfig::for_interface(ip)
+        {
+            resolver = resolver
+                .with_mdns(config)
+                .map_err(|_| failure("TypeError", "Invalid mDNS policy"))?;
+        }
         Self::with_resolver(settings, Arc::new(resolver))
     }
 
@@ -104,6 +118,10 @@ impl NativeWebRtcFactory {
             || settings.max_notifications < 4
             || settings.poll_interval.is_zero()
             || settings.gathering_timeout.is_zero()
+            || !(1..=1024).contains(&settings.max_remote_candidates)
+            || !(128..=65536).contains(&settings.max_candidate_bytes)
+            || settings.mdns_timeout.is_zero()
+            || Instant::now().checked_add(settings.mdns_timeout).is_none()
         {
             return Err(failure("TypeError", "Invalid RTC host budgets"));
         }
@@ -220,6 +238,7 @@ struct State {
     refused_servers: Vec<String>,
     refused_server_urls: Vec<String>,
     candidate_urls: BTreeMap<String, String>,
+    mdns: mdns::Candidates,
 }
 
 impl WebRtcFactory for NativeWebRtcFactory {
@@ -286,6 +305,7 @@ impl WebRtcFactory for NativeWebRtcFactory {
                 refused_server_urls: refused_servers.clone(),
                 refused_servers,
                 candidate_urls: BTreeMap::new(),
+                mdns: mdns::Candidates::new(self.resolver.clone(), self.settings.bind),
                 observable: json!({"signalingState":"stable","iceGatheringState":"new","iceConnectionState":"new","connectionState":"new"}),
             }),
         }))
@@ -298,7 +318,7 @@ impl Drop for NativePeer {
 }
 
 impl State {
-    fn begin_gathering(&mut self) -> Result<(), WebRtcError> {
+    fn begin_gathering(&mut self, is_offer: bool) -> Result<(), WebRtcError> {
         let credentials = self
             .endpoint
             .core()
@@ -309,6 +329,9 @@ impl State {
         }
         let restarting = self.gathering;
         if restarting {
+            if is_offer {
+                self.mdns.cancel_pending();
+            }
             self.refused_servers = self.refused_server_urls.clone();
         }
         self.gathered_credentials = credentials;
@@ -368,7 +391,7 @@ impl State {
                 "dtls":{"state":dtls.state().to_string(),"certificates":dtls.get_remote_certificates(),
                     "ice":{"state":ice.state().to_string(),"gatheringState":ice.gathering_state().to_string(),
                         "role":ice.role().to_string(),"component":ice.component().to_string(),
-                        "localCandidates":candidates(ice.get_local_candidates(),true),"remoteCandidates":candidates(ice.get_remote_candidates(),false),
+                        "localCandidates":candidates(ice.get_local_candidates(),true),"remoteCandidates":candidates(self.mdns.project(ice.get_remote_candidates()),false),
                         "localParameters":ice.get_local_parameters(),"remoteParameters":ice.get_remote_parameters()}}})
         })
     }
@@ -581,6 +604,7 @@ impl WebRtcPeer for NativePeer {
             },
             WebRtcOperation::GetStats => stats::report(&mut state, now),
             WebRtcOperation::Close => {
+                state.mdns.cancel_pending();
                 match &mut state.endpoint {
                     Endpoint::Host(peer) => {
                         let _ = peer.close();
@@ -627,6 +651,10 @@ impl WebRtcPeer for NativePeer {
     }
     fn poll(&self, budget: usize) -> Vec<String> {
         let mut state = self.state.borrow_mut();
+        let now = Instant::now();
+        let io_budget = state.settings.io.packets_per_turn.min(budget);
+        let State { mdns, endpoint, .. } = &mut *state;
+        mdns.poll(endpoint.core_mut(), now, io_budget);
         let mut out = Vec::new();
         for _ in 0..budget {
             state.harvest_transports();

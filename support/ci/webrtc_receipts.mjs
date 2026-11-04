@@ -19,7 +19,7 @@ function records(text) {
 function compact(c) {
   if(c.status!=='pass') {
     const d=c.restartDiagnostics;
-    return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'fail',phase:c.phase,error:c.error,initialStats:c.initialStatsDiagnostics,
+    return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'fail',phase:c.phase,error:c.error,resolution:c.resolution,initialStats:c.initialStatsDiagnostics,
       diagnostics:d?{step:d.step,method:d.method,initiator:d.initiator,iceBefore:d.iceBefore,iceAfter:d.iceAfter,statsObserved:d.statsObserved,
         peers:Object.fromEntries(Object.entries(d.snapshots||{}).map(([name,s])=>[name,{
           connection:s.connectionState,ice:s.iceState,signaling:s.signaling,gathering:s.gathering,
@@ -41,8 +41,8 @@ function compact(c) {
     nominated:[a.pair.nominated,b.pair.nominated],certificatePairSHA256:digest([a.localFingerprint,b.localFingerprint]),
     refusals:a.refused.length||b.refused.length?{native:counts(a.refused),browser:counts(b.refused)}:undefined,
     gatheringErrorCodes:codes.native.length||codes.browser.length?codes:undefined,
-    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,nativeNegotiationEvents:r.nativeNegotiationEvents||undefined,statsSettling:r.statsSettling})),
-    dns:c.dns,initialStatsSettling:c.initialStatsSettling,commonAssertionsVerified:true};
+    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,mdnsResolved:r.mdnsResolved,nativeNegotiationEvents:r.nativeNegotiationEvents||undefined,statsSettling:r.statsSettling})),
+    dns:c.dns,mdns:c.mdns,initialStatsSettling:c.initialStatsSettling,commonAssertionsVerified:true};
 }
 
 export class RestartJournal {
@@ -74,20 +74,25 @@ export class RestartJournal {
         omittedRefusalsAndNegotiationCountsMeanZero:true,
         caseVerifiedMeans:'all common assertions passed and source/native binary unchanged at checkpoint',
         pendingRestartInterruptedBeforeCleanup:true,sameNativeRtcSocketThenAllRtcAndDnsSocketsReleasedAndRebound:true},
-      scope:identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
+      scope:identity.mdns?'Windows native remote UUID mDNS resolution on a fixed IPv4 interface; controlled aliases for numeric browser host candidates and untouched browser mDNS names. UDP STUN/TURN regressions, relay suppression and pending-query cancellation. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.':identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
     return journal;
   }
   validateCase(c) {
     assert(fields.every(f=>this.identity.choices[f].includes(c[f])),'case outside declared matrix');
     if(this.identity.dns&&c.status==='pass'){
-      const pending=c.route==='stun'?1:0;
-      assert(c.dns&&c.dns.pendingAtCleanup===pending&&c.dns.socketsReleased===1+pending,'DNS ownership evidence missing');
+      const pending=Number(c.route==='stun')+Number(this.identity.mdns&&c.route!=='relay');
+      assert(c.dns&&c.dns.pendingAtCleanup===pending&&c.dns.socketsReleased===1+pending+Number(this.identity.mdns&&c.route!=='relay'),'DNS ownership evidence missing');
       assert(c.route==='direct'?c.dns.queries===0:c.dns.answers>=1&&c.dns.originalUrlAndPrivacyChecked,'DNS exchange/metadata evidence missing');
-      if(pending)assert(c.dns.held>=1,'DNS cancellation case lacked a pending request');
+      if(c.route==='stun')assert(c.dns.held>=1,'DNS cancellation case lacked a pending request');
       if(this.identity.dnsMode==='service'&&c.route!=='direct'){
         assert(c.dns.mode==='service'&&c.dns.types.srv>=1&&c.dns.types.a>=1,'service lookup evidence missing');
         assert(c.route==='relay'?c.dns.types.naptr===1:c.dns.types.naptr===0,'unexpected S-NAPTR ownership');
       }
+    }
+    if(this.identity.mdns&&c.status==='pass'){
+      assert(c.mdns&&c.mdns.namesAndStatsPrivate,'mDNS privacy evidence missing');
+      if(c.route==='relay')assert(c.mdns.started===0&&c.mdns.resolved===0&&c.mdns.pendingAtCleanup===0,'relay policy issued mDNS');
+      else {assert(c.mdns.resolved>=1&&c.mdns.pendingAtCleanup===1&&c.mdns.held>=1,'mDNS resolution/cancellation evidence missing');assert(c.restarts.length===2&&c.restarts.every(r=>r.mdnsResolved>=1),'fresh mDNS restart evidence missing');}
     }
     if(c.gate===this.gate+'-case'&&c.status==='pass')assert(c.verified===true||(c.commonAssertionsVerified&&c.sourceStable),'case lacks checkpoint verification');
   }

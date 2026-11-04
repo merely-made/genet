@@ -12,6 +12,9 @@ use script_engine_api::ScriptEngine;
 use script_runtime_api::Runtime;
 use serde_json::{Value, json};
 
+#[path = "interop_host/trace.rs"]
+mod trace;
+
 struct Page;
 impl script_runtime_api::ScriptResourceLoader for Page {
     fn load(&self, url: &str) -> Option<String> {
@@ -81,7 +84,7 @@ fn run<E: ScriptEngine>(bind: IpAddr) -> Result<(), String> {
                     Err(error) => Err(rt.describe_error(&error)),
                 }
             },
-            Some("metrics") => Ok(json!({"pending":rt.pending_webrtc()})),
+            Some("metrics") => Ok(json!({"pending":rt.pending_webrtc(),"ice":trace::snapshot()})),
             Some("navigate") => {
                 let stale = rt
                     .eval(
@@ -125,6 +128,7 @@ fn run<E: ScriptEngine>(bind: IpAddr) -> Result<(), String> {
 }
 
 fn main() {
+    trace::install();
     // Match the substantial stack available to the engine's integration-test
     // threads rather than Windows' small executable-entry stack.
     let result = std::thread::Builder::new()

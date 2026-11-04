@@ -4,7 +4,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
   const peers={native,browser}, opposite=name=>name==='native'?'browser':'native';
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  const results=[];let probeRound=0,step='capture',snapshots,method,initiator;
+  const results=[];let probeRound=0,step='capture',snapshots,method,initiator,iceBefore;
   async function stats(peer) {
     await peer.evaluate('__interop.inspect()');
     for(let i=0;i<200;i++){const value=await peer.value('__interop.stats');if(value)return value;await delay(10);}
@@ -12,6 +12,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
   }
   try {
     for([method,initiator] of [['method',offerer],['offer',opposite(offerer)]]) {
+      iceBefore=(await native.request('metrics')).ice;
       const descriptions=[];
       async function pump() {
         for(const name of ['native','browser'])for(const signal of await peers[name].value('__interop.takeSignals()')) {
@@ -71,6 +72,6 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
     }
     return results;
   } catch(error) {
-    error.restartDiagnostics={step,method,initiator,snapshots};throw error;
+    error.restartDiagnostics={step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice};throw error;
   }
 }

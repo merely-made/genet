@@ -186,7 +186,9 @@ impl Query {
             return Ok(None);
         };
         let identity = if multicast && count(4) == 0 {
-            message.metadata.id == 0
+            // Chromium uses zero; Firefox echoes the request ID even on its
+            // multicast, questionless replies. Other transaction IDs fail.
+            message.metadata.id == 0 || message.metadata.id == self.request.metadata.id
         } else {
             message.metadata.id == self.request.metadata.id
                 && message.queries == self.request.queries

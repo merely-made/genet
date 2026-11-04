@@ -255,6 +255,9 @@ fn multicast_zero_id_questionless_cache_flush_answer_is_accepted_only_on_the_joi
     reply.metadata.id = 0;
     reply.queries.clear();
     reply.answers[0].dns_class = DNSClass::Unknown(0x8001);
+    let mut echo_id = response(&q, &[Ipv4Addr::LOCALHOST]);
+    echo_id.queries.clear();
+    echo_id.answers[0].dns_class = DNSClass::Unknown(0x8001);
     socket.send_to(&reply.to_vec().unwrap(), from).unwrap();
     assert!(
         lookup.poll(Instant::now()).is_pending(),
@@ -273,4 +276,34 @@ fn multicast_zero_id_questionless_cache_flush_answer_is_accepted_only_on_the_joi
     });
     assert_eq!(resolver.pending(), 0);
     UdpSocket::bind(from).unwrap();
+    let now = Instant::now();
+    let mut query = Query::new(
+        HOST,
+        MdnsConfig::new(Ipv4Addr::LOCALHOST, 8),
+        DnsLimits::default(),
+        now,
+        now + Duration::from_secs(1),
+        Lease(Arc::new(AtomicUsize::new(1))),
+        Arc::new(AtomicUsize::new(0)),
+    )
+    .unwrap();
+    echo_id.metadata.id = query.request.metadata.id;
+    assert_eq!(
+        query.answer(&echo_id.to_vec().unwrap(), true).unwrap(),
+        Some(Ipv4Addr::LOCALHOST.into())
+    );
+    assert_eq!(
+        query.answer(&echo_id.to_vec().unwrap(), false).unwrap(),
+        None
+    );
+    echo_id.metadata.id = if query.request.metadata.id == 1 { 2 } else { 1 };
+    assert_eq!(
+        query.answer(&echo_id.to_vec().unwrap(), true).unwrap(),
+        None
+    );
+    assert!(matches!(
+        query.poll(now + Duration::from_secs(2)),
+        Poll::Ready(Err(ResolveError::Timeout))
+    ));
+    assert!(query.socket.is_none() && query.multicast.is_none() && query.lease.is_none());
 }

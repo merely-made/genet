@@ -105,6 +105,7 @@ E2r passes nine ordinary tests on working Rust 1.99.1 and MSRV 1.97.1,
 the three controlled coturn tests and strict all-target Clippy. Restart-specific
 checks cover stale STUN transactions, two bounded relay-refusal generations,
 and DTLS answer policy for continued versus changed peer identity. The pinned
-core's 57 ICE tests pass on 1.97.1, including authenticated old consent confined
-to the retained route and deadline. Genet owns the established-channel
-native/WPT/headed restart receiving results in its conformance receipt.
+core's 58 ICE tests pass on 1.97.1, including authenticated old consent confined
+to the retained route and deadline, and a fresh check after an authenticated
+restart request revives an exhausted controlling pair. Genet owns the established
+data-channel native/WPT/headed restart receiving results in its conformance receipt.

@@ -355,3 +355,18 @@ No isolated Cargo home, target, worktree or running fixture is required.
 - 2026-11-04, before installation: the Native read-only preflight reported no
   covering rule on the Public profile. Host registration and browser receiving
   remain open; the earlier supplier pins and closed E2m packet are unchanged.
+
+### Registration and privacy implementation checkpoint
+
+In progress: opt-in `LocalAddressPolicy::Mdns` on the selected IPv4 interface;
+`Expose` retains the existing configured behavior. One private UUID per peer
+is retained across fixed-interface ICE restarts and released on close/drop.
+The provider owns bounded multicast-query registration sockets; direct-unicast
+queries and IPv6 remain outside this native profile. Genet projects host
+candidates, descriptions, local transport observations and statistics, keeping
+numeric routing internal and suppressing related private addresses. Failure
+withdraws registration without numeric fallback. Required automated acceptance
+is real name resolution, encrypted peer exchange, all exposure surfaces,
+restart/name stability, close/navigation cleanup and failure-path privacy.
+Retain compact host/privacy evidence alongside the core packet, with the same
+20,000-byte total E2a cap; do not alter the closed core packet.

@@ -22,6 +22,13 @@ pub(super) fn report(state: &mut State, now: Instant) -> Value {
     add_missing_candidates(state, &mut entries);
     state.mdns.stats(&mut entries);
     normalize_references(&mut entries);
+    if let Some(local) = &state.local {
+        for entry in &mut entries {
+            if entry["type"] == "local-candidate" {
+                local.project(entry);
+            }
+        }
+    }
     json!(entries)
 }
 

@@ -7,6 +7,8 @@ use script_runtime_api::Runtime;
 
 #[path = "browser/dns_fixture.rs"]
 mod dns_fixture;
+#[path = "browser/local_mdns.rs"]
+mod local_mdns;
 #[path = "browser/mdns.rs"]
 mod mdns;
 #[path = "browser/mdns_fixture.rs"]
@@ -383,6 +385,10 @@ macro_rules! both {
     ($module:ident,$engine:ty) => {
         mod $module {
             use super::*;
+            #[test]
+            fn local_mdns_registration() {
+                super::local_mdns::exchange::<$engine>();
+            }
             #[test]
             fn constructors() {
                 constructors_and_close::<$engine>();

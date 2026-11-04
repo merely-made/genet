@@ -6,7 +6,9 @@
 
 mod channels;
 mod discovery;
+mod local_mdns;
 mod mdns;
+pub use local_mdns::LocalAddressPolicy;
 mod signaling;
 mod stats;
 
@@ -54,6 +56,7 @@ pub struct Settings {
     pub max_remote_candidates: usize,
     pub max_candidate_bytes: usize,
     pub mdns_timeout: Duration,
+    pub local_address_policy: LocalAddressPolicy,
 }
 
 impl Default for Settings {
@@ -74,6 +77,7 @@ impl Default for Settings {
             max_remote_candidates: 128,
             max_candidate_bytes: 4096,
             mdns_timeout: Duration::from_secs(3),
+            local_address_policy: LocalAddressPolicy::Expose,
         }
     }
 }
@@ -239,6 +243,7 @@ struct State {
     refused_server_urls: Vec<String>,
     candidate_urls: BTreeMap<String, String>,
     mdns: mdns::Candidates,
+    local: Option<local_mdns::Local>,
 }
 
 impl WebRtcFactory for NativeWebRtcFactory {
@@ -288,11 +293,13 @@ impl WebRtcFactory for NativeWebRtcFactory {
                 .map_err(protocol_error)?,
             ))
         };
+        let local = local_mdns::Local::new(self.settings, config["iceTransportPolicy"] == "relay")?;
         self.live.set(self.live.get() + 1);
         Ok(Rc::new(NativePeer {
             live: self.live.clone(),
             state: RefCell::new(State {
                 endpoint,
+                local,
                 settings: self.settings,
                 config,
                 channels: BTreeMap::new(),
@@ -385,7 +392,9 @@ impl State {
                 // peer-reflexive addresses ICE learns from incoming traffic.
                 if !local && c.typ==murm_rtc::rtc::peer_connection::transport::RTCIceCandidateType::Prflx { return None; }
                 if local { c.url=self.candidate_urls.get(&c.id).cloned(); }
-                candidate_value(c,local)
+                let mut value = candidate_value(c,local)?;
+                if local && let Some(projection)=&self.local { projection.project(&mut value); }
+                Some(value)
             }).collect::<Vec<_>>();
             json!({"state":state,"maxMessageSize":sctp.max_message_size(),"maxChannels":sctp.max_channels(),
                 "dtls":{"state":dtls.state().to_string(),"certificates":dtls.get_remote_certificates(),
@@ -450,6 +459,15 @@ impl State {
         value["localDescription"] = json!(core.local_description());
         value["currentLocalDescription"] = json!(core.current_local_description());
         value["pendingLocalDescription"] = json!(core.pending_local_description());
+        if let Some(local) = &self.local {
+            for key in [
+                "localDescription",
+                "currentLocalDescription",
+                "pendingLocalDescription",
+            ] {
+                local.project(&mut value[key]);
+            }
+        }
         value["remoteDescription"] = json!(remote);
         value["currentRemoteDescription"] = json!(core.current_remote_description());
         value["pendingRemoteDescription"] = json!(core.pending_remote_description());
@@ -465,6 +483,13 @@ impl State {
         value
     }
     fn notify(&mut self, mut value: Value) {
+        if matches!(
+            value["event"].as_str(),
+            Some("icecandidate" | "icecandidateerror")
+        ) && let Some(local) = &self.local
+        {
+            local.project(&mut value);
+        }
         if matches!(
             value["event"].as_str(),
             Some("icecandidate" | "icecandidateerror" | "icegatheringstatechange")
@@ -605,6 +630,9 @@ impl WebRtcPeer for NativePeer {
             WebRtcOperation::GetStats => stats::report(&mut state, now),
             WebRtcOperation::Close => {
                 state.mdns.cancel_pending();
+                if let Some(local) = &mut state.local {
+                    local.close();
+                }
                 match &mut state.endpoint {
                     Endpoint::Host(peer) => {
                         let _ = peer.close();
@@ -653,6 +681,11 @@ impl WebRtcPeer for NativePeer {
         let mut state = self.state.borrow_mut();
         let now = Instant::now();
         let io_budget = state.settings.io.packets_per_turn.min(budget);
+        if io_budget > 0
+            && let Some(local) = &mut state.local
+        {
+            local.poll(now, io_budget);
+        }
         let State { mdns, endpoint, .. } = &mut *state;
         mdns.poll(endpoint.core_mut(), now, io_budget);
         let mut out = Vec::new();

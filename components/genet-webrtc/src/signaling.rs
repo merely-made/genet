@@ -6,7 +6,7 @@ pub(super) fn perform(
     data: Value,
     now: Instant,
 ) -> Result<Value, WebRtcError> {
-    Ok(match operation {
+    let mut result = match operation {
         WebRtcOperation::CreateOffer => {
             json!(
                 state
@@ -57,10 +57,23 @@ pub(super) fn perform(
         WebRtcOperation::GetConfiguration => state.config.clone(),
         WebRtcOperation::SetConfiguration => configure(state, data, now)?,
         _ => return Err(failure("OperationError", "Invalid signaling operation")),
-    })
+    };
+    if matches!(
+        operation,
+        WebRtcOperation::CreateOffer | WebRtcOperation::CreateAnswer
+    ) && let Some(local) = &state.local
+    {
+        local.project(&mut result);
+    }
+    Ok(result)
 }
 
-fn set_local(state: &mut State, data: Value, now: Instant) -> Result<Value, WebRtcError> {
+fn set_local(state: &mut State, mut data: Value, now: Instant) -> Result<Value, WebRtcError> {
+    if let Some(local) = &state.local
+        && let Some(sdp) = data["sdp"].as_str()
+    {
+        data["sdp"] = json!(local.sdp(sdp, true));
+    }
     let rollback = data["type"] == "rollback";
     let description = if data["type"].is_null() {
         let mut description = if state.observable["signalingState"] == "have-remote-offer" {

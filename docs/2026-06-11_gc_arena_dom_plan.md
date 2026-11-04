@@ -558,7 +558,7 @@ debug assertions only for `genet-scripted-dom` adds foreign-handle aliasing
 dev-profile configuration probe, not a full optimized-release or wasm run.
 The manifest, lock, runner/source digests and logs live with the shared R2-A
 research receipt at
-`mere/design_docs/mere_docs/testing/receipts/2026-09-08_stack_pillar_probes/arena/R2_A_RECEIPT.md`.
+`Code/testing/mere/design_docs/mere_docs/testing/receipts/2026-09-08_stack_pillar_probes/arena/R2_A_RECEIPT.md`.
 Restoring baseline debug configuration and deferring reclamation at just the
 two replacement sites makes all 7 assertions pass in the scratch snapshot.
 That diagnostic patch is preserved with the receipt; it does not fix foreign

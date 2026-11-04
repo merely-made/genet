@@ -24,3 +24,7 @@ pub mod udp;
 /// Caller-owned, cancellable hostname address resolution for native hosts.
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 pub mod resolve;
+
+/// Caller-driven IPv4 local mDNS registration.
+#[cfg(all(feature = "dns", not(target_arch = "wasm32")))]
+pub mod registration;

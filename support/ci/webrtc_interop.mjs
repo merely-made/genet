@@ -8,6 +8,7 @@
 //   node support/ci/webrtc_interop.mjs --server NUMERIC_WSL_IP:34790
 // Add --dns controlled for explicit-port native hostname URLs, controlled A
 // replies, and interrupted-DNS cleanup. Browser peers use the numeric endpoint.
+// --dns service instead uses portless URLs and controlled SRV/S-NAPTR replies.
 // Optional matrix filters: --browser chrome|firefox --engine boa|nova
 // --route direct|relay --offerer native|browser --cleanup close|navigate.
 // --restart both exercises both APIs at every negotiation step; adds configured STUN.
@@ -40,9 +41,10 @@ const execFileAsync = promisify(execFile);
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const restart=args.get('--restart');
-const dnsEnabled=args.get('--dns')==='controlled';
-if(args.has('--dns')&&!dnsEnabled)throw Error('--dns requires controlled');
-const gate=dnsEnabled?'E2d':restart?'E2r':'E2h';
+const dnsMode=args.get('--dns')||null;
+const dnsEnabled=dnsMode!==null;
+if(dnsEnabled&&!['controlled','service'].includes(dnsMode))throw Error('--dns requires controlled or service');
+const gate=dnsMode==='service'?'E2s':dnsEnabled?'E2d':restart?'E2r':'E2h';
 if(restart && restart!=='both')throw Error('--restart requires both');
 // Diagnostic signaling delay, bounded below the retained-route deadline.
 const answerDelayMs=Number(args.get('--answer-delay-ms')||0);
@@ -62,9 +64,9 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
-const sourceFiles=['components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
-const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md'));
-if(receipt.endsWith('2026-11-01_webrtc_conformance_plan_receipts.md'))throw Error('baseline receipt is frozen');
+const sourceFiles=['support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
+const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md'));
+if(['2026-11-01','2026-11-03'].some(date=>receipt.endsWith(date+'_webrtc_conformance_plan_receipts.md')))throw Error('baseline receipt is frozen');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = data => createHash('sha256').update(data).digest('hex');
 const assert = (value, message) => { if (!value) throw Error(message); };
@@ -347,14 +349,14 @@ const sourceStableNow=async()=>{
   return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
-  gate,dns:dnsEnabled,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
+  gate,dns:dnsEnabled,dnsMode,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
 const udpFixture=new UdpFixture();
 const frontend=await udpFixture.start(bind);
 const dnsFixture=dnsEnabled?new DnsFixture():null;
-const dnsServer=dnsFixture?await dnsFixture.start(bind):null;
+const dnsServer=dnsFixture?await dnsFixture.start(bind,dnsMode==='service'?Number(frontend.split(':')[1]):null):null;
 try {
   for(const browserName of choose('--browser',['chrome','firefox'])) {
     const browser=new Browser();
@@ -372,7 +374,7 @@ try {
           const config={iceTransportPolicy:route==='relay'?'relay':'all',iceServers:route==='relay'?
             [{urls:[`turn:${frontend}?transport=udp`],username:'rtc-test',credential:'rtc-test-password'}]:route==='stun'?[{urls:[`stun:${frontend}`]}]:[]};
           const nativeConfig=JSON.parse(JSON.stringify(config));
-          if(dnsEnabled&&route!=='direct')nativeConfig.iceServers[0].urls=nativeConfig.iceServers[0].urls.map(url=>url.replace(frontend,'rtc.example.test:'+frontend.split(':')[1]));
+          if(dnsEnabled&&route!=='direct')nativeConfig.iceServers[0].urls=dnsMode==='service'?[`${route==='relay'?'turn':'stun'}:rtc.example.test`]:nativeConfig.iceServers[0].urls.map(url=>url.replace(frontend,'rtc.example.test:'+frontend.split(':')[1]));
           await native.evaluate(source);await browser.evaluate(source);
           await native.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(nativeConfig)},'native',${offerer==='native'});__interop.start()`);
           await browser.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(config)},'browser',${offerer==='browser'});__interop.start()`);
@@ -431,8 +433,9 @@ try {
           const summary=(snapshot,stats)=>({connected:snapshot.connected,textMessagesVerified:2,binaryBytesVerified:48000,modes:snapshot.modes,refused:snapshot.refused,gatheringErrors:snapshot.gatheringErrors,
             pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint,
             remoteAddressesRedacted:stats.remoteAddressesRedacted,peerReflexiveInRemoteList:stats.peerReflexiveInRemoteList});
-          const dns=dnsFixture?{queries:dnsFixture.queries-dnsBefore.queries,answers:dnsFixture.answers-dnsBefore.answers,held:dnsFixture.held-dnsBefore.held,pendingAtCleanup:dnsPending,socketsReleased:sockets.length,originalUrlAndPrivacyChecked:route!=='direct'}:undefined;
+          const dns=dnsFixture?{mode:dnsMode,queries:dnsFixture.queries-dnsBefore.queries,answers:dnsFixture.answers-dnsBefore.answers,held:dnsFixture.held-dnsBefore.held,types:Object.fromEntries(Object.entries(dnsFixture.types).map(([type,count])=>[type,count-dnsBefore.types[type]])),pendingAtCleanup:dnsPending,socketsReleased:sockets.length,originalUrlAndPrivacyChecked:route!=='direct'}:undefined;
           if(dns){assert(!dnsFixture.error,dnsFixture.error);assert(route==='direct'?dns.queries===0:dns.answers>=1,'missing controlled DNS exchange');assert(!a.gatheringErrors.length,'hostname gathering failed');if(interruptedDns)assert(dns.held>=1,'missing held DNS request at interruption');}
+          if(dnsMode==='service'&&route!=='direct'){assert(dns.types.srv>=1&&dns.types.a>=1,'missing service lookup');assert(route==='relay'?dns.types.naptr===1:dns.types.naptr===0,'unexpected S-NAPTR ownership');}
           cases.push({...current,dns,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
           if(journal)await journal.case(cases.at(-1),await sourceStableNow());
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
@@ -458,7 +461,7 @@ finally {
   const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
   const sourceStable=JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
   if(!sourceStable){failure={phase:'source identity',error:'source or fixture binary changed during qualification'};process.exitCode=1;}
-  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
+  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:dnsMode==='service'?'native Windows headed restart with portless STUN/UDP-TURN and controlled SRV/S-NAPTR at nondefault discovered ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
   if(journal) {
     await journal.finish(failure,sourceStable);
     console.log(`${gate} ${journal.passed.size}/${expectedCases} durable cases passed; run ${journal.run}`);

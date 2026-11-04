@@ -1,6 +1,6 @@
 # genet Documentation Index
 
-- [WebRTC conformance continuation](2026-11-03_webrtc_conformance_plan.md): explicit-port STUN/UDP-TURN hostname resolution qualified: 30 native checks, unchanged selected WPT maps and 48 headed restart cases on both engines. SRV/NAPTR, mDNS, TCP/TLS, server/interface replacement, browser-guest, media and carrier adoption remain separate gates.
+- [WebRTC conformance continuation](2026-11-04_webrtc_conformance_plan.md): UDP SRV/NAPTR service discovery in progress; explicit-port baseline retains 30 native checks, unchanged WPT maps and 48 headed cases. mDNS, TCP/TLS, server/interface replacement, browser-guest, media and carrier adoption remain separate gates.
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 
@@ -74,7 +74,8 @@ versioned inputs. Historical packet scripts retain their original source/path
 requirements; do not run their writers against frozen evidence.
 
 The completed [WebRTC baseline packet](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md)
-is frozen at its cited path. The [current WebRTC packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md)
+is frozen at its cited path. The [closed E2d packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md)
+and [current E2s packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md)
 lives under `Code/testing/genet/`. Earlier qualification keeps its original
 scope and identities; never overwrite a cited receipt.
 

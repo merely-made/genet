@@ -1,66 +1,50 @@
+use super::dns_fixture::DnsFixture;
 use super::*;
-use hickory_proto::op::{Message, OpCode, ResponseCode};
+use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{RData, Record};
 use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 
 struct Dns {
-    socket: UdpSocket,
+    fixture: DnsFixture,
     addresses: Vec<Ipv4Addr>,
-    requests: Vec<SocketAddr>,
     answer: bool,
 }
 impl Dns {
     fn new(addresses: Vec<Ipv4Addr>) -> Self {
-        let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-        socket.set_nonblocking(true).unwrap();
         Self {
-            socket,
+            fixture: DnsFixture::new(),
             addresses,
-            requests: Vec::new(),
             answer: true,
         }
     }
     fn resolver(&self) -> Arc<DnsResolver> {
-        Arc::new(
-            DnsResolver::new(DnsConfig {
-                servers: vec![self.socket.local_addr().unwrap()],
-                limits: DnsLimits {
-                    timeout: Duration::from_secs(2),
-                    ..Default::default()
-                },
-            })
-            .unwrap(),
-        )
+        self.fixture.resolver(DnsLimits {
+            timeout: Duration::from_secs(2),
+            ..Default::default()
+        })
     }
     fn poll(&mut self) {
-        let mut bytes = [0; 4096];
-        for _ in 0..8 {
-            let Ok((n, from)) = self.socket.recv_from(&mut bytes) else {
-                break;
-            };
-            self.requests.push(from);
-            if !self.answer {
-                continue;
+        let enabled = self.answer;
+        let addresses = &self.addresses;
+        self.fixture.poll(|request| {
+            if !enabled {
+                return None;
             }
-            let request = Message::from_vec(&bytes[..n]).unwrap();
-            let mut response = Message::response(request.metadata.id, OpCode::Query);
-            response.queries = request.queries.clone();
-            if self.addresses.is_empty() {
+            let mut response = super::dns_fixture::response(request);
+            if addresses.is_empty() {
                 response.metadata.response_code = ResponseCode::NXDomain;
             }
-            for address in &self.addresses {
+            for address in addresses {
                 response.answers.push(Record::from_rdata(
                     request.queries[0].name().clone(),
                     0,
                     RData::A((*address).into()),
                 ));
             }
-            self.socket
-                .send_to(&response.to_vec().unwrap(), from)
-                .unwrap();
-        }
+            Some(response)
+        });
     }
 }
 fn runtime<E: ScriptEngine>(resolver: Arc<DnsResolver>, bind: std::net::IpAddr) -> Runtime<E> {
@@ -84,21 +68,10 @@ fn drive<E: ScriptEngine>(
     expression: &str,
     mut io: impl FnMut(),
 ) {
-    let deadline = Instant::now() + Duration::from_secs(20);
-    while read(rt, expression) != "true" {
-        assert!(
-            Instant::now() < deadline,
-            "DNS browser deadline: {}",
-            read(rt, "problem")
-        );
+    super::dns_fixture::drive(rt, expression, |_| {
         fixture.poll();
         io();
-        rt.pump_webrtc(16);
-        let now = rt.clock_elapsed_ms();
-        rt.run_timers(16, now).unwrap();
-        rt.run_microtasks();
-        std::thread::sleep(Duration::from_millis(1));
-    }
+    });
 }
 
 pub(super) fn fallback<E: ScriptEngine>() {
@@ -175,7 +148,7 @@ pub(super) fn fallback<E: ScriptEngine>() {
         assert_eq!(resolver.pending(), 0);
     }
     assert_eq!(bindings, 2);
-    assert_eq!(dns.requests.len(), 2);
+    assert_eq!(dns.fixture.requests.len(), 2);
     run(&mut rt, "p.close()");
     assert_eq!(rt.pending_webrtc(), 0);
 }
@@ -213,8 +186,8 @@ pub(super) fn cancellation<E: ScriptEngine>() {
             dns.poll();
         }
         assert_eq!(resolver.pending(), 1);
-        assert!(!dns.requests.is_empty());
-        let old = dns.requests[0];
+        assert!(!dns.fixture.requests.is_empty());
+        let old = dns.fixture.requests[0];
         run(
             &mut rt,
             "p.createOffer({iceRestart:true}).then(o=>p.setLocalDescription(o)).catch(e=>problem=String(e));",
@@ -232,12 +205,12 @@ pub(super) fn cancellation<E: ScriptEngine>() {
         assert_eq!(resolver.pending(), 0);
         assert_eq!(rt.pending_webrtc(), 0);
         // Late answers to the retired source ports cannot recreate a job.
-        for address in &dns.requests {
-            dns.socket.send_to(&[0; 12], address).unwrap();
+        for address in &dns.fixture.requests {
+            dns.fixture.socket.send_to(&[0; 12], address).unwrap();
         }
         rt.pump_webrtc(32);
         assert_eq!(resolver.pending(), 0);
-        for address in &dns.requests {
+        for address in &dns.fixture.requests {
             UdpSocket::bind(address).expect("DNS socket released after realm teardown");
         }
     }
@@ -262,7 +235,7 @@ pub(super) fn errors<E: ScriptEngine>() {
             &mut rt,
             r#"
       var problem='',done=false,errors=[],order=[],p=new RTCPeerConnection({iceTransportPolicy:'relay',iceServers:[{
-        urls:['turn:missing.example.test:3478','turn:portless.example.test','turn:tcp.example.test:3478?transport=tcp'],username:'private-user',credential:'private-password'}]});
+        urls:['turn:missing.example.test:3478','turns:secure.example.test:5349','turn:tcp.example.test:3478?transport=tcp'],username:'private-user',credential:'private-password'}]});
       p.createDataChannel('errors');p.onicecandidate=e=>{if(e.candidate)problem='direct leak';else{order.push('null');done=true;}};
       p.onicegatheringstatechange=()=>{if(p.iceGatheringState==='complete')order.push('complete');};
       p.onicecandidateerror=e=>{order.push('error');if(e.errorCode!==701||e.address!==null||e.port!==null||/private/.test(e.url+e.errorText))problem='error privacy';errors.push(e.url);};
@@ -280,7 +253,7 @@ pub(super) fn errors<E: ScriptEngine>() {
             "error,error,error,complete,null"
         );
         assert_eq!(
-            dns.requests.len(),
+            dns.fixture.requests.len(),
             usize::from(available),
             "unsupported URLs must not start DNS"
         );
@@ -328,6 +301,6 @@ pub(super) fn coturn<E: ScriptEngine>() {
         assert_eq!(read(&mut rt, "problem"), "");
         assert_eq!(rt.pending_webrtc(), 0);
         assert_eq!(resolver.pending(), 0);
-        assert!(dns.requests.len() >= 2);
+        assert!(dns.fixture.requests.len() >= 2);
     }
 }

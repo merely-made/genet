@@ -44,8 +44,8 @@ function compact(c) {
 
 export class RestartJournal {
   static async open(file,identity,source,resume) {
-    assert(!file.endsWith('2026-11-01_webrtc_conformance_plan_receipts.md'),'baseline receipt is frozen');
-    const gate=identity.gate||'E2d';
+    assert(!['2026-11-01','2026-11-03'].some(date=>file.endsWith(date+'_webrtc_conformance_plan_receipts.md')),'baseline receipt is frozen');
+    const gate=identity.gate||'E2s';
     const old=await readFile(file,'utf8'),rows=records(old),signature=digest(identity);
     const start=resume?rows.findLast(r=>r.gate===gate+'-run'&&(resume==='latest'||r.run===resume)):null;
     if(resume)assert(start&&start.signature===signature,'restart resume requires identical source, binary, lock and fixture profile');
@@ -70,7 +70,7 @@ export class RestartJournal {
         omittedRefusalsAndNegotiationCountsMeanZero:true,
         caseVerifiedMeans:'all common assertions passed and source/native binary unchanged at checkpoint',
         pendingRestartInterruptedBeforeCleanup:true,sameNativeRtcSocketThenAllRtcAndDnsSocketsReleasedAndRebound:true},
-      scope:identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
+      scope:identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
     return journal;
   }
   validateCase(c) {
@@ -80,6 +80,10 @@ export class RestartJournal {
       assert(c.dns&&c.dns.pendingAtCleanup===pending&&c.dns.socketsReleased===1+pending,'DNS ownership evidence missing');
       assert(c.route==='direct'?c.dns.queries===0:c.dns.answers>=1&&c.dns.originalUrlAndPrivacyChecked,'DNS exchange/metadata evidence missing');
       if(pending)assert(c.dns.held>=1,'DNS cancellation case lacked a pending request');
+      if(this.identity.dnsMode==='service'&&c.route!=='direct'){
+        assert(c.dns.mode==='service'&&c.dns.types.srv>=1&&c.dns.types.a>=1,'service lookup evidence missing');
+        assert(c.route==='relay'?c.dns.types.naptr===1:c.dns.types.naptr===0,'unexpected S-NAPTR ownership');
+      }
     }
     if(c.gate===this.gate+'-case'&&c.status==='pass')assert(c.verified===true||(c.commonAssertionsVerified&&c.sourceStable),'case lacks checkpoint verification');
   }
@@ -114,7 +118,7 @@ export class RestartJournal {
     const repair=lastFence&&lastFence!=='```'?'\n```\n\nInterrupted checkpoint retained; incomplete JSON is not counted.\n':'';
     const row={...data,schema:2,gate:this.gate+'-'+kind,run:this.run,utc:new Date().toISOString()};
     const entry=repair+'\n\n### '+this.gate+' headed '+kind+'\n\n```json\n'+JSON.stringify(row)+'\n```\n';
-    assert(Buffer.byteLength(old+entry)<=220000,'E2d receipt byte cap exceeded');
+    assert(Buffer.byteLength(old+entry)<=220000,this.gate+' receipt byte cap exceeded');
     await appendFile(this.file,entry);
   }
 }

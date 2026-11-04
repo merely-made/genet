@@ -3,19 +3,19 @@ use super::{Settings, failure, protocol_error};
 use murm_rtc::resolve::Resolver;
 use murm_rtc::rtc::crypto::RTCCryptoProvider;
 use murm_rtc::rtc::ice::url::{ProtoType, SchemeType, Url};
-use murm_rtc::udp::{DiscoveryConfig, Server};
+use murm_rtc::udp::{DiscoveryConfig, NamedServer, Server};
 use script_runtime_api::WebRtcError;
 use serde_json::Value;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-// RFC 5928 requires service discovery for portless hostnames. This address-only
-// slice refuses those attempts rather than quietly substituting a default port.
+// The core parser supplies defaults, so preserve omission before handing a
+// hostname to the resolver. Only a validated, accepted query selects UDP.
 fn explicit_port(raw: &str) -> bool {
     raw.split_once(':')
         .and_then(|(_, rest)| rest.split('?').next())
-        .and_then(|authority| authority.rsplit_once(':'))
-        .is_some_and(|(_, port)| port.parse::<u16>().is_ok_and(|port| port != 0))
+        .and_then(|authority| authority.rsplit('@').next())
+        .is_some_and(|authority| authority.rsplit_once(':').is_some())
 }
 
 pub(super) fn configuration(
@@ -56,13 +56,20 @@ pub(super) fn configuration(
                 || ip.is_some_and(|ip| {
                     ip.is_unspecified() || ip.is_ipv4() != settings.bind.is_ipv4()
                 })
-                || (ip.is_none() && !explicit_port(raw))
             {
                 refused.push(url.to_string());
                 continue;
             }
             let Some(ip) = ip else {
-                named_servers.push(url);
+                let port = explicit_port(raw).then_some(url.port);
+                let transport_specified = raw
+                    .split_once('?')
+                    .is_some_and(|(_, q)| q.split('&').any(|part| !part.is_empty()));
+                named_servers.push(NamedServer {
+                    url,
+                    port,
+                    transport_specified,
+                });
                 continue;
             };
             let address = SocketAddr::new(ip, url.port);

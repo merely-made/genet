@@ -5,6 +5,11 @@ use genet_webrtc::{NativeWebRtcFactory, Settings};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::Runtime;
 
+#[path = "browser/dns_fixture.rs"]
+mod dns_fixture;
+#[path = "browser/service.rs"]
+mod service;
+
 #[path = "browser/dns.rs"]
 mod dns;
 
@@ -419,6 +424,18 @@ macro_rules! both {
                 super::dns::errors::<$engine>();
             }
             #[test]
+            fn service_fallback() {
+                super::service::fallback::<$engine>();
+            }
+            #[test]
+            fn service_cancellation() {
+                super::service::cancellation::<$engine>();
+            }
+            #[test]
+            fn service_errors() {
+                super::service::errors::<$engine>();
+            }
+            #[test]
             fn restart() {
                 super::restart::ordinary::<$engine>();
             }
@@ -426,6 +443,11 @@ macro_rules! both {
             #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]
             fn coturn_dns_restart() {
                 super::dns::coturn::<$engine>();
+            }
+            #[test]
+            #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]
+            fn coturn_service_restart() {
+                super::service::coturn::<$engine>();
             }
             #[test]
             #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]

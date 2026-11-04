@@ -12,7 +12,7 @@ description = "Caller-driven native WebRTC host for Genet documents"
 [dependencies]
 genet-runtime = { path = "../script-runtime-api" }
 # Independent wire leaf, not Murm's application carrier or root radio workspace.
-murm-rtc = { git = "https://github.com/merely-made/murm.git", rev = "ecd3b760b5fa9ea729e6b37fe11b941b8255f2b2", default-features = false, features = ["crypto-ring", "host"] }
+murm-rtc = { git = "https://github.com/merely-made/murm.git", rev = "0138711d9505b2ff14bd881094b7345ca7efa9a3", default-features = false, features = ["crypto-ring", "host"] }
 serde_json = { workspace = true }
 bytes = "1"
 

@@ -2061,6 +2061,9 @@ fn retained_document_reuses_complete_frames_and_font_allocations() {
     let first = document.frame(320, 240).unwrap();
     let first_generation = document.generation();
     let first_shape_count = document.text_system().shape_count();
+    let first_stats = document.text_system().shaping_stats();
+    assert!(first_shape_count > 0);
+    assert!(first_stats.layout_builds > first_stats.metric_layout_builds);
     let first_font = first.fonts().first().unwrap().data.clone();
 
     let cached = document.frame(320, 240).unwrap();
@@ -2073,7 +2076,24 @@ fn retained_document_reuses_complete_frames_and_font_allocations() {
 
     let resized = document.frame(480, 240).unwrap();
     assert!(document.generation() > first_generation);
-    assert!(document.text_system().shape_count() > first_shape_count);
+    let resized_stats = document.text_system().shaping_stats();
+    assert_eq!(document.text_system().shape_count(), first_shape_count);
+    assert!(resized_stats.cache_hits > first_stats.cache_hits);
+    assert_eq!(
+        resized_stats.layout_builds - resized_stats.metric_layout_builds,
+        first_stats.layout_builds - first_stats.metric_layout_builds
+    );
+    let mut fresh = LiveryDocument::new(
+        StaticDocument::parse(
+            r#"<html><body><div class="label">retained text</div></body></html>"#,
+        ),
+        StyleSet::cambium(&[".label { color: navy; font-size: 18px; width: 120px; }"]),
+        Device::screen(480.0, 240.0),
+    );
+    assert_eq!(
+        format!("{:?}", resized.commands()),
+        format!("{:?}", fresh.frame(480, 240).unwrap().commands())
+    );
     assert!(Arc::ptr_eq(
         &first_font,
         &resized.fonts().first().unwrap().data

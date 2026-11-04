@@ -6,6 +6,15 @@
 
 //! Clean-room Parley adapter for Livery inline formatting.
 
+mod cache;
+pub(crate) use cache::ShapeKey;
+#[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+mod parallel;
+pub(crate) mod prepared;
+mod shaping;
+mod stats;
+pub use stats::{TextShapingOptions, TextShapingStats};
+
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -211,11 +220,96 @@ fn break_inline_lines(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct InlineGroupId(pub(crate) usize);
+
+pub(crate) struct ShapeJob {
+    pub(crate) group: InlineGroupId,
+    pub(crate) generation: u64,
+    pub(crate) key: ShapeKey,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShapeBatchErrorKind {
+    PassGeneration,
+    FontGeneration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ShapeBatchError {
+    pub(crate) index: usize,
+    pub(crate) kind: ShapeBatchErrorKind,
+}
+
+pub(crate) enum Candidates<'a> {
+    Transactional {
+        results: &'a mut Vec<ShapeResult>,
+        generation: u64,
+        group: InlineGroupId,
+    },
+    AtomicNoLate {
+        results: &'a [ShapeResult],
+        generation: u64,
+        group: InlineGroupId,
+    },
+    DirectNoTransaction,
+}
+
+#[derive(Debug)]
+pub(crate) enum PreparedFormatError {
+    Batch(ShapeBatchError),
+    EmptyLateResult,
+    InvalidLateResult,
+}
+
+#[derive(Clone)]
+pub(crate) struct ShapeResult {
+    pub(crate) group: InlineGroupId,
+    pub(crate) generation: u64,
+    pub(crate) key: ShapeKey,
+    pub(crate) shaped: Arc<shaping::UnbrokenText>,
+}
+
+#[cfg(test)]
+thread_local! {
+    // Counts actual key-resolution call sites and key/materialization boundaries.
+    pub(crate) static READY_KEY_TIMED: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    pub(crate) static BORROWED_KEY_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    pub(crate) static READY_KEY_WORK: std::cell::Cell<(usize, usize, usize, usize)> = const { std::cell::Cell::new((0, 0, 0, 0)) };
+    pub(crate) static LATE_FAULT: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+    pub(crate) static FORMAT_TIMED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static OBSERVE_FORMAT_KEY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static OBSERVED_FORMAT_KEY: std::cell::RefCell<Option<ShapeKey>> = const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+thread_local! { pub(crate) static SPAN_OWNERSHIP: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) }; }
+
+#[cfg(test)]
+fn ready_key_work(f: impl FnOnce(&mut (usize, usize, usize, usize))) {
+    READY_KEY_WORK.with(|cell| {
+        let mut work = cell.get();
+        f(&mut work);
+        cell.set(work);
+    });
+}
+
+struct ResolvedShapeStyles {
+    default_features: Vec<FontFeature>,
+    span_features: Vec<Vec<FontFeature>>,
+    default_tab_stop: f32,
+    span_tab_stops: Vec<f32>,
+}
+
 /// Retained font discovery, shaping scratch space, and font resources for one
 /// Livery document session.
 pub struct TextSystem {
-    font_context: FontContext,
-    layout_context: LayoutContext<Brush>,
+    worker: shaping::ShapeWorker,
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    parallel: parallel::ParallelShaping,
+    cache: cache::ShapeCache,
+    key_seed: std::collections::hash_map::RandomState,
+    font_generation: u64,
     fonts: HashMap<FontInstanceKey, FontResource>,
     font_keys: HashMap<(u64, u32), FontInstanceKey>,
     ch_advances: HashMap<ChMetricKey, f32>,
@@ -223,6 +317,8 @@ pub struct TextSystem {
     box_metrics: HashMap<ChMetricKey, FontBoxMetrics>,
     font_face_features: HashMap<String, Box<[FontFeatureSetting]>>,
     shape_count: u64,
+    shaping_stats: TextShapingStats,
+    shaping_options: TextShapingOptions,
 }
 
 /// A font at a style's size: its ascent, descent, line gap and x-height, which
@@ -280,8 +376,12 @@ impl Default for TextSystem {
 impl TextSystem {
     pub fn new() -> Self {
         Self {
-            font_context: FontContext::new(),
-            layout_context: LayoutContext::new(),
+            worker: shaping::ShapeWorker::new(),
+            #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+            parallel: parallel::ParallelShaping::default(),
+            cache: cache::ShapeCache::default(),
+            key_seed: std::collections::hash_map::RandomState::new(),
+            font_generation: 0,
             fonts: HashMap::new(),
             font_keys: HashMap::new(),
             ch_advances: HashMap::new(),
@@ -289,11 +389,69 @@ impl TextSystem {
             box_metrics: HashMap::new(),
             font_face_features: HashMap::new(),
             shape_count: 0,
+            shaping_stats: TextShapingStats::default(),
+            shaping_options: TextShapingOptions::default(),
         }
     }
 
+    pub(crate) fn fresh_font_context(&self) -> Self {
+        let mut fresh = Self::new();
+        fresh.shape_count = self.shape_count;
+        fresh.shaping_stats = self.shaping_stats;
+        fresh.set_shaping_options(self.shaping_options);
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        fresh.set_shaping_pool(self.shaping_pool());
+        fresh
+    }
+
+    /// Number of shape transactions, excluding separate metric builders.
+    /// Unlike `format_requests`, this legacy counter tracks actual shaping
+    /// when retained layouts are introduced.
     pub fn shape_count(&self) -> u64 {
         self.shape_count
+    }
+
+    pub fn shaping_stats(&self) -> TextShapingStats {
+        let mut stats = self.shaping_stats;
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        {
+            stats.worker_scratch_slots = self.parallel.scratch_len();
+        }
+        stats.retained_entries = self.cache.len();
+        stats.retained_text_bytes = self.cache.bytes();
+        stats.retained_layout_bytes = self.cache.layout_bytes();
+        stats
+    }
+
+    pub fn shaping_options(&self) -> TextShapingOptions {
+        self.shaping_options
+    }
+
+    pub fn set_shaping_options(&mut self, options: TextShapingOptions) {
+        self.shaping_options = options;
+        self.cache.trim(
+            options.retained_entries,
+            options.retained_text_bytes,
+            options.retained_layout_bytes,
+        );
+    }
+
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    pub fn set_shaping_pool(&mut self, pool: Option<Arc<rayon::ThreadPool>>) {
+        self.parallel.set_pool(pool);
+    }
+
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    pub(crate) fn shaping_pool(&self) -> Option<Arc<rayon::ThreadPool>> {
+        self.parallel.pool.clone()
+    }
+
+    fn invalidate_shapes(&mut self) {
+        self.font_generation = self.font_generation.wrapping_add(1);
+        self.cache.clear();
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        self.parallel.clear();
+        self.worker.layout_context = LayoutContext::new();
     }
 
     pub fn retained_font_count(&self) -> usize {
@@ -307,9 +465,11 @@ impl TextSystem {
         let Some(bytes) = normalized_font_bytes(bytes) else {
             return;
         };
-        self.font_context
+        self.worker
+            .font_context
             .collection
             .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
+        self.invalidate_shapes();
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
@@ -332,6 +492,7 @@ impl TextSystem {
         };
         let bytes = normalized_font_bytes(bytes).ok_or(GenericFontError::InvalidFont)?;
         let mut families = self
+            .worker
             .font_context
             .collection
             .register_fonts(parley::fontique::Blob::new(Arc::new(bytes)), None);
@@ -339,16 +500,19 @@ impl TextSystem {
             return Err(GenericFontError::InvalidFont);
         }
         families.sort_by_key(|(id, _)| {
-            self.font_context
+            self.worker
+                .font_context
                 .collection
                 .family_name(*id)
                 .unwrap_or("")
                 .to_owned()
         });
         let count = families.len();
-        self.font_context
+        self.worker
+            .font_context
             .collection
             .set_generic_families(generic, families.into_iter().map(|(id, _)| id));
+        self.invalidate_shapes();
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
@@ -366,7 +530,7 @@ impl TextSystem {
         let Some(bytes) = normalized_font_bytes(bytes) else {
             return;
         };
-        self.font_context.collection.register_fonts(
+        self.worker.font_context.collection.register_fonts(
             parley::fontique::Blob::new(Arc::new(bytes)),
             Some(parley::fontique::FontInfoOverride {
                 family_name: Some(family),
@@ -377,6 +541,7 @@ impl TextSystem {
             family.to_ascii_lowercase(),
             feature_settings.settings().into(),
         );
+        self.invalidate_shapes();
         self.ch_advances.clear();
         self.space_advances.clear();
         self.box_metrics.clear();
@@ -392,15 +557,21 @@ impl TextSystem {
             return *advance;
         }
 
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, "0", 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            "0",
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
             style,
         ))));
         builder.push_default(StyleProperty::FontStyle(font_style(style)));
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build("0");
         layout.break_all_lines(None);
         let advance = layout
@@ -425,15 +596,21 @@ impl TextSystem {
         if let Some(metrics) = self.box_metrics.get(&key) {
             return *metrics;
         }
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, "x", 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            "x",
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
             style,
         ))));
         builder.push_default(StyleProperty::FontStyle(font_style(style)));
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build("x");
         layout.break_all_lines(None);
         let metrics = layout
@@ -485,15 +662,21 @@ impl TextSystem {
         }
         // Shape the space between two zeroes so font fallback cannot assign
         // an isolated whitespace run to a different face.
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, "0 0", 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            "0 0",
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
             style,
         ))));
         builder.push_default(StyleProperty::FontStyle(font_style(style)));
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build("0 0");
         layout.break_all_lines(None);
         let advance = layout
@@ -519,9 +702,12 @@ impl TextSystem {
         let text = character.to_string();
         let font_size = super::paint::used_font_size(style);
         let features = effective_font_features(&self.font_face_features, style);
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, &text, 1.0, true);
+        let mut builder = self.worker.layout_context.ranged_builder(
+            &mut self.worker.font_context,
+            &text,
+            1.0,
+            true,
+        );
         builder.push_default(StyleProperty::FontSize(font_size));
         builder.push_default(font_family(style));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
@@ -534,6 +720,9 @@ impl TextSystem {
         if let Some(letter_spacing) = spacing_px(style.letter_spacing, font_size) {
             builder.push_default(StyleProperty::LetterSpacing(letter_spacing));
         }
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+        self.shaping_stats.metric_layout_builds =
+            self.shaping_stats.metric_layout_builds.saturating_add(1);
         let mut layout = builder.build(&text);
         layout.break_all_lines(None);
         layout
@@ -588,30 +777,167 @@ impl TextSystem {
         D::NodeId: Copy + Eq + Hash,
         F: FragmentLookup<D::NodeId>,
     {
+        let prepared =
+            self.prepare_inline_group(dom, styles, boxes, request.roots, request.parent_style);
+        self.format_prepared_inline_group::<D::NodeId, F>(
+            &prepared,
+            fragments,
+            dom.quirks_mode(),
+            request,
+            Candidates::DirectNoTransaction,
+        )
+        .expect("direct formatting cannot fail")
+    }
+
+    pub(crate) fn account_collection_ns(&mut self, ns: u64) {
+        self.shaping_stats.collect_ns = self.shaping_stats.collect_ns.saturating_add(ns);
+    }
+
+    pub(crate) fn prepare_inline_group<D: LayoutDom>(
+        &mut self,
+        dom: &D,
+        styles: &StylePlane<D::NodeId>,
+        boxes: &CssBoxTree<D::NodeId>,
+        roots: &[BoxId],
+        parent_style: &ComputedValues,
+    ) -> prepared::PreparedInlineGroup
+    where
+        D::NodeId: Copy + Eq + Hash,
+    {
+        let start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let prepared =
+            prepared::PreparedInlineGroup::collect(dom, styles, boxes, roots, parent_style);
+        self.shaping_stats.collect_ns = self
+            .shaping_stats
+            .collect_ns
+            .saturating_add(stats::elapsed_ns(start));
+        prepared
+    }
+
+    pub(crate) fn format_prepared_inline_group<Id, F>(
+        &mut self,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
+        quirks_mode: QuirksMode,
+        request: InlineRequest<'_>,
+        candidates: Candidates<'_>,
+    ) -> Result<Option<InlineLayout<BoxId>>, PreparedFormatError>
+    where
+        F: FragmentLookup<Id>,
+    {
         let parent_style = request.parent_style;
-        let mut text = String::new();
-        let mut spans = Vec::new();
-        let mut inline_boxes = Vec::new();
-        let mut inline_styles = HashMap::new();
-        let mut owners = Vec::new();
-        {
-            let mut collector = BoxInlineCollector {
-                dom,
-                styles,
-                boxes,
-                fragments,
-                owners: &mut owners,
-                text: &mut text,
-                spans: &mut spans,
-                inline_boxes: &mut inline_boxes,
-                inline_styles: &mut inline_styles,
-                percentage_basis: request.width,
-                intrinsic_kind: request.intrinsic_kind,
-            };
-            for root in request.roots {
-                collector.collect(*root, parent_style);
-            }
-        }
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        let inline_boxes =
+            prepared.materialize::<Id, _>(fragments, request.width, request.intrinsic_kind);
+        let text = prepared.text.clone();
+        let spans = &prepared.spans;
+        let inline_styles = &prepared.inline_styles;
+        let (preselected, no_late) = match candidates {
+            Candidates::Transactional {
+                results,
+                generation,
+                group,
+            } => {
+                let resolved = self.resolve_shape_styles(spans, parent_style);
+                let start = self
+                    .shaping_options
+                    .record_timings
+                    .then(std::time::Instant::now);
+                let borrowed = if let [result] = results.as_slice() {
+                    #[cfg(test)]
+                    BORROWED_KEY_WORK.with(|c| {
+                        let (attempts, hits) = c.get();
+                        c.set((attempts + 1, hits));
+                    });
+                    (result.generation == generation
+                        && result.group == group
+                        && result.key.input().matches_current(
+                            &text,
+                            spans,
+                            &inline_boxes,
+                            parent_style,
+                            request.intrinsic_kind,
+                            &resolved,
+                        )
+                        && result
+                            .key
+                            .fingerprint_matches(self.font_generation, &self.key_seed))
+                    .then(|| (result.key.clone(), Arc::clone(&result.shaped)))
+                } else {
+                    None
+                };
+                self.shaping_stats.key_materialize_ns = self
+                    .shaping_stats
+                    .key_materialize_ns
+                    .saturating_add(stats::elapsed_ns(start));
+                #[cfg(test)]
+                if borrowed.is_some() {
+                    BORROWED_KEY_WORK.with(|c| {
+                        let (attempts, hits) = c.get();
+                        c.set((attempts, hits + 1));
+                    });
+                }
+                let (key, selected) = if let Some((key, shaped)) = borrowed {
+                    (key, Some(shaped))
+                } else {
+                    let key = self.shape_key_with_resolved(
+                        &text,
+                        spans,
+                        &inline_boxes,
+                        parent_style,
+                        request.intrinsic_kind,
+                        &resolved,
+                    );
+                    let selected = results
+                        .as_slice()
+                        .iter()
+                        .find(|result| {
+                            result.key == key
+                                && result.generation == generation
+                                && result.group == group
+                        })
+                        .map(|result| Arc::clone(&result.shaped));
+                    (key, selected)
+                };
+                let shaped = if let Some(shaped) = selected {
+                    shaped
+                } else {
+                    let job = ShapeJob {
+                        group,
+                        generation,
+                        key: key.clone(),
+                    };
+                    let mut late = self
+                        .shape_late_batch(&[job], generation)
+                        .map_err(PreparedFormatError::Batch)?;
+                    if late.is_empty() {
+                        return Err(PreparedFormatError::EmptyLateResult);
+                    }
+                    if late.len() != 1
+                        || late[0].group != group
+                        || late[0].generation != generation
+                        || late[0].key != key
+                    {
+                        return Err(PreparedFormatError::InvalidLateResult);
+                    }
+                    let result = late.pop().expect("validated one result");
+                    let shaped = Arc::clone(&result.shaped);
+                    results.push(result);
+                    shaped
+                };
+                (Some((key, shaped)), None)
+            },
+            Candidates::AtomicNoLate {
+                results,
+                generation,
+                group,
+            } => (None, Some((results, generation, group))),
+            Candidates::DirectNoTransaction => (None, None),
+        };
         // A forced break adds text without a span, so a block holding only
         // `<br>` still formats its line. Empty-inline markers alone leave the
         // line phantom (CSS 2.1 9.4.2).
@@ -620,24 +946,34 @@ impl TextSystem {
                 .iter()
                 .all(|inline_box| inline_box.marker && inline_box.empty_line)
         {
-            return None;
+            return Ok(None);
         }
 
+        #[cfg(test)]
+        SPAN_OWNERSHIP.with(|c| {
+            let (total, shared) = c.get();
+            c.set((
+                total + 1,
+                shared + usize::from(std::ptr::eq(spans.as_ptr(), prepared.spans.as_ptr())),
+            ));
+        });
         let Shaped {
             items,
             break_lines,
             baselines,
             ..
-        } = self.shape(
+        } = self.shape_with_result(
             &text,
-            &mut spans,
+            spans,
             &inline_boxes,
             &inline_styles,
-            line_height_quirk(dom.quirks_mode(), parent_style),
+            line_height_quirk(quirks_mode, parent_style),
             request.width,
             parent_style,
             request.line_constraints,
             request.intrinsic_kind,
+            no_late,
+            preselected,
         );
         let text_sources = spans
             .iter()
@@ -666,7 +1002,7 @@ impl TextSystem {
             top = top.min(upper);
             bottom = bottom.max(lower);
         }
-        if top.is_finite() && bottom.is_finite() {
+        Ok(if top.is_finite() && bottom.is_finite() {
             Some(InlineLayout {
                 width: right.max(0.0),
                 height: (bottom - top).max(0.0),
@@ -691,7 +1027,7 @@ impl TextSystem {
                 text,
                 text_sources,
             })
-        }
+        })
     }
 
     pub(crate) fn begin_frame<Id>(&self) -> TextFrame<Id> {
@@ -1444,6 +1780,399 @@ impl TextSystem {
         frame.record_prepared_group(prepared_sources, visual_commands);
     }
 
+    pub(crate) fn prepared_shape_key<Id, F: FragmentLookup<Id>>(
+        &mut self,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
+        width: f32,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+        root_style: &ComputedValues,
+    ) -> ShapeKey {
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        let atoms = prepared.materialize::<Id, _>(fragments, width, intrinsic_kind);
+        self.shape_key(
+            &prepared.text,
+            &prepared.spans,
+            &atoms,
+            root_style,
+            intrinsic_kind,
+        )
+    }
+
+    pub(crate) fn prepared_min_shape_key_for_ready<Id, F: FragmentLookup<Id>>(
+        &mut self,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
+        root_style: &ComputedValues,
+    ) -> ShapeKey {
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        let atoms =
+            prepared.materialize::<Id, _>(fragments, 0.01, Some(IntrinsicSizeKind::MinContent));
+        let resolved = self.resolve_shape_styles(&prepared.spans, root_style);
+        self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &atoms,
+            root_style,
+            Some(IntrinsicSizeKind::MinContent),
+            &resolved,
+        )
+    }
+
+    pub(crate) fn prepared_shape_keys_for_ready<Id, F: FragmentLookup<Id>>(
+        &mut self,
+        prepared: &prepared::PreparedInlineGroup,
+        fragments: &F,
+        root_style: &ComputedValues,
+    ) -> [ShapeKey; 3] {
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        let min_atoms =
+            prepared.materialize::<Id, _>(fragments, 0.01, Some(IntrinsicSizeKind::MinContent));
+        let resolved = self.resolve_shape_styles(&prepared.spans, root_style);
+        let min = self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &min_atoms,
+            root_style,
+            Some(IntrinsicSizeKind::MinContent),
+            &resolved,
+        );
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        drop(min_atoms);
+        let max_atoms = prepared.materialize::<Id, _>(
+            fragments,
+            f32::INFINITY,
+            Some(IntrinsicSizeKind::MaxContent),
+        );
+        let max = self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &max_atoms,
+            root_style,
+            Some(IntrinsicSizeKind::MaxContent),
+            &resolved,
+        );
+        #[cfg(test)]
+        ready_key_work(|w| w.2 += 1);
+        drop(max_atoms);
+        let used_atoms = prepared.materialize::<Id, _>(fragments, 0.0, None);
+        let used = self.shape_key_with_resolved(
+            &prepared.text,
+            &prepared.spans,
+            &used_atoms,
+            root_style,
+            None,
+            &resolved,
+        );
+        [min, max, used]
+    }
+
+    pub(crate) fn shape_late_batch(
+        &mut self,
+        jobs: &[ShapeJob],
+        generation: u64,
+    ) -> Result<Vec<ShapeResult>, ShapeBatchError> {
+        #[cfg(test)]
+        let fault = LATE_FAULT.with(|fault| fault.replace(0));
+        #[cfg(test)]
+        if fault == 1 {
+            return Err(ShapeBatchError {
+                index: 0,
+                kind: ShapeBatchErrorKind::PassGeneration,
+            });
+        }
+        let before = self.shaping_stats.cache_misses;
+        #[allow(unused_mut)]
+        let mut results = self.shape_batch(jobs, generation)?;
+        self.shaping_stats.late_misses = self
+            .shaping_stats
+            .late_misses
+            .saturating_add(self.shaping_stats.cache_misses.saturating_sub(before));
+        #[cfg(test)]
+        match fault {
+            2 => results.clear(),
+            3 => results.push(results[0].clone()),
+            4 => results[0].group = InlineGroupId(999),
+            5 => results[0].generation = generation.wrapping_add(1),
+            6 => {
+                let mut input = results[0].key.input().clone();
+                input.text.push('x');
+                results[0].key = ShapeKey::new(self.font_generation, input, &self.key_seed);
+            },
+            7 => {
+                let input = results[0].key.input().clone();
+                results[0].key =
+                    ShapeKey::new(self.font_generation.wrapping_add(1), input, &self.key_seed);
+            },
+            _ => {},
+        }
+        Ok(results)
+    }
+
+    pub(crate) fn shape_batch(
+        &mut self,
+        jobs: &[ShapeJob],
+        generation: u64,
+    ) -> Result<Vec<ShapeResult>, ShapeBatchError> {
+        for (index, job) in jobs.iter().enumerate() {
+            let kind = if job.generation != generation {
+                Some(ShapeBatchErrorKind::PassGeneration)
+            } else if job.key.generation() != self.font_generation {
+                Some(ShapeBatchErrorKind::FontGeneration)
+            } else {
+                None
+            };
+            if let Some(kind) = kind {
+                return Err(ShapeBatchError { index, kind });
+            }
+        }
+        let start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let mut values = HashMap::new();
+        let mut misses = Vec::new();
+        let mut seen = HashSet::new();
+        let mut hits = 0u64;
+        for job in jobs {
+            if !seen.insert(job.key.clone()) {
+                continue;
+            }
+            if let Some(value) = self.cache.get(&job.key) {
+                hits = hits.saturating_add(1);
+                values.insert(job.key.clone(), value);
+            } else {
+                misses.push(job.key.clone());
+            }
+        }
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        let used_parallel = self.parallel.admits(&misses, self.shaping_options);
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        let outputs = if used_parallel {
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                self.parallel.shape(
+                    &misses,
+                    &self.worker.font_context,
+                    self.shaping_options.record_timings,
+                )
+            })) {
+                Ok(results) => results,
+                Err(panic) => {
+                    self.parallel.clear();
+                    std::panic::resume_unwind(panic)
+                },
+            }
+        } else {
+            misses
+                .iter()
+                .map(|key| {
+                    let start = self
+                        .shaping_options
+                        .record_timings
+                        .then(std::time::Instant::now);
+                    let output = self.worker.shape(key.input());
+                    (output, stats::elapsed_ns(start))
+                })
+                .collect()
+        };
+        #[cfg(not(all(feature = "parallel-text", not(target_arch = "wasm32"))))]
+        let outputs: Vec<_> = misses
+            .iter()
+            .map(|key| {
+                let start = self
+                    .shaping_options
+                    .record_timings
+                    .then(std::time::Instant::now);
+                let output = self.worker.shape(key.input());
+                (output, stats::elapsed_ns(start))
+            })
+            .collect();
+        // Publication happens only after every task has joined successfully.
+        let count = misses.len() as u64;
+        self.shaping_stats.batches = self.shaping_stats.batches.saturating_add(1);
+        #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+        if used_parallel {
+            self.shaping_stats.parallel_batches =
+                self.shaping_stats.parallel_batches.saturating_add(1);
+            self.shaping_stats.parallel_jobs =
+                self.shaping_stats.parallel_jobs.saturating_add(count);
+        }
+        self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(hits);
+        self.shaping_stats.cache_misses = self.shaping_stats.cache_misses.saturating_add(count);
+        self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(count);
+        self.shaping_stats.unique_jobs = self.shaping_stats.unique_jobs.saturating_add(count);
+        self.shape_count = self.shape_count.saturating_add(count);
+        for (key, (output, task_ns)) in misses.into_iter().zip(outputs) {
+            self.shaping_stats.worker_task_ns =
+                self.shaping_stats.worker_task_ns.saturating_add(task_ns);
+            let value = Arc::new(output);
+            self.cache.insert(
+                key.clone(),
+                Arc::clone(&value),
+                self.shaping_options.retained_entries,
+                self.shaping_options.retained_text_bytes,
+                self.shaping_options.retained_layout_bytes,
+            );
+            values.insert(key, value);
+        }
+        let results = jobs
+            .iter()
+            .map(|job| ShapeResult {
+                group: job.group,
+                generation,
+                key: job.key.clone(),
+                shaped: Arc::clone(&values[&job.key]),
+            })
+            .collect();
+        self.shaping_stats.shape_wall_ns = self
+            .shaping_stats
+            .shape_wall_ns
+            .saturating_add(stats::elapsed_ns(start));
+        Ok(results)
+    }
+
+    fn shape_key<Id>(
+        &mut self,
+        text: &str,
+        spans: &[SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        root_style: &ComputedValues,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+    ) -> cache::ShapeKey
+    where
+        Id: Copy + Eq + Hash,
+    {
+        let resolved = self.resolve_shape_styles(spans, root_style);
+        self.shape_key_with_resolved(
+            text,
+            spans,
+            inline_boxes,
+            root_style,
+            intrinsic_kind,
+            &resolved,
+        )
+    }
+
+    fn resolve_shape_styles<Id>(
+        &mut self,
+        spans: &[SourceSpan<Id>],
+        root_style: &ComputedValues,
+    ) -> ResolvedShapeStyles {
+        let key_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let default_style = spans.first().map_or(root_style, |span| &span.style);
+        #[cfg(test)]
+        ready_key_work(|w| w.0 += 1);
+        let default_features = effective_font_features(&self.font_face_features, default_style);
+        let span_features = spans
+            .iter()
+            .map(|span| {
+                #[cfg(test)]
+                ready_key_work(|w| w.0 += 1);
+                effective_font_features(&self.font_face_features, &span.style)
+            })
+            .collect::<Vec<_>>();
+        #[cfg(test)]
+        ready_key_work(|w| w.1 += 1);
+        let default_tab_stop = self.tab_stop(default_style);
+        let span_tab_stops = spans
+            .iter()
+            .map(|span| {
+                #[cfg(test)]
+                ready_key_work(|w| w.1 += 1);
+                self.tab_stop(&span.style)
+            })
+            .collect::<Vec<_>>();
+        self.shaping_stats.key_materialize_ns = self
+            .shaping_stats
+            .key_materialize_ns
+            .saturating_add(stats::elapsed_ns(key_start));
+        #[cfg(test)]
+        if key_start.is_some() {
+            READY_KEY_TIMED.with(|c| {
+                let (a, b) = c.get();
+                c.set((a + 1, b));
+            });
+        }
+        ResolvedShapeStyles {
+            default_features,
+            span_features,
+            default_tab_stop,
+            span_tab_stops,
+        }
+    }
+
+    fn shape_key_with_resolved<Id>(
+        &mut self,
+        text: &str,
+        spans: &[SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        root_style: &ComputedValues,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+        resolved: &ResolvedShapeStyles,
+    ) -> cache::ShapeKey
+    where
+        Id: Copy + Eq + Hash,
+    {
+        let key_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let default_style = spans.first().map_or(root_style, |span| &span.style);
+        #[cfg(test)]
+        ready_key_work(|w| w.3 += 1);
+        let input = prepared::ShapeInput {
+            text: text.to_owned(),
+            defaults: prepared::properties(
+                default_style,
+                0,
+                &resolved.default_features,
+                intrinsic_kind,
+                resolved.default_tab_stop,
+            ),
+            spans: spans
+                .iter()
+                .enumerate()
+                .map(|(source_index, span)| prepared::Span {
+                    range: span.range.clone(),
+                    properties: prepared::properties(
+                        &span.style,
+                        source_index,
+                        &resolved.span_features[source_index],
+                        intrinsic_kind,
+                        resolved.span_tab_stops[source_index],
+                    ),
+                })
+                .collect(),
+            slots: prepared::slots(inline_boxes).collect(),
+            base_level: match root_style.direction {
+                Direction::Ltr => 0,
+                Direction::Rtl => 1,
+            },
+            scale: 1.0f32.to_bits(),
+            quantize: true,
+        };
+        let key = cache::ShapeKey::new(self.font_generation, input, &self.key_seed);
+        self.shaping_stats.key_materialize_ns = self
+            .shaping_stats
+            .key_materialize_ns
+            .saturating_add(stats::elapsed_ns(key_start));
+        #[cfg(test)]
+        if key_start.is_some() {
+            READY_KEY_TIMED.with(|c| {
+                let (a, b) = c.get();
+                c.set((a, b + 1));
+            });
+        }
+        key
+    }
+
     #[expect(
         clippy::too_many_arguments,
         reason = "one shaping transaction carries the text, source spans, inline atoms and styles, document mode, width, root policy, and optional line constraints"
@@ -1451,7 +2180,7 @@ impl TextSystem {
     fn shape<Id>(
         &mut self,
         text: &str,
-        spans: &mut [SourceSpan<Id>],
+        spans: &[SourceSpan<Id>],
         inline_boxes: &[InlineAtom<Id>],
         inline_styles: &HashMap<Id, ComputedValues>,
         quirks: bool,
@@ -1463,18 +2192,51 @@ impl TextSystem {
     where
         Id: Copy + Eq + Hash,
     {
-        self.shape_count = self.shape_count.saturating_add(1);
-        let default_style = spans.first().map_or(root_style, |span| &span.style);
-        let default_features = effective_font_features(&self.font_face_features, default_style);
-        let span_features = spans
-            .iter()
-            .map(|span| effective_font_features(&self.font_face_features, &span.style))
-            .collect::<Vec<_>>();
-        let default_tab_stop = self.tab_stop(default_style);
-        let span_tab_stops = spans
-            .iter()
-            .map(|span| self.tab_stop(&span.style))
-            .collect::<Vec<_>>();
+        self.shape_with_result(
+            text,
+            spans,
+            inline_boxes,
+            inline_styles,
+            quirks,
+            width,
+            root_style,
+            line_constraints,
+            intrinsic_kind,
+            None,
+            None,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one shaping transaction carries the text, source spans, inline atoms and styles, document mode, width, root policy, and optional line constraints"
+    )]
+    fn shape_with_result<Id>(
+        &mut self,
+        text: &str,
+        spans: &[SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        quirks: bool,
+        width: f32,
+        root_style: &ComputedValues,
+        line_constraints: Option<&FloatLineConstraints>,
+        intrinsic_kind: Option<IntrinsicSizeKind>,
+        candidates: Option<(&[ShapeResult], u64, InlineGroupId)>,
+        preselected: Option<(ShapeKey, Arc<shaping::UnbrokenText>)>,
+    ) -> Shaped<Id>
+    where
+        Id: Copy + Eq + Hash,
+    {
+        self.shaping_stats.format_requests = self.shaping_stats.format_requests.saturating_add(1);
+        let shape_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        #[cfg(test)]
+        if shape_start.is_some() {
+            FORMAT_TIMED.with(|count| count.set(count.get() + 1));
+        }
         let first_hanging_advance = if root_style.hanging_punctuation.first {
             text.char_indices()
                 .find(|(_, character)| !character.is_whitespace())
@@ -1494,48 +2256,102 @@ impl TextSystem {
         } else {
             0.0
         };
-        let mut builder =
-            self.layout_context
-                .ranged_builder(&mut self.font_context, text, 1.0, true);
-        builder.set_base_level(Some(match root_style.direction {
-            Direction::Ltr => 0,
-            Direction::Rtl => 1,
-        }));
-        push_defaults(
-            &mut builder,
-            default_style,
-            default_features,
-            intrinsic_kind,
-            default_tab_stop,
-        );
-        for (source_index, span) in spans.iter().enumerate() {
-            push_span(
-                &mut builder,
-                &span.style,
-                span.range.clone(),
-                source_index,
-                span_features[source_index].clone(),
-                intrinsic_kind,
-                span_tab_stops[source_index],
-            );
-        }
-        for (index, inline_box) in inline_boxes.iter().enumerate() {
-            if inline_box.marker {
-                continue;
+        let (key, active) = if let Some((key, shaped)) = preselected {
+            (key, Some(shaped))
+        } else {
+            let key = self.shape_key(text, spans, inline_boxes, root_style, intrinsic_kind);
+            #[cfg(test)]
+            if OBSERVE_FORMAT_KEY.with(|enabled| enabled.get()) {
+                OBSERVED_FORMAT_KEY.with(|observed| *observed.borrow_mut() = Some(key.clone()));
             }
-            builder.push_inline_box(InlineBox {
-                id: u64::try_from(index).unwrap_or(u64::MAX),
-                kind: InlineBoxKind::InFlow,
-                index: inline_box.index,
-                width: inline_box.line_width,
-                height: if inline_box.edge {
-                    0.0
-                } else {
-                    inline_box.line_box_height
-                },
+            let active = candidates.and_then(|(results, generation, group)| {
+                results
+                    .iter()
+                    .find(|value| {
+                        value.generation == generation && value.group == group && value.key == key
+                    })
+                    .map(|value| Arc::clone(&value.shaped))
             });
-        }
-        let mut layout = builder.build(text);
+            (key, active)
+        };
+        let unbroken = if let Some(value) = active {
+            value
+        } else if let Some(value) = self.cache.get(&key) {
+            self.shaping_stats.cache_hits = self.shaping_stats.cache_hits.saturating_add(1);
+            value
+        } else {
+            self.shaping_stats.cache_misses = self.shaping_stats.cache_misses.saturating_add(1);
+            self.shaping_stats.layout_builds = self.shaping_stats.layout_builds.saturating_add(1);
+            self.shape_count = self.shape_count.saturating_add(1);
+            let task_start = self
+                .shaping_options
+                .record_timings
+                .then(std::time::Instant::now);
+            let value = Arc::new(self.worker.shape(key.input()));
+            self.shaping_stats.worker_task_ns = self
+                .shaping_stats
+                .worker_task_ns
+                .saturating_add(stats::elapsed_ns(task_start));
+            self.cache.insert(
+                key,
+                Arc::clone(&value),
+                self.shaping_options.retained_entries,
+                self.shaping_options.retained_text_bytes,
+                self.shaping_options.retained_layout_bytes,
+            );
+            value
+        };
+        self.shaping_stats.shape_wall_ns = self
+            .shaping_stats
+            .shape_wall_ns
+            .saturating_add(stats::elapsed_ns(shape_start));
+        self.place(
+            text,
+            spans,
+            inline_boxes,
+            inline_styles,
+            quirks,
+            width,
+            root_style,
+            line_constraints,
+            first_hanging_advance,
+            &unbroken,
+        )
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "placement needs current sources, geometry and policy"
+    )]
+    fn place<Id>(
+        &mut self,
+        text: &str,
+        spans: &[SourceSpan<Id>],
+        inline_boxes: &[InlineAtom<Id>],
+        inline_styles: &HashMap<Id, ComputedValues>,
+        quirks: bool,
+        width: f32,
+        root_style: &ComputedValues,
+        line_constraints: Option<&FloatLineConstraints>,
+        first_hanging_advance: f32,
+        unbroken: &shaping::UnbrokenText,
+    ) -> Shaped<Id>
+    where
+        Id: Copy + Eq + Hash,
+    {
+        let place_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let clone_start = self
+            .shaping_options
+            .record_timings
+            .then(std::time::Instant::now);
+        let mut layout = unbroken.layout.clone();
+        self.shaping_stats.unbroken_layout_clone_ns = self
+            .shaping_stats
+            .unbroken_layout_clone_ns
+            .saturating_add(stats::elapsed_ns(clone_start));
         // Preserve the prospective break model for its unit tests only.
         #[cfg(test)]
         let mut break_stream = {
@@ -1563,6 +2379,7 @@ impl TextSystem {
                 hanging: root_style.text_indent.hanging,
             },
         );
+        self.shaping_stats.line_breaks = self.shaping_stats.line_breaks.saturating_add(1);
         break_inline_lines(
             &mut layout,
             width,
@@ -1614,9 +2431,13 @@ impl TextSystem {
                     .get(line_index + 1)
                     .map(positioned_atom_orders)
                     .unwrap_or_default();
-                if let Some(selected) =
-                    selected_break_position(range, kind, &line_atoms, &next_atoms, &break_stream.items)
-                {
+                if let Some(selected) = selected_break_position(
+                    range,
+                    kind,
+                    &line_atoms,
+                    &next_atoms,
+                    &break_stream.items,
+                ) {
                     break_stream.selected_breaks.push(selected);
                 }
             }
@@ -2110,6 +2931,10 @@ impl TextSystem {
             }
         }
         append_positioned_inline_start_markers(&mut result, inline_boxes);
+        self.shaping_stats.place_ns = self
+            .shaping_stats
+            .place_ns
+            .saturating_add(stats::elapsed_ns(place_start));
         Shaped {
             items: result,
             #[cfg(test)]
@@ -2940,7 +3765,9 @@ where
             (false, true) | (true, false) => cluster.range.start,
             (false, false) | (true, true) => cluster.range.end,
         };
-        let offset = self.password_offsets.get(&cluster.source)
+        let offset = self
+            .password_offsets
+            .get(&cluster.source)
             .map_or(offset, |offsets| offsets.source_offset(offset));
         Some((cluster.source, offset))
     }
@@ -3056,7 +3883,8 @@ where
     }
 
     fn source_offset(&self, source: Id, display: usize) -> usize {
-        self.password_offsets.get(&source)
+        self.password_offsets
+            .get(&source)
             .map_or(display, |offsets| offsets.source_offset(display))
     }
 
@@ -3069,7 +3897,9 @@ where
     where
         F: FnMut(Id, Fragment) -> TextRect,
     {
-        let offset = self.password_offsets.get(&source)
+        let offset = self
+            .password_offsets
+            .get(&source)
             .map_or(offset, |offsets| offsets.display_offset(offset, false));
         let cluster = self
             .text_clusters
@@ -3150,15 +3980,21 @@ where
             let source = self.text_order[index];
             let value = self.text_values.get(&source)?;
             let start = if index == start_index {
-                self.password_offsets.get(&source)
-                    .map_or(start_offset, |offsets| offsets.display_offset(start_offset, false))
+                self.password_offsets
+                    .get(&source)
+                    .map_or(start_offset, |offsets| {
+                        offsets.display_offset(start_offset, false)
+                    })
                     .min(value.len())
             } else {
                 0
             };
             let end = if index == end_index {
-                self.password_offsets.get(&source)
-                    .map_or(end_offset, |offsets| offsets.display_offset(end_offset, true))
+                self.password_offsets
+                    .get(&source)
+                    .map_or(end_offset, |offsets| {
+                        offsets.display_offset(end_offset, true)
+                    })
                     .min(value.len())
             } else {
                 value.len()
@@ -3278,6 +4114,7 @@ struct RetainedTextCluster<Id> {
     rtl: bool,
 }
 
+#[derive(Clone)]
 struct SourceSpan<Id> {
     selectable: bool,
     source: Option<Id>,
@@ -3347,7 +4184,7 @@ struct TextSource<Id> {
     range: Range<usize>,
 }
 
-struct InlineAtom<Id> {
+pub(crate) struct InlineAtom<Id> {
     source: Id,
     owners: Vec<Id>,
     index: usize,
@@ -3390,10 +4227,7 @@ struct Shaped<Id> {
 /// selects lines. Byte ranges refer to the exact transformed/collapsed input
 /// passed to Parley; `span_range` is local to its transformed source span.
 #[derive(Clone, Debug)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 struct LogicalBreakStream<Id> {
     paragraph_text: String,
@@ -3497,10 +4331,7 @@ enum SelectedBreakLocation {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 struct AtomicOpportunity {
     byte_index: usize,
@@ -3510,10 +4341,7 @@ struct AtomicOpportunity {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 enum AtomicOpportunitySide {
     Before,
@@ -3521,10 +4349,7 @@ enum AtomicOpportunitySide {
 }
 
 #[derive(Clone, Debug)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 enum LogicalBreakItem<Id> {
     Cluster {
@@ -3555,10 +4380,7 @@ enum LogicalBreakItem<Id> {
 }
 
 #[derive(Clone, Debug)]
-#[allow(
-    dead_code,
-    reason = "test-only prospective break diagnostics"
-)]
+#[allow(dead_code, reason = "test-only prospective break diagnostics")]
 #[cfg(test)]
 struct SourceSlice<Id> {
     text_range: Range<usize>,
@@ -4667,29 +5489,20 @@ fn descendant_text<D: LayoutDom>(dom: &D, node: D::NodeId) -> String {
     text
 }
 
-struct BoxInlineCollector<'a, D, F>
-where
-    D: LayoutDom,
-    F: FragmentLookup<D::NodeId>,
-{
+struct TapeCollector<'a, D: LayoutDom> {
     dom: &'a D,
     styles: &'a StylePlane<D::NodeId>,
     boxes: &'a CssBoxTree<D::NodeId>,
-    fragments: &'a F,
     owners: &'a mut Vec<BoxId>,
     text: &'a mut String,
     spans: &'a mut Vec<SourceSpan<BoxId>>,
-    inline_boxes: &'a mut Vec<InlineAtom<BoxId>>,
     inline_styles: &'a mut HashMap<BoxId, ComputedValues>,
-    percentage_basis: f32,
-    intrinsic_kind: Option<IntrinsicSizeKind>,
+    events: &'a mut Vec<prepared::GeometryEvent>,
+    inline_owners: &'a mut Vec<prepared::InlineOwner>,
 }
-
-impl<D, F> BoxInlineCollector<'_, D, F>
+impl<D: LayoutDom> TapeCollector<'_, D>
 where
-    D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
-    F: FragmentLookup<D::NodeId>,
 {
     fn collect(&mut self, box_id: BoxId, inherited: &ComputedValues) {
         let css_box = &self.boxes[box_id];
@@ -4726,32 +5539,50 @@ where
                     return;
                 }
                 if is_forced_line_break(self.dom, node) {
-                    self.push_forced_line_break(box_id, &style);
+                    let start = append_forced_line_break(self.text);
+                    push_forced_break_span(self.spans, self.owners, &style, start..self.text.len());
                     return;
                 }
                 let atomic = css_box.replaced
                     || (css_box.display.outside == Some(DisplayOutside::Inline)
                         && css_box.display.inside == Some(DisplayInside::FlowRoot));
                 if atomic {
-                    self.push_atomic_box(box_id, &style);
+                    self.events.push(prepared::GeometryEvent::Atomic {
+                        source: box_id,
+                        style: style.clone(),
+                        owners: self.owners.clone(),
+                        index: self.text.len(),
+                    });
                     return;
                 }
 
                 let ancestor_owners = self.owners.clone();
                 let text_start = self.text.len();
-                self.push_edge(box_id, &style, &ancestor_owners, true);
-                self.push_positioned_start_marker(box_id, &style, &ancestor_owners);
-                let content_start = self.inline_boxes.len();
+                let positioned = matches!(
+                    css_box.positioning,
+                    buckram::PositioningScheme::Relative | buckram::PositioningScheme::Sticky
+                );
+                let slot = self.inline_owners.len();
+                self.inline_owners.push(prepared::InlineOwner {
+                    source: box_id,
+                    style: style.clone(),
+                    owners: ancestor_owners,
+                    positioned,
+                });
+                self.events.push(prepared::GeometryEvent::Begin {
+                    slot,
+                    index: text_start,
+                });
                 self.owners.push(box_id);
                 for child in css_box.children() {
                     self.collect(*child, &style);
                 }
                 self.owners.pop();
-                let has_inline_content = self.inline_boxes.len() > content_start;
-                self.push_edge(box_id, &style, &ancestor_owners, false);
-                if self.text.len() == text_start && !has_inline_content {
-                    self.push_empty_line_box(box_id, &style, &ancestor_owners);
-                }
+                self.events.push(prepared::GeometryEvent::End {
+                    slot,
+                    index: self.text.len(),
+                    text_empty: self.text.len() == text_start,
+                });
                 self.inline_styles.insert(box_id, style);
             },
             BoxOrigin::Anonymous { .. } => {
@@ -4773,7 +5604,12 @@ where
                     // vertical-align; it is not on the wrapper's migrated
                     // property list, and for_child reset it.
                     style.vertical_align = owner.vertical_align;
-                    self.push_atomic_box(box_id, &style);
+                    self.events.push(prepared::GeometryEvent::Atomic {
+                        source: box_id,
+                        style: style.clone(),
+                        owners: self.owners.clone(),
+                        index: self.text.len(),
+                    });
                     return;
                 }
                 for child in css_box.children() {
@@ -4814,7 +5650,18 @@ where
             },
         }
     }
+}
 
+struct GeometryMaterializer<'a, Id, F: FragmentLookup<Id>> {
+    fragments: &'a F,
+    owners: Vec<BoxId>,
+    inline_boxes: Vec<InlineAtom<BoxId>>,
+    percentage_basis: f32,
+    intrinsic_kind: Option<IntrinsicSizeKind>,
+    index: usize,
+    marker: std::marker::PhantomData<Id>,
+}
+impl<Id, F: FragmentLookup<Id>> GeometryMaterializer<'_, Id, F> {
     /// One atomic inline box: its whole subtree was laid out separately and
     /// its rectangle occupies line space as a unit.
     fn push_atomic_box(&mut self, box_id: BoxId, style: &ComputedValues) {
@@ -4837,7 +5684,7 @@ where
         self.inline_boxes.push(InlineAtom {
             source: box_id,
             owners: self.owners.clone(),
-            index: self.text.len(),
+            index: self.index,
             fragment,
             line_width,
             line_box_height,
@@ -4864,7 +5711,7 @@ where
                 self.inline_boxes.push(InlineAtom {
                     source,
                     owners: owners.to_vec(),
-                    index: self.text.len(),
+                    index: self.index,
                     fragment: Fragment {
                         width,
                         ..Fragment::default()
@@ -4903,11 +5750,9 @@ where
         source: BoxId,
         style: &ComputedValues,
         owners: &[BoxId],
+        positioned: bool,
     ) {
-        if !matches!(
-            self.boxes[source].positioning,
-            buckram::PositioningScheme::Relative | buckram::PositioningScheme::Sticky
-        ) {
+        if !positioned {
             return;
         }
         let font_size = super::paint::used_font_size(style);
@@ -4915,7 +5760,7 @@ where
         self.inline_boxes.push(InlineAtom {
             source,
             owners: owners.to_vec(),
-            index: self.text.len(),
+            index: self.index,
             fragment: Fragment::default(),
             line_width: 0.0,
             line_box_height: line_height,
@@ -4932,25 +5777,18 @@ where
         });
     }
 
-    fn push_empty_line_box(&mut self, source: BoxId, style: &ComputedValues, owners: &[BoxId]) {
+    fn push_empty_line_box(
+        &mut self,
+        source: BoxId,
+        style: &ComputedValues,
+        owners: &[BoxId],
+        positioned: bool,
+    ) {
         // An empty positioned inline still establishes the containing block
         // for an absolute descendant, so its atom keeps its line rectangle.
-        let positioned = matches!(
-            self.boxes[source].positioning,
-            buckram::PositioningScheme::Relative | buckram::PositioningScheme::Sticky
-        );
         self.inline_boxes.push(empty_inline_atom(
-            source,
-            owners,
-            self.text.len(),
-            style,
-            positioned,
+            source, owners, self.index, style, positioned,
         ));
-    }
-
-    fn push_forced_line_break(&mut self, _source: BoxId, style: &ComputedValues) {
-        let start = append_forced_line_break(self.text);
-        push_forced_break_span(self.spans, self.owners, style, start..self.text.len());
     }
 }
 
@@ -5726,84 +6564,6 @@ fn collapse_css_whitespace(source: &str) -> String {
     output
 }
 
-fn push_defaults(
-    builder: &mut parley::RangedBuilder<'_, Brush>,
-    style: &ComputedValues,
-    features: Vec<FontFeature>,
-    intrinsic_kind: Option<IntrinsicSizeKind>,
-    tab_stop: f32,
-) {
-    let font_size = super::paint::used_font_size(style);
-    builder.push_default(StyleProperty::FontSize(font_size));
-    builder.push_default(font_family(style));
-    builder.push_default(StyleProperty::FontWeight(FontWeight::new(font_weight(
-        style,
-    ))));
-    builder.push_default(StyleProperty::FontStyle(font_style(style)));
-    builder.push_default(StyleProperty::Brush(brush(style, 0)));
-    builder.push_default(line_height(style));
-    builder.push_default(StyleProperty::FontFeatures(FontFeatures::List(Cow::Owned(
-        features,
-    ))));
-    builder.push_default(StyleProperty::WordBreak(word_break(style)));
-    builder.push_default(StyleProperty::OverflowWrap(overflow_wrap(
-        style,
-        intrinsic_kind,
-    )));
-    builder.push_default(StyleProperty::TextWrapMode(text_wrap_mode(style)));
-    builder.push_default(StyleProperty::TabSize(tab_stop));
-    if let Some(letter_spacing) = spacing_px(style.letter_spacing, font_size) {
-        builder.push_default(StyleProperty::LetterSpacing(letter_spacing));
-    }
-    if let Some(word_spacing) = spacing_px(style.word_spacing, font_size) {
-        builder.push_default(StyleProperty::WordSpacing(word_spacing));
-    }
-}
-
-fn push_span(
-    builder: &mut parley::RangedBuilder<'_, Brush>,
-    style: &ComputedValues,
-    range: Range<usize>,
-    source_index: usize,
-    features: Vec<FontFeature>,
-    intrinsic_kind: Option<IntrinsicSizeKind>,
-    tab_stop: f32,
-) {
-    let font_size = super::paint::used_font_size(style);
-    builder.push(StyleProperty::FontSize(font_size), range.clone());
-    builder.push(font_family(style), range.clone());
-    builder.push(
-        StyleProperty::FontWeight(FontWeight::new(font_weight(style))),
-        range.clone(),
-    );
-    builder.push(StyleProperty::FontStyle(font_style(style)), range.clone());
-    builder.push(
-        StyleProperty::Brush(brush(style, source_index)),
-        range.clone(),
-    );
-    builder.push(line_height(style), range.clone());
-    builder.push(
-        StyleProperty::FontFeatures(FontFeatures::List(Cow::Owned(features))),
-        range.clone(),
-    );
-    builder.push(StyleProperty::WordBreak(word_break(style)), range.clone());
-    builder.push(
-        StyleProperty::OverflowWrap(overflow_wrap(style, intrinsic_kind)),
-        range.clone(),
-    );
-    builder.push(
-        StyleProperty::TextWrapMode(text_wrap_mode(style)),
-        range.clone(),
-    );
-    builder.push(StyleProperty::TabSize(tab_stop), range.clone());
-    if let Some(letter_spacing) = spacing_px(style.letter_spacing, font_size) {
-        builder.push(StyleProperty::LetterSpacing(letter_spacing), range.clone());
-    }
-    if let Some(word_spacing) = spacing_px(style.word_spacing, font_size) {
-        builder.push(StyleProperty::WordSpacing(word_spacing), range);
-    }
-}
-
 fn effective_font_features(
     face_features: &HashMap<String, Box<[FontFeatureSetting]>>,
     style: &ComputedValues,
@@ -5934,6 +6694,20 @@ fn word_break(style: &ComputedValues) -> ParleyWordBreak {
         CssWordBreak::KeepAll => ParleyWordBreak::KeepAll,
         CssWordBreak::BreakAll => ParleyWordBreak::BreakAll,
     }
+}
+
+#[cfg(test)]
+pub(crate) fn test_equivalent_overflow(
+    prepared: &prepared::PreparedInlineGroup,
+    root: &ComputedValues,
+) -> bool {
+    let equivalent = |style: &ComputedValues| {
+        let min = overflow_wrap(style, Some(IntrinsicSizeKind::MinContent));
+        min == overflow_wrap(style, Some(IntrinsicSizeKind::MaxContent))
+            && min == overflow_wrap(style, None)
+    };
+    equivalent(prepared.spans.first().map_or(root, |span| &span.style))
+        && prepared.spans.iter().all(|span| equivalent(&span.style))
 }
 
 fn overflow_wrap(
@@ -6307,7 +7081,7 @@ mod tests {
     fn explicit_generic_font_shapes_without_system_and_invalid_replace_preserves_face() {
         let bytes = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
         let mut system = TextSystem::new();
-        system.font_context.collection =
+        system.worker.font_context.collection =
             parley::fontique::Collection::new(parley::fontique::CollectionOptions {
                 shared: false,
                 system_fonts: false,
@@ -6507,18 +7281,19 @@ mod tests {
         );
         let features = effective_font_features(&text_system.font_face_features, style);
         let tab_stop = text_system.tab_stop(style);
-        let mut builder = text_system.layout_context.ranged_builder(
-            &mut text_system.font_context,
-            text,
-            1.0,
-            true,
-        );
-        builder.set_base_level(Some(match style.direction {
-            Direction::Ltr => 0,
-            Direction::Rtl => 1,
-        }));
-        push_defaults(&mut builder, style, features, None, tab_stop);
-        let mut layout = builder.build(text);
+        let input = prepared::ShapeInput {
+            text: text.to_owned(),
+            defaults: prepared::properties(style, 0, &features, None, tab_stop),
+            spans: Vec::new(),
+            slots: Vec::new(),
+            base_level: match style.direction {
+                Direction::Ltr => 0,
+                Direction::Rtl => 1,
+            },
+            scale: 1.0f32.to_bits(),
+            quantize: true,
+        };
+        let mut layout = text_system.worker.shape(&input).layout;
         layout.break_all_lines(None);
         let mut metadata = Vec::new();
         for line in layout.lines() {
@@ -9161,5 +9936,2151 @@ mod tests {
         eprintln!(
             "boundary-index timing, {cluster_count} clusters, five iterations: reference={reference_times:?}, indexed={indexed_times:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod reuse_tests;
+
+#[cfg(test)]
+pub(crate) mod prepared_geometry_tests {
+    use super::*;
+    use crate::{Device, InteractionStates, StyleSet, box_tree::GeneratedBoxTree, resolve_styles};
+    use genet_static_dom::StaticDocument;
+
+    pub(crate) struct CountingDom<'a> {
+        pub(crate) inner: &'a StaticDocument,
+        pub(crate) reads: std::cell::Cell<usize>,
+    }
+    impl CountingDom<'_> {
+        fn hit(&self) {
+            self.reads.set(self.reads.get() + 1);
+        }
+    }
+    impl LayoutDom for CountingDom<'_> {
+        type NodeId = <StaticDocument as LayoutDom>::NodeId;
+        fn document(&self) -> Self::NodeId {
+            self.hit();
+            self.inner.document()
+        }
+        fn parent(&self, id: Self::NodeId) -> Option<Self::NodeId> {
+            self.hit();
+            self.inner.parent(id)
+        }
+        fn prev_sibling(&self, id: Self::NodeId) -> Option<Self::NodeId> {
+            self.hit();
+            self.inner.prev_sibling(id)
+        }
+        fn next_sibling(&self, id: Self::NodeId) -> Option<Self::NodeId> {
+            self.hit();
+            self.inner.next_sibling(id)
+        }
+        fn dom_children(&self, id: Self::NodeId) -> impl Iterator<Item = Self::NodeId> + '_ {
+            self.hit();
+            self.inner.dom_children(id)
+        }
+        fn kind(&self, id: Self::NodeId) -> NodeKind {
+            self.hit();
+            self.inner.kind(id)
+        }
+        fn element_name(&self, id: Self::NodeId) -> Option<&layout_dom_api::QualName> {
+            self.hit();
+            self.inner.element_name(id)
+        }
+        fn attribute(&self, id: Self::NodeId, ns: &Namespace, local: &LocalName) -> Option<&str> {
+            self.hit();
+            self.inner.attribute(id, ns, local)
+        }
+        fn attributes(
+            &self,
+            id: Self::NodeId,
+        ) -> impl Iterator<Item = layout_dom_api::AttributeView<'_>> + '_ {
+            self.hit();
+            self.inner.attributes(id)
+        }
+        fn text(&self, id: Self::NodeId) -> Option<&str> {
+            self.hit();
+            self.inner.text(id)
+        }
+    }
+    struct Plane {
+        atom: BoxId,
+        fragment: Option<Fragment>,
+        baseline: f32,
+    }
+    impl<Id> FragmentLookup<Id> for Plane {
+        fn rect(&self, _: Id) -> Option<&Fragment> {
+            None
+        }
+        fn atomic_box_rect(&self, id: BoxId) -> Option<&Fragment> {
+            if id == self.atom {
+                self.fragment.as_ref()
+            } else {
+                None
+            }
+        }
+        fn atomic_box_baseline(&self, id: BoxId) -> Option<f32> {
+            (id == self.atom).then_some(self.baseline)
+        }
+        fn atomic_box_intrinsic_inline(&self, id: BoxId) -> Option<IntrinsicSizes> {
+            (id == self.atom).then(|| IntrinsicSizes::new(7.0, 19.0).unwrap())
+        }
+    }
+    fn digest(atoms: &[InlineAtom<BoxId>]) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for a in atoms {
+            a.source.hash(&mut h);
+            a.owners.hash(&mut h);
+            a.index.hash(&mut h);
+            for x in [
+                a.fragment.x,
+                a.fragment.y,
+                a.fragment.width,
+                a.fragment.height,
+                a.line_width,
+                a.line_box_height,
+                a.baseline,
+                a.margin_left,
+                a.margin_top,
+                a.font_size,
+                a.line_height,
+            ] {
+                x.to_bits().hash(&mut h);
+            }
+            (a.edge, a.paint, a.marker, a.empty_line).hash(&mut h);
+        }
+        h.finish()
+    }
+    #[test]
+    fn ready_batch_resolves_each_style_position_once_but_keeps_three_keys() {
+        let dom = StaticDocument::parse("<div><span id=a>one span</span></div>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let parent = ComputedValues::default();
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        assert_eq!(prepared.spans.len(), 1);
+        let fragments = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        assert!(prepared.ready::<<StaticDocument as LayoutDom>::NodeId, _>(&fragments));
+        let mut system = TextSystem::new();
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let keys = system
+            .prepared_shape_keys_for_ready::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &prepared, &fragments, &parent,
+            );
+        assert_eq!(keys.len(), 3);
+        assert_eq!(READY_KEY_WORK.with(|w| w.get()), (2, 2, 3, 3));
+        for enabled in [false, true] {
+            let mut system = TextSystem::new();
+            system.set_shaping_options(TextShapingOptions {
+                record_timings: enabled,
+                ..Default::default()
+            });
+            READY_KEY_TIMED.with(|c| c.set((0, 0)));
+            system.prepared_shape_keys_for_ready::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &prepared, &fragments, &parent,
+            );
+            assert_eq!(
+                READY_KEY_TIMED.with(|c| c.get()),
+                if enabled { (1, 3) } else { (0, 0) }
+            );
+            assert_eq!(system.shaping_stats.key_materialize_ns > 0, enabled);
+        }
+    }
+
+    #[test]
+    fn eager_equivalence_rejects_events_and_differing_span_policy() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom =
+            StaticDocument::parse("<div><span id=a>first</span><span id=b>second</span></div>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let span = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let text = *boxes[span]
+            .children()
+            .iter()
+            .find(|id| matches!(boxes[**id].origin, BoxOrigin::Text(_)))
+            .unwrap();
+        let parent = ComputedValues::default();
+        let mut nested =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[span], &parent);
+        assert_eq!(nested.test_individual_event_rejections(&parent), (1, 1, 0));
+        assert!(!nested.test_empty_events());
+        assert!(!nested.can_share_eager_key(&parent));
+        let mut plain =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[text], &parent);
+        let plane = Plane {
+            atom: span,
+            fragment: None,
+            baseline: 0.0,
+        };
+        assert!(plain.ready::<Node, _>(&plane));
+        assert!(plain.can_share_eager_key(&parent));
+        plain.spans[0].style.overflow_wrap = CssOverflowWrap::BreakWord;
+        assert!(!plain.can_share_eager_key(&parent));
+        plain.spans[0].style.word_break = CssWordBreak::BreakWord;
+        assert!(plain.can_share_eager_key(&parent));
+        let mut second = plain.spans[0].clone();
+        second.style.word_break = CssWordBreak::Normal;
+        plain.spans.push(second);
+        assert!(!plain.can_share_eager_key(&parent));
+        plain.spans.clear();
+        let mut different_root = parent.clone();
+        different_root.overflow_wrap = CssOverflowWrap::BreakWord;
+        assert!(!plain.can_share_eager_key(&different_root));
+        assert!(plain.can_share_eager_key(&parent));
+    }
+
+    #[test]
+    fn eager_equivalence_rejects_atomic_event_with_and_without_geometry() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<div><img id=atom></div>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let atom = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                            == Some("atom")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let parent = ComputedValues::default();
+        let mut prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[atom], &parent);
+        assert_eq!(
+            prepared.test_individual_event_rejections(&parent),
+            (0, 0, 1)
+        );
+        let missing = Plane {
+            atom,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let fixed = Plane {
+            atom,
+            fragment: Some(Fragment {
+                width: 29.0,
+                height: 12.0,
+                ..Fragment::default()
+            }),
+            baseline: 6.0,
+        };
+        assert!(!prepared.ready::<Node, _>(&missing));
+        assert!(prepared.ready::<Node, _>(&fixed));
+        assert!(!prepared.can_share_eager_key(&parent));
+        let widths = [
+            Some(IntrinsicSizeKind::MinContent),
+            Some(IntrinsicSizeKind::MaxContent),
+            None,
+        ]
+        .map(|kind| prepared.materialize::<Node, _>(&fixed, 320.0, kind)[0].line_width);
+        assert_eq!(widths, [7.0, 19.0, 29.0]);
+    }
+
+    #[test]
+    fn transactional_late_validation_precedes_formatting_and_append() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<div id=a>(hello</div>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut parent = ComputedValues::default();
+        parent.hanging_punctuation.first = true;
+        parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        for fault in 1..=7 {
+            let mut system = TextSystem::new();
+            let mut results = Vec::new();
+            let before = system.shaping_stats();
+            LATE_FAULT.with(|f| f.set(fault));
+            let output = system.format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                InlineRequest {
+                    roots: &[root],
+                    parent_style: &parent,
+                    width: 100.0,
+                    intrinsic_kind: None,
+                    line_constraints: None,
+                },
+                Candidates::Transactional {
+                    results: &mut results,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            );
+            assert!(match fault {
+                1 => matches!(output, Err(PreparedFormatError::Batch(_))),
+                2 => matches!(output, Err(PreparedFormatError::EmptyLateResult)),
+                _ => matches!(output, Err(PreparedFormatError::InvalidLateResult)),
+            });
+            assert!(results.is_empty());
+            let after = system.shaping_stats();
+            assert_eq!(after.format_requests, before.format_requests);
+            assert_eq!(after.shape_wall_ns, before.shape_wall_ns);
+            // Metadata injection occurs after batch cache publication.
+            if fault != 1 {
+                assert!(after.cache_misses > before.cache_misses);
+            }
+        }
+    }
+
+    #[test]
+    fn formatted_output_outlives_prepared_group() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<span id=a>owned hello</span>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let parent = ComputedValues::default();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut system = TextSystem::new();
+        let output = {
+            let prepared =
+                prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+            let key = system.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+            let mut results = system
+                .shape_batch(
+                    &[ShapeJob {
+                        group: InlineGroupId(9),
+                        generation: 11,
+                        key,
+                    }],
+                    11,
+                )
+                .unwrap();
+            BORROWED_KEY_WORK.with(|c| c.set((0, 0)));
+            let output = system
+                .format_prepared_inline_group::<Node, _>(
+                    &prepared,
+                    &plane,
+                    LayoutDom::quirks_mode(&dom),
+                    InlineRequest {
+                        roots: &[root],
+                        parent_style: &parent,
+                        width: 100.0,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    },
+                    Candidates::Transactional {
+                        results: &mut results,
+                        generation: 11,
+                        group: InlineGroupId(9),
+                    },
+                )
+                .unwrap()
+                .unwrap();
+            assert_eq!(BORROWED_KEY_WORK.with(|c| c.get()), (1, 1));
+            output
+        };
+        assert_eq!(output.text, "owned hello");
+        assert!(!output.items.is_empty());
+        assert!(!output.text_sources.is_empty());
+    }
+
+    #[test]
+    fn transactional_candidates_require_key_group_and_pass() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<span id=a>hello</span>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut parent = ComputedValues::default();
+        parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        let mut system = TextSystem::new();
+        let mut options = system.shaping_options();
+        options.retained_entries = 0;
+        options.record_timings = true;
+        system.set_shaping_options(options);
+        let key = system.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+        let valid = system
+            .shape_batch(
+                &[ShapeJob {
+                    group: InlineGroupId(9),
+                    generation: 11,
+                    key,
+                }],
+                11,
+            )
+            .unwrap()
+            .pop()
+            .unwrap();
+        let mut wrong_group = valid.clone();
+        wrong_group.group = InlineGroupId(8);
+        let mut stale = valid.clone();
+        stale.generation = 10;
+        let roots = [root];
+        let request = || InlineRequest {
+            roots: &roots,
+            parent_style: &parent,
+            width: 100.0,
+            intrinsic_kind: None,
+            line_constraints: None,
+        };
+        let mut foreign = valid.clone();
+        foreign.key = cache::ShapeKey::new(
+            system.font_generation,
+            valid.key.input().clone(),
+            &std::collections::hash_map::RandomState::new(),
+        );
+        let mut forged = valid.clone();
+        forged.key.force_fingerprint(0);
+        let mut wrong_font = valid.clone();
+        wrong_font.key = cache::ShapeKey::new(
+            system.font_generation + 1,
+            valid.key.input().clone(),
+            &system.key_seed,
+        );
+        let mut different_value = valid.clone();
+        let mut input = valid.key.input().clone();
+        input.text.push('!');
+        different_value.key = cache::ShapeKey::new(system.font_generation, input, &system.key_seed);
+        let mut collision = different_value.clone();
+        collision.key.force_fingerprint_from(&valid.key);
+        for (candidate, hit) in [
+            (valid.clone(), true),
+            (wrong_group.clone(), false),
+            (stale.clone(), false),
+            (foreign, false),
+            (forged, false),
+            (wrong_font, false),
+            (different_value, false),
+            (collision, false),
+        ] {
+            let mut choices = vec![candidate];
+            READY_KEY_WORK.with(|c| c.set((0, 0, 0, 0)));
+            BORROWED_KEY_WORK.with(|c| c.set((0, 0)));
+            system
+                .format_prepared_inline_group::<Node, _>(
+                    &prepared,
+                    &plane,
+                    LayoutDom::quirks_mode(&dom),
+                    request(),
+                    Candidates::Transactional {
+                        results: &mut choices,
+                        generation: 11,
+                        group: InlineGroupId(9),
+                    },
+                )
+                .unwrap()
+                .unwrap();
+            assert_eq!(BORROWED_KEY_WORK.with(|c| c.get()), (1, usize::from(hit)));
+            assert_eq!(READY_KEY_WORK.with(|c| c.get().3), usize::from(!hit));
+            assert_eq!(choices.len(), if hit { 1 } else { 2 });
+        }
+        let mut choices = vec![wrong_group.clone(), stale.clone(), valid.clone()];
+        READY_KEY_TIMED.with(|c| c.set((0, 0)));
+        FORMAT_TIMED.with(|c| c.set(0));
+        let before = system.shaping_stats();
+        let builds_before = system.shape_count();
+        system
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut choices,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(choices.len(), 3);
+        assert_eq!(system.shaping_stats().batches, before.batches);
+        assert_eq!(READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+        assert_eq!(FORMAT_TIMED.with(|c| c.get()), 1);
+        assert!(system.shaping_stats().shape_wall_ns > before.shape_wall_ns);
+        assert_eq!(
+            system.shape_count(),
+            builds_before,
+            "active result survives zero retention"
+        );
+        let mut invalid_only = vec![wrong_group, stale];
+        let before = system.shaping_stats();
+        system
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut invalid_only,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(invalid_only.len(), 3);
+        assert_eq!(invalid_only[2].group, InlineGroupId(9));
+        assert_eq!(invalid_only[2].generation, 11);
+        assert_eq!(system.shaping_stats().batches, before.batches + 1);
+    }
+
+    #[test]
+    fn fallback_and_late_format_construct_one_current_key_each() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<span id=a>hello</span>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut parent = ComputedValues::default();
+        parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        let mut system = TextSystem::new();
+        let mut reference = TextSystem::new();
+        reference.key_seed = system.key_seed.clone();
+        let old_format = |system: &mut TextSystem,
+                          results: &mut Vec<ShapeResult>,
+                          generation: u64| {
+            let key = system.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+            let index = if let Some(index) = results.iter().position(|result| result.key == key) {
+                index
+            } else {
+                let mut late = system
+                    .shape_late_batch(
+                        &[ShapeJob {
+                            group: InlineGroupId(9),
+                            generation,
+                            key,
+                        }],
+                        generation,
+                    )
+                    .unwrap();
+                let index = results.len();
+                results.append(&mut late);
+                index
+            };
+            system
+                .format_prepared_inline_group::<Node, _>(
+                    &prepared,
+                    &plane,
+                    LayoutDom::quirks_mode(&dom),
+                    InlineRequest {
+                        roots: &[root],
+                        parent_style: &parent,
+                        width: 100.0,
+                        intrinsic_kind: None,
+                        line_constraints: None,
+                    },
+                    Candidates::AtomicNoLate {
+                        results: std::slice::from_ref(&results[index]),
+                        generation,
+                        group: InlineGroupId(9),
+                    },
+                )
+                .unwrap()
+                .unwrap()
+        };
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let old_keys =
+            reference.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent);
+        let old_jobs = old_keys
+            .into_iter()
+            .map(|key| ShapeJob {
+                group: InlineGroupId(9),
+                generation: 11,
+                key,
+            })
+            .collect::<Vec<_>>();
+        let mut old_results = reference.shape_batch(&old_jobs, 11).unwrap();
+        let old_first = old_format(&mut reference, &mut old_results, 11);
+        let old_work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (old_work.2, old_work.3),
+            (5, 5),
+            "old three eager plus two current boundaries"
+        );
+        let old_eager_work = old_work;
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let old_repeat = old_format(&mut reference, &mut old_results, 11);
+        let old_work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!((old_work.2, old_work.3), (2, 2), "old repeated format");
+        assert_eq!(old_first.size(), old_repeat.size());
+        let old_repeat_work = old_work;
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let keys = system.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent);
+        let jobs = keys
+            .into_iter()
+            .map(|key| ShapeJob {
+                group: InlineGroupId(9),
+                generation: 11,
+                key,
+            })
+            .collect::<Vec<_>>();
+        let mut results = system.shape_batch(&jobs, 11).unwrap();
+        let roots = [root];
+        let request = || InlineRequest {
+            roots: &roots,
+            parent_style: &parent,
+            width: 100.0,
+            intrinsic_kind: None,
+            line_constraints: None,
+        };
+        let first = system
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut results,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(old_first.size(), first.size());
+        let work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (work.2, work.3),
+            (4, 4),
+            "three eager keys plus one current key"
+        );
+        let new_eager_work = work;
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        system
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut results,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (work.2, work.3),
+            (1, 1),
+            "repeated formatting makes one current key"
+        );
+        let new_repeat_work = work;
+        let mut old_cold = TextSystem::new();
+        let mut new_cold = TextSystem::new();
+        new_cold.key_seed = old_cold.key_seed.clone();
+        for cold in [&mut old_cold, &mut new_cold] {
+            let mut options = cold.shaping_options();
+            options.retained_entries = 0;
+            cold.set_shaping_options(options);
+        }
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let mut old_late = Vec::new();
+        let old_before = old_cold.shaping_stats();
+        let old_output = old_format(&mut old_cold, &mut old_late, 12);
+        let old_work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!((old_work.2, old_work.3), (2, 2), "old cold late format");
+        let old_after = old_cold.shaping_stats();
+        assert_eq!(old_after.batches - old_before.batches, 1);
+        assert_eq!(old_after.cache_misses - old_before.cache_misses, 1);
+        assert_eq!(old_after.late_misses - old_before.late_misses, 1);
+        assert_eq!(old_after.cache_hits - old_before.cache_hits, 0);
+        READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+        let mut late = Vec::new();
+        let before = new_cold.shaping_stats();
+        let output = new_cold
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::Transactional {
+                    results: &mut late,
+                    generation: 12,
+                    group: InlineGroupId(9),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        let work = READY_KEY_WORK.with(|w| w.get());
+        assert_eq!(
+            (work.2, work.3),
+            (1, 1),
+            "late formatting makes one current key"
+        );
+        assert_eq!(late.len(), 1);
+        assert_eq!(old_output.size(), output.size());
+        let after = new_cold.shaping_stats();
+        assert_eq!(after.batches - before.batches, 1);
+        assert_eq!(after.cache_misses - before.cache_misses, 1);
+        assert_eq!(after.late_misses - before.late_misses, 1);
+        assert_eq!(after.cache_hits - before.cache_hits, 0);
+        println!(
+            "old/new boundaries eager+current {}/{}, repeat {}/{}, cold late {}/{}; cold batches/misses/late-misses old {}/{}/{}, new {}/{}/{}",
+            old_eager_work.3,
+            new_eager_work.3,
+            old_repeat_work.3,
+            new_repeat_work.3,
+            old_work.3,
+            work.3,
+            old_after.batches - old_before.batches,
+            old_after.cache_misses - old_before.cache_misses,
+            old_after.late_misses - old_before.late_misses,
+            after.batches - before.batches,
+            after.cache_misses - before.cache_misses,
+            after.late_misses - before.late_misses
+        );
+    }
+
+    #[test]
+    fn old_and_current_late_batch_failure_have_same_early_effects() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let dom = StaticDocument::parse("<span id=a>(hello</span>");
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let root = boxes
+            .iter()
+            .find_map(|(id, b)| {
+                b.origin
+                    .node()
+                    .filter(|n| {
+                        dom.attribute(*n, &Namespace::from(""), &LocalName::from("id")) == Some("a")
+                    })
+                    .map(|_| id)
+            })
+            .unwrap();
+        let plane = Plane {
+            atom: root,
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut parent = ComputedValues::default();
+        parent.hanging_punctuation.first = true;
+        parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+        let mut old = TextSystem::new();
+        let mut current = TextSystem::new();
+        current.key_seed = old.key_seed.clone();
+        for system in [&mut old, &mut current] {
+            let mut options = system.shaping_options();
+            options.record_timings = true;
+            system.set_shaping_options(options);
+        }
+        // Seed a distinct successful batch first. Failure must not undo this publication.
+        let seed_key = old.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+        let current_seed =
+            current.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+        assert_eq!(seed_key, current_seed);
+        let mut input = seed_key.input().clone();
+        input.text.push('x');
+        let earlier = ShapeKey::new(seed_key.generation(), input, &old.key_seed);
+        for system in [&mut old, &mut current] {
+            system
+                .shape_batch(
+                    &[ShapeJob {
+                        group: InlineGroupId(8),
+                        generation: 10,
+                        key: earlier.clone(),
+                    }],
+                    10,
+                )
+                .unwrap();
+        }
+        let old_before = old.shaping_stats();
+        let current_before = current.shaping_stats();
+        READY_KEY_TIMED.with(|c| c.set((0, 0)));
+        FORMAT_TIMED.with(|c| c.set(0));
+        let key = old.prepared_shape_key::<Node, _>(&prepared, &plane, 100.0, None, &parent);
+        LATE_FAULT.with(|f| f.set(1));
+        let old_error = old
+            .shape_late_batch(
+                &[ShapeJob {
+                    group: InlineGroupId(9),
+                    generation: 11,
+                    key,
+                }],
+                11,
+            )
+            .err()
+            .unwrap();
+        assert_eq!(READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+        assert_eq!(FORMAT_TIMED.with(|c| c.get()), 0);
+        READY_KEY_TIMED.with(|c| c.set((0, 0)));
+        FORMAT_TIMED.with(|c| c.set(0));
+        LATE_FAULT.with(|f| f.set(1));
+        let mut results = Vec::new();
+        let current_error = current
+            .format_prepared_inline_group::<Node, _>(
+                &prepared,
+                &plane,
+                LayoutDom::quirks_mode(&dom),
+                InlineRequest {
+                    roots: &[root],
+                    parent_style: &parent,
+                    width: 100.0,
+                    intrinsic_kind: None,
+                    line_constraints: None,
+                },
+                Candidates::Transactional {
+                    results: &mut results,
+                    generation: 11,
+                    group: InlineGroupId(9),
+                },
+            )
+            .err()
+            .unwrap();
+        assert!(matches!(current_error, PreparedFormatError::Batch(error) if error == old_error));
+        assert!(results.is_empty());
+        assert_eq!(READY_KEY_TIMED.with(|c| c.get()), (1, 1));
+        assert_eq!(FORMAT_TIMED.with(|c| c.get()), 0);
+        let old_after = old.shaping_stats();
+        let current_after = current.shaping_stats();
+        for (before, after) in [(old_before, old_after), (current_before, current_after)] {
+            assert_eq!(after.format_requests, before.format_requests);
+            assert_eq!(after.batches, before.batches);
+            assert_eq!(after.cache_misses, before.cache_misses);
+            assert_eq!(after.late_misses, before.late_misses);
+            assert_eq!(after.shape_wall_ns, before.shape_wall_ns);
+            assert!(after.key_materialize_ns > before.key_materialize_ns);
+            assert_eq!(after.retained_entries, before.retained_entries);
+        }
+        assert_eq!(
+            old_after.layout_builds - old_before.layout_builds,
+            current_after.layout_builds - current_before.layout_builds
+        );
+        assert_eq!(
+            old_after.metric_layout_builds - old_before.metric_layout_builds,
+            current_after.metric_layout_builds - current_before.metric_layout_builds
+        );
+        assert_eq!(old.ch_advances, current.ch_advances);
+        assert_eq!(old.space_advances, current.space_advances);
+        assert_eq!(
+            old_after.cache_hits - old_before.cache_hits,
+            current_after.cache_hits - current_before.cache_hits
+        );
+        assert_eq!(
+            old_after.unique_jobs - old_before.unique_jobs,
+            current_after.unique_jobs - current_before.unique_jobs
+        );
+        assert!(old.cache.get(&earlier).is_some());
+        assert!(current.cache.get(&earlier).is_some());
+    }
+
+    #[test]
+    fn old_selection_key_survives_late_batch_and_hanging_measurement() {
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        for markup in [
+            "<div id=a>(hello\tworld</div>",
+            "<div id=a>(नमस्ते\tworld</div>",
+            "<div id=a></div>",
+        ] {
+            let dom = StaticDocument::parse(markup);
+            let styles = resolve_styles(
+                &dom,
+                &StyleSet::cambium(&[
+                    "#a { tab-size: 3; font-family: Ahem, 'Noto Sans Devanagari'; white-space: pre; }",
+                ]),
+                &Device::screen(320.0, 240.0),
+                &InteractionStates::default(),
+            );
+            let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+            let root = boxes
+                .iter()
+                .find_map(|(id, b)| {
+                    b.origin
+                        .node()
+                        .filter(|n| {
+                            dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                                == Some("a")
+                        })
+                        .map(|_| id)
+                })
+                .unwrap();
+            let plane = Plane {
+                atom: root,
+                fragment: None,
+                baseline: 0.0,
+            };
+            let mut parent = ComputedValues::default();
+            parent.hanging_punctuation.first = true;
+            parent.tab_size = TabSize::Number(3.0);
+            parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+            let prepared =
+                prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+            if !prepared.text.is_empty() {
+                assert!(prepared.text.contains('\t'));
+                assert!(is_opening_hanging_punctuation(
+                    prepared.text.chars().next().unwrap()
+                ));
+            }
+            for prewarm in [false, true] {
+                for (width, intrinsic_kind) in [
+                    (0.01, Some(IntrinsicSizeKind::MinContent)),
+                    (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
+                    (100.0, None),
+                ] {
+                    let mut system = TextSystem::new();
+                    system
+                        .register_generic_font_bytes(
+                            include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+                            "monospace",
+                        )
+                        .unwrap();
+                    let fallback = include_bytes!(
+                        "../../../tests/wpt/tests/fonts/noto/NotoSansDevanagari-Regular.ttf"
+                    );
+                    system.register_font_bytes(fallback.to_vec());
+                    let mut actual = TextSystem::new();
+                    actual.key_seed = system.key_seed.clone();
+                    actual
+                        .register_generic_font_bytes(
+                            include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+                            "monospace",
+                        )
+                        .unwrap();
+                    actual.register_font_bytes(fallback.to_vec());
+                    if prewarm {
+                        for span in &prepared.spans {
+                            system.tab_stop(&span.style);
+                            actual.tab_stop(&span.style);
+                        }
+                        system.tab_stop(&parent);
+                        actual.tab_stop(&parent);
+                    }
+                    let first = system.prepared_shape_key::<Node, _>(
+                        &prepared,
+                        &plane,
+                        width,
+                        intrinsic_kind,
+                        &parent,
+                    );
+                    let generation = system.font_generation;
+                    let results = system
+                        .shape_late_batch(
+                            &[ShapeJob {
+                                group: InlineGroupId(9),
+                                generation: 11,
+                                key: first.clone(),
+                            }],
+                            11,
+                        )
+                        .unwrap();
+                    OBSERVED_FORMAT_KEY.with(|key| *key.borrow_mut() = None);
+                    OBSERVE_FORMAT_KEY.with(|enabled| enabled.set(true));
+                    let output = system
+                        .format_prepared_inline_group::<Node, _>(
+                            &prepared,
+                            &plane,
+                            LayoutDom::quirks_mode(&dom),
+                            InlineRequest {
+                                roots: &[root],
+                                parent_style: &parent,
+                                width,
+                                intrinsic_kind,
+                                line_constraints: None,
+                            },
+                            Candidates::AtomicNoLate {
+                                results: &results,
+                                generation: 11,
+                                group: InlineGroupId(9),
+                            },
+                        )
+                        .unwrap();
+                    OBSERVE_FORMAT_KEY.with(|enabled| enabled.set(false));
+                    let second = OBSERVED_FORMAT_KEY.with(|key| key.borrow_mut().take());
+                    if prepared.text.is_empty() {
+                        assert!(output.is_none());
+                        assert!(second.is_none(), "old empty path returns before second key");
+                    } else {
+                        assert_eq!(Some(first), second, "{markup}, prewarm={prewarm}");
+                    }
+                    assert_eq!(system.font_generation, generation);
+                    let mut current_results = Vec::new();
+                    let current = actual
+                        .format_prepared_inline_group::<Node, _>(
+                            &prepared,
+                            &plane,
+                            LayoutDom::quirks_mode(&dom),
+                            InlineRequest {
+                                roots: &[root],
+                                parent_style: &parent,
+                                width,
+                                intrinsic_kind,
+                                line_constraints: None,
+                            },
+                            Candidates::Transactional {
+                                results: &mut current_results,
+                                generation: 11,
+                                group: InlineGroupId(9),
+                            },
+                        )
+                        .unwrap();
+                    assert_eq!(system.font_generation, actual.font_generation);
+                    assert_eq!(system.ch_advances, actual.ch_advances);
+                    assert_eq!(system.space_advances, actual.space_advances);
+                    for (left, right) in [
+                        (&system.ch_advances, &actual.ch_advances),
+                        (&system.space_advances, &actual.space_advances),
+                    ] {
+                        for (key, value) in left {
+                            assert_eq!(value.to_bits(), right[key].to_bits());
+                        }
+                    }
+                    assert_eq!(
+                        system.shaping_stats.layout_builds,
+                        actual.shaping_stats.layout_builds
+                    );
+                    assert_eq!(
+                        system.shaping_stats.metric_layout_builds,
+                        actual.shaping_stats.metric_layout_builds
+                    );
+                    assert_eq!(
+                        system.shaping_stats.format_requests,
+                        actual.shaping_stats.format_requests
+                    );
+                    match (&output, &current) {
+                        (None, None) => {},
+                        (Some(left), Some(right)) => {
+                            assert_eq!(left.size(), right.size());
+                            assert_eq!(left.baselines(), right.baselines());
+                            assert_eq!(left.text, right.text);
+                            assert_eq!(
+                                format!("{:?}", left.line_bounds),
+                                format!("{:?}", right.line_bounds)
+                            );
+                            let mut left_frame = TextFrame::default();
+                            let mut right_frame = TextFrame::default();
+                            let owner = boxes[root].origin.node();
+                            left.place(
+                                &mut left_frame,
+                                &styles,
+                                owner,
+                                |id| boxes[id].origin.node(),
+                                (0.0, 0.0),
+                                320.0,
+                            );
+                            right.place(
+                                &mut right_frame,
+                                &styles,
+                                owner,
+                                |id| boxes[id].origin.node(),
+                                (0.0, 0.0),
+                                320.0,
+                            );
+                            assert!(
+                                left_frame
+                                    .prepared_groups
+                                    .iter()
+                                    .any(|group| !group.is_empty())
+                            );
+                            assert_eq!(
+                                format!("{:?}", left_frame.prepared_groups),
+                                format!("{:?}", right_frame.prepared_groups)
+                            );
+                            let first = left_frame
+                                .text_clusters
+                                .first()
+                                .expect("nonempty output binds a caret cluster");
+                            let rect = |_, f: Fragment| TextRect {
+                                x: f.x,
+                                y: f.y,
+                                width: f.width,
+                                height: f.height,
+                            };
+                            for offset in [first.range.start, first.range.end] {
+                                let l = left_frame.caret_rect(first.source, offset, rect);
+                                let r = right_frame.caret_rect(first.source, offset, rect);
+                                assert!(l.is_some() && r.is_some());
+                                assert_eq!(l, r);
+                            }
+                            let runs = |layout: &InlineLayout<BoxId>, system: &TextSystem| {
+                                layout
+                                    .items
+                                    .iter()
+                                    .filter_map(|item| match item {
+                                        ShapedItem::Text(run) => Some(format!(
+                                            "{:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                                            run.source,
+                                            run.owners,
+                                            run.fragment,
+                                            run.line_fragment,
+                                            run.glyphs,
+                                            run.clusters
+                                                .iter()
+                                                .map(|c| (
+                                                    c.source,
+                                                    c.range.clone(),
+                                                    c.fragment,
+                                                    c.rtl
+                                                ))
+                                                .collect::<Vec<_>>(),
+                                            run.color,
+                                            system.fonts[&run.font_instance].data
+                                        )),
+                                        _ => None,
+                                    })
+                                    .collect::<Vec<_>>()
+                            };
+                            assert_eq!(runs(left, &system), runs(right, &actual));
+                        },
+                        _ => panic!("old/current empty mismatch"),
+                    }
+                    if markup.contains("नमस्ते") {
+                        let output = output.unwrap();
+                        assert!(output.items.iter().any(|item| matches!(item, ShapedItem::Text(run) if system.fonts.get(&run.font_instance).is_some_and(|font| font.data.as_slice() == fallback))));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ready_keys_match_independent_original_requests_after_font_registration() {
+        use std::hash::{Hash, Hasher};
+        type Node = <StaticDocument as LayoutDom>::NodeId;
+        let font = include_bytes!("../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec();
+        for (markup, css) in [
+            (
+                "<div><span id=a>eligible hello world</span></div>",
+                "#a { overflow-wrap: anywhere; }",
+            ),
+            ("<div><span id=a></span></div>", ""),
+            (
+                "<div><span id=a>hello\tworld</span></div>",
+                "#a { font-family: monospace; tab-size: 3; overflow-wrap: break-word; }",
+            ),
+            (
+                "<div><span id=a>abc <b>مرحبا</b> z</span></div>",
+                "#a { direction: rtl; overflow-wrap: anywhere; font-feature-settings: 'liga' 0; } b { tab-size: 4; letter-spacing: 2px; }",
+            ),
+            (
+                "<div><span id=a>abc <b></b><img id=atom> z</span></div>",
+                "#a { word-break: break-word; padding: 2px; } b { margin-left: 3px; }",
+            ),
+        ] {
+            let dom = StaticDocument::parse(markup);
+            let styles = resolve_styles(
+                &dom,
+                &StyleSet::cambium(&[css]),
+                &Device::screen(320.0, 240.0),
+                &InteractionStates::default(),
+            );
+            let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+            let find = |name| {
+                boxes.iter().find_map(|(id, b)| {
+                    b.origin
+                        .node()
+                        .filter(|n| {
+                            dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                                == Some(name)
+                        })
+                        .map(|_| id)
+                })
+            };
+            let mut root = find("a").unwrap();
+            if markup.contains("eligible hello world") {
+                root = *boxes[root]
+                    .children()
+                    .iter()
+                    .find(|id| matches!(boxes[**id].origin, BoxOrigin::Text(_)))
+                    .expect("text box");
+            }
+            let atom = find("atom").unwrap_or(root);
+            let plane = Plane {
+                atom,
+                fragment: Some(Fragment {
+                    width: 29.0,
+                    height: 12.0,
+                    ..Fragment::default()
+                }),
+                baseline: 6.0,
+            };
+            let mut parent = ComputedValues::default();
+            parent.direction = Direction::Rtl;
+            parent.font_family = CssFontFamily::Named("different-root-face".into());
+            parent.tab_size = TabSize::Number(9.0);
+            parent.color = ComputedColor::Absolute(CssColor::srgb(0.0, 0.0, 0.0, 1.0));
+            let prepared =
+                prepared::PreparedInlineGroup::collect(&dom, &styles, &boxes, &[root], &parent);
+            assert!(prepared.ready::<Node, _>(&plane));
+            if markup.contains("<span id=a></span>") {
+                assert!(prepared.spans.is_empty());
+                assert!(prepared.text.is_empty());
+            }
+            if markup.contains("مرحبا") {
+                assert!(prepared.spans.len() > 1);
+                let first = &prepared.spans[0].style;
+                assert!(
+                    prepared.spans.iter().skip(1).any(|span| {
+                        metric_key(first, super::super::paint::used_font_size(first))
+                            == metric_key(
+                                &span.style,
+                                super::super::paint::used_font_size(&span.style),
+                            )
+                            && first.letter_spacing != span.style.letter_spacing
+                    }),
+                    "fixture must include distinct styles sharing a metric key"
+                );
+            }
+            for prewarm in [false, true] {
+                let mut reference = TextSystem::new();
+                let mut actual = TextSystem::new();
+                actual.key_seed = reference.key_seed.clone();
+                for system in [&mut reference, &mut actual] {
+                    system
+                        .register_generic_font_bytes(font.clone(), "sans-serif")
+                        .unwrap();
+                    system
+                        .register_generic_font_bytes(font.clone(), "monospace")
+                        .unwrap();
+                    if prewarm {
+                        for span in &prepared.spans {
+                            system.tab_stop(&span.style);
+                        }
+                        system.tab_stop(&parent);
+                    }
+                }
+                for generation in 0..2 {
+                    if generation == 1 {
+                        let replacement = include_bytes!(
+                            "../../../tests/wpt/tests/fonts/CanvasTest-ascent256.ttf"
+                        )
+                        .to_vec();
+                        for system in [&mut reference, &mut actual] {
+                            system
+                                .register_generic_font_bytes(replacement.clone(), "sans-serif")
+                                .unwrap();
+                            if prewarm {
+                                for span in &prepared.spans {
+                                    system.tab_stop(&span.style);
+                                }
+                                system.tab_stop(&parent);
+                            }
+                        }
+                    }
+                    READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+                    let expected = [
+                        reference.prepared_shape_key::<Node, _>(
+                            &prepared,
+                            &plane,
+                            0.01,
+                            Some(IntrinsicSizeKind::MinContent),
+                            &parent,
+                        ),
+                        reference.prepared_shape_key::<Node, _>(
+                            &prepared,
+                            &plane,
+                            f32::INFINITY,
+                            Some(IntrinsicSizeKind::MaxContent),
+                            &parent,
+                        ),
+                        reference
+                            .prepared_shape_key::<Node, _>(&prepared, &plane, 0.0, None, &parent),
+                    ];
+                    let n = 1 + prepared.spans.len();
+                    assert_eq!(READY_KEY_WORK.with(|w| w.get()), (3 * n, 3 * n, 3, 3));
+                    READY_KEY_WORK.with(|w| w.set((0, 0, 0, 0)));
+                    let eligible = markup.contains("eligible hello world");
+                    let got = if eligible {
+                        let key = actual.prepared_min_shape_key_for_ready::<Node, _>(
+                            &prepared, &plane, &parent,
+                        );
+                        [key.clone(), key.clone(), key]
+                    } else {
+                        actual.prepared_shape_keys_for_ready::<Node, _>(&prepared, &plane, &parent)
+                    };
+                    assert_eq!(
+                        READY_KEY_WORK.with(|w| w.get()),
+                        if eligible { (n, n, 1, 1) } else { (n, n, 3, 3) }
+                    );
+                    assert_eq!(
+                        expected, got,
+                        "{markup} {css} prewarm={prewarm} generation={generation}"
+                    );
+                    if !prepared.spans.is_empty() {
+                        assert_eq!(got[0].input().defaults, got[0].input().spans[0].properties);
+                    }
+                    for (a, b) in expected.iter().zip(&got) {
+                        let mut ah = std::collections::hash_map::DefaultHasher::new();
+                        let mut bh = std::collections::hash_map::DefaultHasher::new();
+                        a.hash(&mut ah);
+                        b.hash(&mut bh);
+                        assert_eq!(ah.finish(), bh.finish());
+                    }
+                    assert_eq!(reference.ch_advances, actual.ch_advances);
+                    assert_eq!(reference.space_advances, actual.space_advances);
+                    for (left, right) in [
+                        (&reference.ch_advances, &actual.ch_advances),
+                        (&reference.space_advances, &actual.space_advances),
+                    ] {
+                        assert_eq!(left.len(), right.len());
+                        for (key, value) in left {
+                            assert_eq!(value.to_bits(), right[key].to_bits());
+                        }
+                    }
+                    assert_eq!(
+                        reference.shaping_stats.metric_layout_builds,
+                        actual.shaping_stats.metric_layout_builds
+                    );
+                    if find("atom").is_some() {
+                        let widths = got
+                            .each_ref()
+                            .map(|k| k.input().slots.iter().map(|s| s.width).collect::<Vec<_>>());
+                        assert!(widths[0].contains(&7.0f32.to_bits()));
+                        assert!(widths[1].contains(&19.0f32.to_bits()));
+                        assert!(widths[2].contains(&29.0f32.to_bits()));
+                    }
+                    let jobs = |keys: &[ShapeKey; 3]| {
+                        keys.iter()
+                            .cloned()
+                            .map(|key| ShapeJob {
+                                group: InlineGroupId(1),
+                                generation: 42,
+                                key,
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    let ref_results = reference.shape_batch(&jobs(&expected), 42).unwrap();
+                    let actual_jobs = jobs(&got);
+                    let results = actual
+                        .shape_batch(
+                            if eligible {
+                                &actual_jobs[..1]
+                            } else {
+                                &actual_jobs
+                            },
+                            42,
+                        )
+                        .unwrap();
+                    if markup.contains("eligible hello world") {
+                        assert!(prepared.test_empty_events());
+                        assert_eq!(expected[0], expected[1]);
+                        assert_eq!(expected[0], expected[2]);
+                    }
+                    for (index, (width, intrinsic_kind)) in [
+                        (0.01, Some(IntrinsicSizeKind::MinContent)),
+                        (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
+                        (0.0, None),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        let request = || InlineRequest {
+                            roots: std::slice::from_ref(&root),
+                            parent_style: &parent,
+                            width,
+                            intrinsic_kind,
+                            line_constraints: None,
+                        };
+                        let left = reference
+                            .format_prepared_inline_group::<Node, _>(
+                                &prepared,
+                                &plane,
+                                LayoutDom::quirks_mode(&dom),
+                                request(),
+                                Candidates::AtomicNoLate {
+                                    results: std::slice::from_ref(&ref_results[index]),
+                                    generation: 42,
+                                    group: InlineGroupId(1),
+                                },
+                            )
+                            .unwrap();
+                        let right = actual
+                            .format_prepared_inline_group::<Node, _>(
+                                &prepared,
+                                &plane,
+                                LayoutDom::quirks_mode(&dom),
+                                request(),
+                                Candidates::AtomicNoLate {
+                                    results: &results,
+                                    generation: 42,
+                                    group: InlineGroupId(1),
+                                },
+                            )
+                            .unwrap();
+                        if markup.contains("<span id=a></span>") {
+                            assert!(left.is_none() && right.is_none(), "empty inline is phantom");
+                            continue;
+                        }
+                        let left = left.expect("reference nonempty output");
+                        let right = right.expect("optimized nonempty output");
+                        assert!(!left.items.is_empty() && !right.items.is_empty());
+                        assert!(left.items.iter().any(
+                            |item| matches!(item, ShapedItem::Text(run) if !run.glyphs.is_empty())
+                        ));
+                        assert!(right.items.iter().any(
+                            |item| matches!(item, ShapedItem::Text(run) if !run.glyphs.is_empty())
+                        ));
+                        assert_eq!(left.size(), right.size());
+                        assert_eq!(left.baselines(), right.baselines());
+                        assert_eq!(left.text, right.text);
+                        assert_eq!(
+                            format!("{:?}", left.line_bounds),
+                            format!("{:?}", right.line_bounds)
+                        );
+                        let sources = |layout: &InlineLayout<BoxId>| {
+                            layout
+                                .text_sources
+                                .iter()
+                                .map(|source| (source.source, source.range.clone()))
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(sources(&left), sources(&right));
+                        // Include ordered lines, source/owner binding, atom geometry and glyphs.
+                        let items = |layout: &InlineLayout<BoxId>| {
+                            layout
+                                .items
+                                .iter()
+                                .map(|item| match item {
+                                    ShapedItem::Text(run) => format!(
+                                        "text {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                                        run.source,
+                                        run.owners,
+                                        run.line_y.to_bits(),
+                                        run.fragment,
+                                        run.line_fragment,
+                                        run.font_instance,
+                                        run.font_size.to_bits(),
+                                        run.color,
+                                        run.glyphs,
+                                        run.clusters
+                                            .iter()
+                                            .map(|c| (c.source, c.range.clone(), c.fragment, c.rtl))
+                                            .collect::<Vec<_>>()
+                                    ),
+                                    ShapedItem::InlineBox {
+                                        source,
+                                        owners,
+                                        fragment,
+                                        line_fragment,
+                                        edge,
+                                        paint,
+                                        line_y,
+                                    } => format!(
+                                        "atom {:?} {:?} {:?} {:?} {:?} {:?} {:?}",
+                                        source,
+                                        owners,
+                                        fragment,
+                                        line_fragment,
+                                        edge,
+                                        paint,
+                                        line_y.to_bits()
+                                    ),
+                                    ShapedItem::Empty {
+                                        source,
+                                        fragment,
+                                        line_y,
+                                    } => format!(
+                                        "empty {:?} {:?} {:?}",
+                                        source,
+                                        fragment,
+                                        line_y.to_bits()
+                                    ),
+                                })
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(items(&left), items(&right));
+                        let fonts = |system: &TextSystem, layout: &InlineLayout<BoxId>| {
+                            layout
+                                .items
+                                .iter()
+                                .filter_map(|item| match item {
+                                    ShapedItem::Text(run) => {
+                                        let font = &system.fonts[&run.font_instance];
+                                        Some((font.index, font.data.as_ref().clone()))
+                                    },
+                                    _ => None,
+                                })
+                                .collect::<Vec<_>>()
+                        };
+                        assert_eq!(fonts(&reference, &left), fonts(&actual, &right));
+                        let mut left_frame = TextFrame::default();
+                        let mut right_frame = TextFrame::default();
+                        let owner = boxes[root].origin.node();
+                        left.place(
+                            &mut left_frame,
+                            &styles,
+                            owner,
+                            |id| boxes[id].origin.node(),
+                            (0.0, 0.0),
+                            320.0,
+                        );
+                        right.place(
+                            &mut right_frame,
+                            &styles,
+                            owner,
+                            |id| boxes[id].origin.node(),
+                            (0.0, 0.0),
+                            320.0,
+                        );
+                        assert!(
+                            left_frame
+                                .prepared_groups
+                                .iter()
+                                .any(|group| !group.is_empty()),
+                            "nonempty output must project paint commands"
+                        );
+                        assert!(
+                            right_frame
+                                .prepared_groups
+                                .iter()
+                                .any(|group| !group.is_empty()),
+                            "nonempty output must project paint commands"
+                        );
+                        assert_eq!(
+                            format!("{:?}", left_frame.prepared_groups),
+                            format!("{:?}", right_frame.prepared_groups)
+                        );
+                        if eligible {
+                            let first = left_frame
+                                .text_clusters
+                                .first()
+                                .expect("eligible output binds caret clusters");
+                            let rect = |_, f: Fragment| TextRect {
+                                x: f.x,
+                                y: f.y,
+                                width: f.width,
+                                height: f.height,
+                            };
+                            for offset in [first.range.start, first.range.end] {
+                                let expected_caret =
+                                    left_frame.caret_rect(first.source, offset, rect);
+                                let actual_caret =
+                                    right_frame.caret_rect(first.source, offset, rect);
+                                assert!(expected_caret.is_some() && actual_caret.is_some());
+                                assert_eq!(expected_caret, actual_caret);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn prepared_batch_formats_current_owners_without_dom_rereads() {
+        let dom = StaticDocument::parse(
+            "<div><span id=a>same text</span><span id=b>same text</span></div>",
+        );
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let find = |name| {
+            boxes
+                .iter()
+                .find_map(|(id, b)| {
+                    b.origin
+                        .node()
+                        .filter(|n| {
+                            dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                                == Some(name)
+                        })
+                        .map(|_| id)
+                })
+                .unwrap()
+        };
+        let roots_a = [find("a")];
+        let roots_b = [find("b")];
+        let parent = ComputedValues::default();
+        let counting = CountingDom {
+            inner: &dom,
+            reads: std::cell::Cell::new(0),
+        };
+        let a =
+            prepared::PreparedInlineGroup::collect(&counting, &styles, &boxes, &roots_a, &parent);
+        let b =
+            prepared::PreparedInlineGroup::collect(&counting, &styles, &boxes, &roots_b, &parent);
+        let reads = counting.reads.get();
+        let fragments = Plane {
+            atom: roots_a[0],
+            fragment: None,
+            baseline: 0.0,
+        };
+        let mut system = TextSystem::new();
+        let mut options = system.shaping_options();
+        options.retained_entries = 0;
+        system.set_shaping_options(options);
+        for (width, intrinsic) in [
+            (40.0, None),
+            (200.0, None),
+            (0.01, Some(IntrinsicSizeKind::MinContent)),
+            (f32::INFINITY, Some(IntrinsicSizeKind::MaxContent)),
+        ] {
+            let key_a = system.prepared_shape_key::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &a, &fragments, width, intrinsic, &parent,
+            );
+            let key_b = system.prepared_shape_key::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &b, &fragments, width, intrinsic, &parent,
+            );
+            assert_eq!(key_a, key_b);
+            let jobs = [
+                ShapeJob {
+                    group: InlineGroupId(4),
+                    generation: 99,
+                    key: key_a,
+                },
+                ShapeJob {
+                    group: InlineGroupId(8),
+                    generation: 99,
+                    key: key_b,
+                },
+            ];
+            let before = system.shape_count();
+            let results = system.shape_batch(&jobs, 99).expect("valid batch");
+            assert_eq!(system.shape_count() - before, 1);
+            let request = |roots| InlineRequest {
+                roots,
+                parent_style: &parent,
+                width,
+                intrinsic_kind: intrinsic,
+                line_constraints: None,
+            };
+            let first = system
+                .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                    &a,
+                    &fragments,
+                    LayoutDom::quirks_mode(&dom),
+                    request(&roots_a),
+                    Candidates::AtomicNoLate {
+                        results: std::slice::from_ref(&results[0]),
+                        generation: 99,
+                        group: InlineGroupId(4),
+                    },
+                )
+                .unwrap()
+                .unwrap();
+            let second = system
+                .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                    &b,
+                    &fragments,
+                    LayoutDom::quirks_mode(&dom),
+                    request(&roots_b),
+                    Candidates::AtomicNoLate {
+                        results: std::slice::from_ref(&results[1]),
+                        generation: 99,
+                        group: InlineGroupId(8),
+                    },
+                )
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                system.shape_count() - before,
+                1,
+                "active result must avoid a cache lookup"
+            );
+            assert_ne!(first.text_sources[0].source, second.text_sources[0].source);
+            let fresh = system
+                .format_inline_group(&dom, &styles, &boxes, &fragments, request(&roots_b))
+                .unwrap();
+            assert_eq!(second.size(), fresh.size());
+            assert_eq!(second.baselines(), fresh.baselines());
+            assert_eq!(second.text, fresh.text);
+            assert_eq!(second.text_sources[0].source, fresh.text_sources[0].source);
+            assert_eq!(counting.reads.get(), reads);
+            let before_stale = system.shape_count();
+            system
+                .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                    &a,
+                    &fragments,
+                    LayoutDom::quirks_mode(&dom),
+                    request(&roots_a),
+                    Candidates::AtomicNoLate {
+                        results: std::slice::from_ref(&results[0]),
+                        generation: 100,
+                        group: InlineGroupId(4),
+                    },
+                )
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                system.shape_count() - before_stale,
+                1,
+                "stale result must be rejected"
+            );
+            let wrong_key = ShapeResult {
+                group: InlineGroupId(4),
+                generation: 99,
+                key: {
+                    let mut input = results[0].key.input().clone();
+                    input.text.push('x');
+                    cache::ShapeKey::new(results[0].key.generation(), input, &system.key_seed)
+                },
+                shaped: Arc::clone(&results[0].shaped),
+            };
+            for (result, group) in [
+                (&results[0], InlineGroupId(8)),
+                (&wrong_key, InlineGroupId(4)),
+            ] {
+                let before = system.shape_count();
+                let rejected = system
+                    .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                        &a,
+                        &fragments,
+                        LayoutDom::quirks_mode(&dom),
+                        request(&roots_a),
+                        Candidates::AtomicNoLate {
+                            results: std::slice::from_ref(result),
+                            generation: 99,
+                            group,
+                        },
+                    )
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    system.shape_count() - before,
+                    1,
+                    "wrong group or key must be rejected"
+                );
+                assert_eq!(rejected.size(), first.size());
+            }
+        }
+        // Retention is enabled, but a second unique key evicts the first.
+        let mut options = system.shaping_options();
+        options.retained_entries = 1;
+        system.set_shaping_options(options);
+        let key = system.prepared_shape_key::<<StaticDocument as LayoutDom>::NodeId, _>(
+            &a, &fragments, 80.0, None, &parent,
+        );
+        let mut other_input = key.input().clone();
+        other_input.text.push('x');
+        let other = cache::ShapeKey::new(key.generation(), other_input, &system.key_seed);
+        let jobs = [
+            ShapeJob {
+                group: InlineGroupId(4),
+                generation: 101,
+                key: key.clone(),
+            },
+            ShapeJob {
+                group: InlineGroupId(5),
+                generation: 101,
+                key: other,
+            },
+        ];
+        let results = system
+            .shape_batch(&jobs, 101)
+            .expect("valid eviction batch");
+        assert!(
+            system.cache.get(&key).is_none(),
+            "first entry must be evicted"
+        );
+        let request = || InlineRequest {
+            roots: &roots_a,
+            parent_style: &parent,
+            width: 80.0,
+            intrinsic_kind: None,
+            line_constraints: None,
+        };
+        let before = system.shape_count();
+        let actual = system
+            .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &a,
+                &fragments,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::AtomicNoLate {
+                    results: std::slice::from_ref(&results[0]),
+                    generation: 101,
+                    group: InlineGroupId(4),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            system.shape_count(),
+            before,
+            "evicted active result must not rebuild"
+        );
+        let mut fresh_system = TextSystem::new();
+        let fresh = fresh_system
+            .format_inline_group(&dom, &styles, &boxes, &fragments, request())
+            .unwrap();
+        assert_eq!(actual.size(), fresh.size());
+        assert_eq!(actual.baselines(), fresh.baselines());
+        assert_eq!(actual.text, fresh.text);
+        assert_eq!(actual.text_sources[0].source, fresh.text_sources[0].source);
+        let glyphs = |layout: &InlineLayout<BoxId>| {
+            layout
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    ShapedItem::Text(run) => Some(
+                        run.glyphs
+                            .iter()
+                            .map(|g| (g.index, g.point.x.to_bits(), g.point.y.to_bits()))
+                            .collect::<Vec<_>>(),
+                    ),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(glyphs(&actual), glyphs(&fresh));
+
+        options.retained_layout_bytes = 0;
+        system.set_shaping_options(options);
+        assert_eq!(system.shaping_stats().retained_layout_bytes, 0);
+        let disabled = system
+            .shape_batch(&jobs, 101)
+            .expect("disabled cache batch");
+        assert_eq!(system.shaping_stats().retained_entries, 0);
+        let before = system.shape_count();
+        let actual = system
+            .format_prepared_inline_group::<<StaticDocument as LayoutDom>::NodeId, _>(
+                &a,
+                &fragments,
+                LayoutDom::quirks_mode(&dom),
+                request(),
+                Candidates::AtomicNoLate {
+                    results: std::slice::from_ref(&disabled[0]),
+                    generation: 101,
+                    group: InlineGroupId(4),
+                },
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(system.shape_count(), before);
+        assert_eq!(actual.text, fresh.text);
+        assert_eq!(actual.text_sources[0].source, fresh.text_sources[0].source);
+        assert_eq!(glyphs(&actual), glyphs(&fresh));
+    }
+
+    #[test]
+    fn split_shape_geometry_materialization_matches_fresh() {
+        let dom = StaticDocument::parse(
+            "<div><span id=words>é</span><span id=outer><span id=inner style='padding-left:10%'></span></span><span id=middle>ok</span><span id=positioned style='position:relative'></span><img id=atom></div>",
+        );
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[]),
+            &Device::screen(320.0, 240.0),
+            &InteractionStates::default(),
+        );
+        let boxes = GeneratedBoxTree::from_dom(&dom, &styles);
+        let find = |name| {
+            boxes
+                .iter()
+                .find_map(|(id, b)| {
+                    b.origin
+                        .node()
+                        .filter(|n| {
+                            dom.attribute(*n, &Namespace::from(""), &LocalName::from("id"))
+                                == Some(name)
+                        })
+                        .map(|_| id)
+                })
+                .unwrap()
+        };
+        let outer = find("outer");
+        let inner = find("inner");
+        let positioned = find("positioned");
+        let atom = find("atom");
+        let roots = [find("words"), outer, find("middle"), positioned, atom];
+        let parent = ComputedValues::default();
+        let counting = CountingDom {
+            inner: &dom,
+            reads: std::cell::Cell::new(0),
+        };
+        let prepared =
+            prepared::PreparedInlineGroup::collect(&counting, &styles, &boxes, &roots, &parent);
+        let reads_after_collect = counting.reads.get();
+        assert!(reads_after_collect > 0);
+        for width in [0.0, 100.0, 250.0] {
+            for policy in [
+                None,
+                Some(IntrinsicSizeKind::MinContent),
+                Some(IntrinsicSizeKind::MaxContent),
+            ] {
+                for (fragment, baseline) in [
+                    (
+                        Some(Fragment {
+                            width: 13.0,
+                            height: 8.0,
+                            ..Fragment::default()
+                        }),
+                        3.0,
+                    ),
+                    (
+                        Some(Fragment {
+                            width: 29.0,
+                            height: 12.0,
+                            ..Fragment::default()
+                        }),
+                        6.0,
+                    ),
+                    (None, 0.0),
+                ] {
+                    let plane = Plane {
+                        atom,
+                        fragment,
+                        baseline,
+                    };
+                    let fresh = prepared::PreparedInlineGroup::collect(
+                        &dom, &styles, &boxes, &roots, &parent,
+                    );
+                    let inline_boxes = fresh
+                        .materialize::<<StaticDocument as LayoutDom>::NodeId, _>(
+                            &plane, width, policy,
+                        );
+                    let result = prepared.materialize::<<StaticDocument as LayoutDom>::NodeId, _>(
+                        &plane, width, policy,
+                    );
+                    assert_eq!(counting.reads.get(), reads_after_collect);
+                    assert_eq!(fresh.text, prepared.text);
+                    assert_eq!(fresh.spans.len(), prepared.spans.len());
+                    for (a, b) in fresh.spans.iter().zip(&prepared.spans) {
+                        assert_eq!(
+                            (a.selectable, a.source, &a.owners, &a.range),
+                            (b.selectable, b.source, &b.owners, &b.range)
+                        );
+                    }
+                    println!(
+                        "width={width} policy={policy:?} fragment={fragment:?} baseline={baseline} fresh={:016x} materialized={:016x}",
+                        digest(&inline_boxes),
+                        digest(&result)
+                    );
+                    assert_eq!(digest(&inline_boxes), digest(&result));
+                    assert_eq!(inline_boxes.len(), result.len());
+                    for (a, b) in inline_boxes.iter().zip(&result) {
+                        assert_eq!(
+                            (
+                                a.source,
+                                &a.owners,
+                                a.index,
+                                a.fragment,
+                                a.line_width,
+                                a.line_box_height,
+                                a.baseline,
+                                a.margin_left,
+                                a.margin_top
+                            ),
+                            (
+                                b.source,
+                                &b.owners,
+                                b.index,
+                                b.fragment,
+                                b.line_width,
+                                b.line_box_height,
+                                b.baseline,
+                                b.margin_left,
+                                b.margin_top
+                            )
+                        );
+                        assert_eq!(
+                            (
+                                a.edge,
+                                a.paint,
+                                a.marker,
+                                a.empty_line,
+                                a.vertical_align,
+                                a.font_size,
+                                a.line_height
+                            ),
+                            (
+                                b.edge,
+                                b.paint,
+                                b.marker,
+                                b.empty_line,
+                                b.vertical_align,
+                                b.font_size,
+                                b.line_height
+                            )
+                        );
+                    }
+                    assert_eq!(
+                        result.iter().any(|a| a.source == inner && a.edge),
+                        width != 0.0
+                    );
+                    assert!(!result.iter().any(|a| a.source == outer && a.empty_line));
+                    assert_eq!(
+                        result
+                            .iter()
+                            .any(|a| a.source == positioned && a.marker && !a.empty_line),
+                        true
+                    );
+                    assert_eq!(result.iter().any(|a| a.source == atom), fragment.is_some());
+                    let mut expected = Vec::new();
+                    if width != 0.0 {
+                        expected.push((inner, true, false));
+                    }
+                    expected.push((inner, false, true));
+                    expected.push((positioned, false, false));
+                    expected.push((positioned, false, true));
+                    if fragment.is_some() {
+                        expected.push((atom, false, false));
+                    }
+                    assert_eq!(
+                        result
+                            .iter()
+                            .map(|a| (a.source, a.edge, a.empty_line))
+                            .collect::<Vec<_>>(),
+                        expected
+                    );
+                    assert_eq!(prepared.text, "éok");
+                    assert!(
+                        result
+                            .iter()
+                            .filter(|a| a.source == inner)
+                            .all(|a| a.index == 2 && a.owners == [outer])
+                    );
+                    assert!(
+                        result
+                            .iter()
+                            .filter(|a| a.source == positioned || a.source == atom)
+                            .all(|a| a.index == 4 && a.owners.is_empty())
+                    );
+                    if width != 0.0 {
+                        assert_eq!(result[0].line_width, width * 0.1);
+                        assert!(result[0].paint);
+                    }
+                    if let Some(rect) = fragment {
+                        let a = result.iter().find(|a| a.source == atom).unwrap();
+                        let expected_width = match policy {
+                            None => rect.width,
+                            Some(IntrinsicSizeKind::MinContent) => 7.0,
+                            Some(IntrinsicSizeKind::MaxContent) => 19.0,
+                        };
+                        assert_eq!(a.line_width, expected_width);
+                        assert_eq!(a.baseline, baseline);
+                        assert!(a.paint && !a.marker);
+                    }
+                }
+            }
+        }
     }
 }

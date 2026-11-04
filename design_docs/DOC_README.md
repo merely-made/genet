@@ -78,6 +78,8 @@ remains with its current owner while that lane appends results. Its retention
 does not enlarge any earlier qualification. Fresh outputs use an explicit new
 location under `Code/testing/genet/`; never overwrite a cited receipt.
 
+The shaping [qualification receipt](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md) is also frozen externally with exact original Git bytes. Its [export manifest](../../../testing/genet/shaping-publish-20261103/receipt-export.json) records the source commit and SHA-256; [publication checks](../../../testing/genet/shaping-publish-20261103/report.md) hold the new continuation. Future outputs use new files rather than overwrite the frozen receipt.
+
 ## Required reading order
 
 1. The root [`README.md`](../README.md) — what genet is.
@@ -667,6 +669,13 @@ completed corpus census or bounded slice does not close its enclosing feature.
   green.)
 
 ## layout and styling
+
+- [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md) — implemented and reviewed locally; bounded qualification shows reuse and pooled gains alongside cold and memory regressions; source-specific evidence and runtime limits remain explicit.
+- [Shaping cost reduction](2026-11-01_shaping_cost_reduction_plan.md) — source-specific follow-up, preserved controls, vector-storage budget and bounded qualification.
+- [Borrowed shaping validation](2026-11-02_borrowed_shaping_validation_plan.md) — qualified local borrowed-input validation and isolated shared-buffer diagnosis; reconciled through main 2d492f0, with fresh renderer-cohort shaping/consumer/wasm gates, final RTC compile and declared repository hooks passing for authorized main publication. Three timing cohorts remain bound to d17e53b; whole-workload cold equivalence and broader runtime remain open.
+  (**qualification, 2026-11-01**): retained exact-input shaping and optional
+  caller-supplied native pooling have separate measured gates; process
+  orchestration remains outside this plan.
 
 - [css_3d_transforms_and_first_frame_plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md)
   (**bounded Genet seam implemented; downstream native Bench B accepted 2026-09-13**:

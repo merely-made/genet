@@ -366,6 +366,15 @@ where
         Some([bounds.min.x, bounds.min.y, bounds.width(), bounds.height()])
     }
 
+    pub fn set_text_shaping_options(&mut self, options: crate::TextShapingOptions) {
+        self.text.set_shaping_options(options);
+    }
+
+    #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
+    pub fn set_text_shaping_pool(&mut self, pool: Option<std::sync::Arc<rayon::ThreadPool>>) {
+        self.text.set_shaping_pool(pool);
+    }
+
     pub fn text_system(&self) -> &TextSystem {
         &self.text
     }

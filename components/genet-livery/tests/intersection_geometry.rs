@@ -111,12 +111,7 @@ fn root_margin_grows_the_root_and_lifts_the_far_edge_case() {
     let grown = page.intersect("tall", None, (0.0, 0.0), px(150.0));
     assert!(grown.is_intersecting, "a 150px margin reaches it");
     assert_eq!(grown.root_bounds, Some([-150.0, -150.0, 500.0, 400.0]));
-    let percent = page.intersect(
-        "tall",
-        None,
-        (0.0, 0.0),
-        [MarginValue::Percent(200.0); 4],
-    );
+    let percent = page.intersect("tall", None, (0.0, 0.0), [MarginValue::Percent(200.0); 4]);
     assert_eq!(percent.root_bounds, Some([-400.0, -200.0, 1000.0, 500.0]));
 }
 
@@ -180,13 +175,8 @@ fn display_none_and_detached_targets_do_not_intersect() {
 #[test]
 fn scroll_metrics_measure_the_padding_box_and_overflow() {
     let page = Fixture::new(PAGE, CSS);
-    let metrics = scroll_metrics(
-        &page.dom,
-        &page.styles,
-        &page.fragments,
-        page.node("clip"),
-    )
-    .unwrap();
+    let metrics =
+        scroll_metrics(&page.dom, &page.styles, &page.fragments, page.node("clip")).unwrap();
     assert_eq!(metrics.client, (80.0, 40.0));
     assert_eq!(metrics.scroll, (80.0, 100.0));
     assert_eq!(metrics.max_offset(), (0.0, 60.0));

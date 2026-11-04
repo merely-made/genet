@@ -103,8 +103,7 @@ where
         let Some(animation) = self.keyframe_animation.as_ref() else {
             return;
         };
-        let Some((keyframes, source_url)) =
-            self.style_set.keyframes_with_source(&animation.name)
+        let Some((keyframes, source_url)) = self.style_set.keyframes_with_source(&animation.name)
         else {
             return;
         };
@@ -144,7 +143,7 @@ where
                     context,
                     source_url,
                 )
-                    .map(|value| (property, value))
+                .map(|value| (property, value))
             })
             .collect::<Vec<_>>();
         if let Some(style) = styles.get_mut(animation.node) {
@@ -334,7 +333,10 @@ fn keyframe_value(
     if first_offset > 0.0 {
         samples.insert(
             0,
-            (0.0, resolve_keyframe_color_value(fallback.clone(), context, None)),
+            (
+                0.0,
+                resolve_keyframe_color_value(fallback.clone(), context, None),
+            ),
         );
     }
     if samples.last().is_some_and(|(offset, _)| *offset < 1.0) {

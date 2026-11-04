@@ -17,8 +17,8 @@ use layout_dom_api::{LayoutDom, NodeKind};
 use livery::values::{Display, Overflow, Position};
 
 use crate::{
-    LiveryLayout, StylePlane, ancestor_scroll, element_geometry, inline_boxes,
-    is_scroll_container, layout::fragment_edges,
+    LiveryLayout, StylePlane, ancestor_scroll, element_geometry, inline_boxes, is_scroll_container,
+    layout::fragment_edges,
 };
 
 /// One side of `rootMargin`/`scrollMargin`.
@@ -72,12 +72,7 @@ where
 }
 
 fn to_rect(edges: Edges) -> [f32; 4] {
-    [
-        edges[0],
-        edges[1],
-        edges[2] - edges[0],
-        edges[3] - edges[1],
-    ]
+    [edges[0], edges[1], edges[2] - edges[0], edges[3] - edges[1]]
 }
 
 /// Inclusive: boxes that only touch still intersect, with zero area.
@@ -135,7 +130,12 @@ where
             );
             let first = boxes[0];
             return Some(boxes.iter().fold(
-                [first[0] - dx, first[1] - dy, first[0] + first[2] - dx, first[1] + first[3] - dy],
+                [
+                    first[0] - dx,
+                    first[1] - dy,
+                    first[0] + first[2] - dx,
+                    first[1] + first[3] - dy,
+                ],
                 |all, part| {
                     [
                         all[0].min(part[0] - dx),

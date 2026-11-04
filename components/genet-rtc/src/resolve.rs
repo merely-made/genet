@@ -61,6 +61,21 @@ pub trait Resolver: Send + Sync {
         deadline: Instant,
     ) -> Result<Box<dyn Lookup>, ResolveError>;
 
+    /// Resolve a remote UUID-v4 `.local` candidate on the selected interface.
+    /// This must never use recursive DNS. Hosts without mDNS may refuse it.
+    ///
+    /// # Errors
+    /// Returns a sanitized validation, capacity or unavailable-capability error.
+    fn start_mdns(
+        &self,
+        _host: &str,
+        _interface: IpAddr,
+        _now: Instant,
+        _deadline: Instant,
+    ) -> Result<Box<dyn Lookup>, ResolveError> {
+        Err(ResolveError::Unavailable)
+    }
+
     /// Resolve a UDP server, retaining whether port/transport were omitted.
     /// Poll the returned cursor only when another endpoint batch is needed.
     ///
@@ -88,4 +103,22 @@ pub trait Resolver: Send + Sync {
 #[cfg(feature = "dns")]
 mod native;
 #[cfg(feature = "dns")]
+pub use native::mdns::MdnsConfig;
+#[cfg(feature = "dns")]
 pub use native::{DnsConfig, DnsLimits, DnsResolver};
+
+/// Restrict peer discovery to the ephemeral name format used by WebRTC agents.
+pub fn is_mdns_candidate_name(host: &str) -> bool {
+    let bytes = host.as_bytes();
+    bytes.len() == 42
+        && bytes[36..].eq_ignore_ascii_case(b".local")
+        && bytes[..36].iter().enumerate().all(|(i, b)| {
+            if [8, 13, 18, 23].contains(&i) {
+                *b == b'-'
+            } else {
+                b.is_ascii_hexdigit()
+            }
+        })
+        && bytes[14] == b'4'
+        && matches!(bytes[19].to_ascii_lowercase(), b'8' | b'9' | b'a' | b'b')
+}

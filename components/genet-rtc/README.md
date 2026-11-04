@@ -89,7 +89,7 @@ profile. It does not depend on Genet, Personae, Notochord, Luggage, storage,
 `mere-transport` or the conversation service.
 
 Canonical receiving and validation plan:
-`genet/design_docs/2026-11-04_webrtc_conformance_plan.md`, qualified baseline and E2s.
+`genet/design_docs/2026-11-04_webrtc_mdns_plan.md`, qualified baseline and E2s.
 Supplier integration: `murm/design_docs/2026-11-02_murm_family_move_plan.md`,
 RTC ICE restart section. Native UDP tests are not headed-browser or WPT
 qualification.

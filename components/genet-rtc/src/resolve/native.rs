@@ -9,6 +9,7 @@ mod address;
 #[cfg(test)]
 mod fixture;
 mod io;
+pub(super) mod mdns;
 mod query;
 mod service;
 #[cfg(test)]
@@ -109,6 +110,9 @@ impl DnsConfig {
 pub struct DnsResolver {
     config: DnsConfig,
     active: Arc<AtomicUsize>,
+    mdns: Option<mdns::MdnsConfig>,
+    mdns_started: Arc<AtomicUsize>,
+    mdns_resolved: Arc<AtomicUsize>,
 }
 impl DnsResolver {
     /// Validate caller policy. Creates no thread, task, lookup or socket.
@@ -140,14 +144,58 @@ impl DnsResolver {
         Ok(Self {
             config,
             active: Arc::new(AtomicUsize::new(0)),
+            mdns: None,
+            mdns_started: Arc::new(AtomicUsize::new(0)),
+            mdns_resolved: Arc::new(AtomicUsize::new(0)),
         })
     }
     /// Number of owned pending lookup contexts, including idle service cursors.
     pub fn pending(&self) -> usize {
         self.active.load(Ordering::Relaxed)
     }
+
+    /// Enable one-shot peer mDNS on exactly one selected IPv4 interface.
+    ///
+    /// # Errors
+    /// Returns `Limit` for invalid placement or timing policy.
+    pub fn with_mdns(mut self, config: mdns::MdnsConfig) -> Result<Self, ResolveError> {
+        config.validate()?;
+        self.mdns = Some(config);
+        Ok(self)
+    }
+
+    /// Host-only monotonic query/resolution counters, never exposed to scripts.
+    pub fn mdns_counts(&self) -> (usize, usize) {
+        (
+            self.mdns_started.load(Ordering::Relaxed),
+            self.mdns_resolved.load(Ordering::Relaxed),
+        )
+    }
 }
 impl Resolver for DnsResolver {
+    fn start_mdns(
+        &self,
+        host: &str,
+        interface: IpAddr,
+        now: Instant,
+        deadline: Instant,
+    ) -> Result<Box<dyn Lookup>, ResolveError> {
+        let config = self.mdns.ok_or(ResolveError::Unavailable)?;
+        if interface != IpAddr::V4(config.interface) {
+            return Err(ResolveError::Unavailable);
+        }
+        let query = mdns::Query::new(
+            host,
+            config,
+            self.config.limits,
+            now,
+            deadline,
+            self.reserve()?,
+            self.mdns_resolved.clone(),
+        )?;
+        self.mdns_started.fetch_add(1, Ordering::Relaxed);
+        Ok(Box::new(query))
+    }
     fn start(
         &self,
         host: &str,

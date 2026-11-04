@@ -22,7 +22,7 @@ udp = ["host", "dep:tokio"]
 # Published 0.21.1 loses DCEP reliability on accepted channels. This exact
 # supplier includes DCEP, bounded restart path/consent, continued DTLS role
 # and recovery of exhausted checks after authenticated restart requests.
-rtc = { git = "https://github.com/merely-made/rtc", rev = "579edfe9ac1453b3875649d7afa5cf25608ae9fa", default-features = false }
+rtc = { git = "https://github.com/merely-made/rtc", rev = "ab0f9d1d531299c30986e415bdcf6c69ee94510f", default-features = false }
 bytes = { version = "1", optional = true }
 thiserror = { version = "2", optional = true }
 hickory-proto = { version = "0.26.3", default-features = false, features = ["std"], optional = true }

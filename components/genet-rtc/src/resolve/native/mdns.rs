@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-//! RFC 6762 section 5.1 one-shot client. No multicast listener or responder.
+//! Bounded one-shot client, including browsers that multicast their replies.
 use super::*;
 use hickory_proto::op::{Message, MessageType, OpCode, Query as Question, ResponseCode};
 use hickory_proto::rr::{DNSClass, Name, RData, RecordType};
@@ -64,6 +64,8 @@ impl MdnsConfig {
 
 pub(super) struct Query {
     socket: Option<UdpSocket>,
+    multicast: Option<UdpSocket>,
+    read_multicast: bool,
     config: MdnsConfig,
     limits: DnsLimits,
     request: Message,
@@ -124,8 +126,27 @@ impl Query {
         {
             return Err(ResolveError::Io);
         }
+        // Some browser responders multicast even replies to an ephemeral-port
+        // query. This receive-only membership lives exactly as long as this
+        // request; it never advertises, sends from 5353 or caches other names.
+        let multicast = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
+            .map_err(|_| ResolveError::Io)?;
+        multicast
+            .set_reuse_address(true)
+            .map_err(|_| ResolveError::Io)?;
+        multicast
+            .bind(&"0.0.0.0:5353".parse::<SocketAddr>().unwrap().into())
+            .map_err(|_| ResolveError::Io)?;
+        multicast
+            .join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), &config.interface)
+            .map_err(|_| ResolveError::Io)?;
+        multicast
+            .set_nonblocking(true)
+            .map_err(|_| ResolveError::Io)?;
         Ok(Self {
             socket: Some(socket.into()),
+            multicast: Some(multicast.into()),
+            read_multicast: false,
             config,
             limits,
             request,
@@ -145,6 +166,7 @@ impl Query {
         result: Result<Vec<IpAddr>, ResolveError>,
     ) -> Poll<Result<Vec<IpAddr>, ResolveError>> {
         self.socket = None;
+        self.multicast = None;
         self.lease = None;
         if result.is_ok() {
             self.resolved.fetch_add(1, Ordering::Relaxed);
@@ -152,19 +174,24 @@ impl Query {
         self.result = Some(result.clone());
         Poll::Ready(result)
     }
-    fn answer(&self, bytes: &[u8]) -> Result<Option<IpAddr>, ResolveError> {
+    fn answer(&self, bytes: &[u8], multicast: bool) -> Result<Option<IpAddr>, ResolveError> {
         if bytes.len() < 12 || bytes.len() > self.limits.max_response_bytes {
             return Ok(None);
         }
         let count = |n| usize::from(u16::from_be_bytes([bytes[n], bytes[n + 1]]));
-        if count(4) != 1 || count(6) + count(8) + count(10) > self.limits.max_records {
+        if count(4) > 1 || count(6) + count(8) + count(10) > self.limits.max_records {
             return Ok(None);
         }
         let Ok(message) = Message::from_vec(bytes) else {
             return Ok(None);
         };
-        if message.metadata.id != self.request.metadata.id
-            || message.queries != self.request.queries
+        let identity = if multicast && count(4) == 0 {
+            message.metadata.id == 0
+        } else {
+            message.metadata.id == self.request.metadata.id
+                && message.queries == self.request.queries
+        };
+        if !identity
             || message.metadata.message_type != MessageType::Response
             || message.metadata.op_code != OpCode::Query
             || !message.metadata.authoritative
@@ -176,7 +203,7 @@ impl Query {
         let mut addresses = Vec::new();
         for record in &message.answers {
             if record.name != self.request.queries[0].name().clone()
-                || record.dns_class != DNSClass::IN
+                || u16::from(record.dns_class) & 0x7fff != u16::from(DNSClass::IN)
             {
                 continue;
             }
@@ -242,18 +269,24 @@ impl Lookup for Query {
             self.retry = self.deadline;
         }
         for _ in 0..self.limits.packets_per_poll {
-            match self.socket.as_ref().unwrap().recv_from(&mut self.buffer) {
+            self.read_multicast = !self.read_multicast;
+            let socket = if self.read_multicast {
+                self.multicast.as_ref().unwrap()
+            } else {
+                self.socket.as_ref().unwrap()
+            };
+            match socket.recv_from(&mut self.buffer) {
                 Ok((n, SocketAddr::V4(from)))
                     if from.port() == 5353 && self.config.on_link(*from.ip()) =>
                 {
-                    match self.answer(&self.buffer[..n]) {
+                    match self.answer(&self.buffer[..n], self.read_multicast) {
                         Ok(Some(ip)) => return self.finish(Ok(vec![ip])),
                         Ok(None) => {}
                         Err(e) => return self.finish(Err(e)),
                     }
                 }
                 Ok(_) => {}
-                Err(e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
                 Err(e) if cfg!(windows) && e.raw_os_error() == Some(10040) => {}
                 Err(_) => return self.finish(Err(ResolveError::Io)),
             }

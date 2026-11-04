@@ -15,6 +15,8 @@ fn responder() -> UdpSocket {
     socket
         .join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), &Ipv4Addr::LOCALHOST)
         .unwrap();
+    socket.set_multicast_if_v4(&Ipv4Addr::LOCALHOST).unwrap();
+    socket.set_multicast_loop_v4(true).unwrap();
     socket.set_nonblocking(true).unwrap();
     socket.into()
 }
@@ -197,13 +199,13 @@ fn malformed_ambiguous_alias_and_off_link_answers_are_not_accepted() {
     assert!(!query.config.on_link(Ipv4Addr::new(192, 0, 2, 2)));
     let mut own = response(&query.request, &[Ipv4Addr::LOCALHOST]);
     own.answers[0].ttl = 0;
-    assert_eq!(query.answer(&own.to_vec().unwrap()).unwrap(), None);
+    assert_eq!(query.answer(&own.to_vec().unwrap(), false).unwrap(), None);
     own = response(
         &query.request,
         &[Ipv4Addr::LOCALHOST, Ipv4Addr::new(127, 0, 0, 2)],
     );
     assert_eq!(
-        query.answer(&own.to_vec().unwrap()),
+        query.answer(&own.to_vec().unwrap(), false),
         Err(ResolveError::Invalid)
     );
     own = response(&query.request, &[]);
@@ -215,7 +217,7 @@ fn malformed_ambiguous_alias_and_off_link_answers_are_not_accepted() {
         )),
     ));
     assert_eq!(
-        query.answer(&own.to_vec().unwrap()),
+        query.answer(&own.to_vec().unwrap(), false),
         Err(ResolveError::Invalid)
     );
     own = response(&query.request, &[]);
@@ -224,11 +226,51 @@ fn malformed_ambiguous_alias_and_off_link_answers_are_not_accepted() {
         120,
         RData::AAAA(std::net::Ipv6Addr::LOCALHOST.into()),
     ));
-    assert_eq!(query.answer(&own.to_vec().unwrap()).unwrap(), None);
+    assert_eq!(query.answer(&own.to_vec().unwrap(), false).unwrap(), None);
     let mut too_many = reply.to_vec().unwrap();
     too_many[6..8].copy_from_slice(&u16::MAX.to_be_bytes());
     socket.send_to(&too_many, from).unwrap();
     socket.send_to(&[0; 17000], from).unwrap();
     socket.send_to(&reply.to_vec().unwrap(), from).unwrap();
     wait(|| matches!(lookup.poll(Instant::now()), Poll::Ready(Ok(_))));
+}
+
+#[test]
+fn multicast_zero_id_questionless_cache_flush_answer_is_accepted_only_on_the_joined_socket() {
+    let _guard = FIXTURE.lock().unwrap();
+    let socket = responder();
+    let resolver = resolver();
+    let now = Instant::now();
+    let mut lookup = resolver
+        .start_mdns(
+            HOST,
+            Ipv4Addr::LOCALHOST.into(),
+            now,
+            now + Duration::from_secs(2),
+        )
+        .unwrap();
+    assert!(lookup.poll(now).is_pending());
+    let (q, from) = receive(&socket);
+    let mut reply = response(&q, &[Ipv4Addr::LOCALHOST]);
+    reply.metadata.id = 0;
+    reply.queries.clear();
+    reply.answers[0].dns_class = DNSClass::Unknown(0x8001);
+    socket.send_to(&reply.to_vec().unwrap(), from).unwrap();
+    assert!(
+        lookup.poll(Instant::now()).is_pending(),
+        "legacy unicast still requires its question/ID"
+    );
+    socket
+        .send_to(&reply.to_vec().unwrap(), "224.0.0.251:5353")
+        .unwrap();
+    wait(|| {
+        if let Poll::Ready(result) = lookup.poll(Instant::now()) {
+            assert_eq!(result.unwrap(), vec![IpAddr::V4(Ipv4Addr::LOCALHOST)]);
+            true
+        } else {
+            false
+        }
+    });
+    assert_eq!(resolver.pending(), 0);
+    UdpSocket::bind(from).unwrap();
 }

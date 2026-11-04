@@ -2,6 +2,8 @@
 
 > **For agentic workers:** use superpowers:subagent-driven-development. Preserve the worktree and evidence. Steps use checkbox syntax.
 
+**Status (2026-11-03):** selected cost reductions are qualified for the user-authorized main publication; whole-workload cold equivalence remains open. The [borrowed validation plan](2026-11-02_borrowed_shaping_validation_plan.md#publication-reconciliation-2026-11-03) owns current reconciliation/publication. Earlier isolation restrictions below describe the historical stages.
+
 **Goal:** remove the measured cold-layout regression and make retained layout memory understood and controllable while preserving resize reuse, changed-key edits, and parallel gains.
 
 **Architecture:** retain whole inline groups, exact builder-input equality, owner-thread DOM/source projection, and synchronous optional caller-owned workers. Diagnose costs before altering ownership or cache representation. Optimize only experimentally confirmed waste.

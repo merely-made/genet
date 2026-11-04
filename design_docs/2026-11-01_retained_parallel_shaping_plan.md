@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task by task. Use superpowers:subagent-driven-development only if delegated execution is selected. Steps use checkbox syntax for tracking.
 
+**Status (2026-11-03):** implementation and follow-up qualification are complete for the user-authorized main publication. Current reconciliation and source-specific checks are recorded in the [borrowed validation plan](2026-11-02_borrowed_shaping_validation_plan.md#publication-reconciliation-2026-11-03) and canonical receipt. The whole-workload cold goal remains open. Earlier isolation restrictions below describe the historical stages.
+
 **Status (2026-11-01):** implemented and reviewed locally with Terra and Luna. Tasks 1–6 are complete; whole-branch review and its scoped fix review are complete through `b65ac762a3c`. Bounded measurements show reuse and pooled gains alongside an original-baseline cold slowdown and material retained memory cost. Exact tested checkpoints and untested boundaries are recorded in the qualification receipt. Nothing has been merged or pushed.
 
 **Goal:** avoid repeated shaping of unchanged inline content and shape independent dirty groups concurrently, while preserving layout, paint, selection and hit-testing behavior.

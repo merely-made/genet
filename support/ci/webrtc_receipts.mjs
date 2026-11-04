@@ -9,7 +9,7 @@ const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('h
 function records(text) {
   const result=[];
   for(const match of text.matchAll(/```json\r?\n([\s\S]*?)\r?\n```/g)) {
-    try {result.push(JSON.parse(match[1]));}catch{}
+    try {const row=JSON.parse(match[1]);if(row&&typeof row==='object'&&!Array.isArray(row))result.push(row);}catch{}
   }
   return result;
 }

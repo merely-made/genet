@@ -11,6 +11,19 @@ from support.ci import webrtc_native as runner
 
 @unittest.skipUnless(runner.os.name == "nt", "Windows RTC receiving runner")
 class NativeRunnerTests(unittest.TestCase):
+    def test_windows_powershell_51_accepts_the_setup_preview(self):
+        legacy = Path(runner.os.environ.get("SystemRoot", "C:/Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        if not legacy.is_file():
+            self.skipTest("Windows PowerShell 5.1 is not installed")
+        result = runner.subprocess.run([
+            str(legacy), "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+            str(runner.ROOT / "support/ci/webrtc_permissions.ps1"), "-Kind", "Native", "-Install", "-WhatIf"
+        ], capture_output=True, text=True, encoding="utf-8", timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        reports = [runner.json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0]["kind"], "Native")
+
     def test_only_a_runnable_browser_test_artifact_is_selected(self):
         good = {"reason": "compiler-artifact", "target": {"name": "browser", "kind": ["test"]},
                 "profile": {"test": True}, "executable": "C:/artifact/browser.exe"}

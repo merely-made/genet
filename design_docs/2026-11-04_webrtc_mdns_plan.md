@@ -254,3 +254,10 @@ The actual native wrapper exits 2 before tests, and `-Install -WhatIf` leaves
 firewall rules unchanged. Administrative installation and a network run from
 that path remain pending the one-time Windows setup. Prior conformance results
 keep their exact original source identities.
+
+Compatibility correction: the setup script supports Windows PowerShell 5.1 and
+PowerShell 7. Its original `$IsWindows` guard was undefined under strict mode
+in 5.1; the platform check now uses the shared .NET API. Both runtimes pass the
+actual native `-Install -WhatIf` preview without changing firewall rules. A
+Windows PowerShell 5.1 subprocess regression is part of the runner test suite.
+The fresh compatibility receipt shares the operational 12 KB retained cap.

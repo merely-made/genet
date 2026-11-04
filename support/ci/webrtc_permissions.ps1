@@ -11,7 +11,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-if (-not $IsWindows) { throw 'This preflight is for the Windows RTC receiving profile.' }
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
+    throw 'This preflight is for the Windows RTC receiving profile.'
+}
 $target = 'C:\t\cargo-targets\genet'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -22,7 +24,7 @@ if (-not $FirewallProfile.Count) {
         else { [string]$_.NetworkCategory }
     } | Sort-Object -Unique)
 }
-if (-not $FirewallProfile.Count) { throw 'No active network profile; specify -Profile explicitly.' }
+if (-not $FirewallProfile.Count) { throw 'No active network profile; specify -FirewallProfile explicitly.' }
 $roles = @()
 if ($Kind -in @('Native', 'All')) {
     $roles += @{ Role = 'native'; Program = "$target\rtc-interop\native-browser-tests.exe"; Protocol = 'UDP'; Port = 'Any' }

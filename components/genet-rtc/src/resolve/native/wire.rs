@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MPL-2.0
 use super::*;
 use hickory_proto::op::{Message, MessageType, OpCode, Query, ResponseCode};
-use hickory_proto::rr::{DNSClass, Name, RData, RecordType};
+use hickory_proto::rr::{DNSClass, Name, RData, Record, RecordType};
 
 pub(super) enum Answer {
-    Addresses(Vec<IpAddr>, Vec<Name>),
+    Records(Vec<Record>, Vec<Name>),
     Alias(Vec<Name>),
     Truncated,
     Ignore,
@@ -20,26 +20,23 @@ pub(super) fn name(host: &str) -> Result<Name, ResolveError> {
     name.set_fqdn(true);
     Ok(name)
 }
-pub(super) fn request(name: &Name, family: Family) -> Result<(Message, Vec<u8>), ResolveError> {
+pub(super) fn request(
+    name: &Name,
+    record_type: RecordType,
+) -> Result<(Message, Vec<u8>), ResolveError> {
     let mut nonce = [0; 2];
     getrandom::fill(&mut nonce).map_err(|_| ResolveError::Unavailable)?;
     let mut message = Message::new(u16::from_ne_bytes(nonce), MessageType::Query, OpCode::Query);
     message.metadata.recursion_desired = true;
-    message.queries.push(Query::query(
-        name.clone(),
-        if family == Family::V4 {
-            RecordType::A
-        } else {
-            RecordType::AAAA
-        },
-    ));
+    message
+        .queries
+        .push(Query::query(name.clone(), record_type));
     let bytes = message.to_vec().map_err(|_| ResolveError::Invalid)?;
     Ok((message, bytes))
 }
 pub(super) fn answer(
     bytes: &[u8],
     request: &Message,
-    family: Family,
     limits: DnsLimits,
 ) -> Result<Answer, ResolveError> {
     if bytes.len() < 12 || bytes.len() > limits.max_response_bytes {
@@ -71,26 +68,18 @@ pub(super) fn answer(
     let mut current = request.queries[0].name().clone();
     let mut seen = vec![current.clone()];
     for _ in 0..=limits.max_aliases {
-        let mut addresses = Vec::new();
-        for record in &message.answers {
-            if record.name != current || record.dns_class != DNSClass::IN {
-                continue;
-            }
-            let ip = match &record.data {
-                RData::A(a) => IpAddr::V4(a.0),
-                RData::AAAA(a) => IpAddr::V6(a.0),
-                _ => continue,
-            };
-            if family.accepts(ip)
-                && !ip.is_unspecified()
-                && !addresses.contains(&ip)
-                && addresses.len() < limits.max_addresses
-            {
-                addresses.push(ip);
-            }
-        }
-        if !addresses.is_empty() {
-            return Ok(Answer::Addresses(addresses, seen));
+        let records: Vec<Record> = message
+            .answers
+            .iter()
+            .filter(|r| {
+                r.name == current
+                    && r.dns_class == DNSClass::IN
+                    && r.record_type() == request.queries[0].query_type()
+            })
+            .cloned()
+            .collect();
+        if !records.is_empty() {
+            return Ok(Answer::Records(records, seen));
         }
         let alias = message.answers.iter().find_map(|record| {
             if record.name == current
@@ -105,7 +94,7 @@ pub(super) fn answer(
             return if current != request.queries[0].name().clone() {
                 Ok(Answer::Alias(seen))
             } else {
-                Err(ResolveError::NotFound)
+                Ok(Answer::Records(Vec::new(), seen))
             };
         };
         if seen.contains(&alias) {

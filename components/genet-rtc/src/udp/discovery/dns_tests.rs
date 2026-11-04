@@ -1,5 +1,5 @@
 use super::*;
-use crate::resolve::ResolveError;
+use crate::resolve::{Lookup, ResolveError};
 use std::net::IpAddr;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -54,6 +54,7 @@ fn setup(turn: bool, count: usize) -> (Discovery, Arc<Controlled>, SocketAddr, I
                 if turn { "turn" } else { "stun" }
             ))
             .unwrap()
+            .into()
         })
         .collect();
     let discovery = Discovery::new(

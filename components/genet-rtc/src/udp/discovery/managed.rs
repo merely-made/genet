@@ -5,6 +5,8 @@ impl Managed {
     pub(super) fn new(
         url: Url,
         address: Option<SocketAddr>,
+        port: Option<u16>,
+        transport_specified: bool,
         local: SocketAddr,
         config: &DiscoveryConfig,
     ) -> Result<Self, Error> {
@@ -12,6 +14,7 @@ impl Managed {
             || !matches!(url.scheme, SchemeType::Stun | SchemeType::Turn)
             || url.port == 0
             || url.host.is_empty()
+            || port.is_some_and(|p| p == 0 || p != url.port)
             || address.is_some_and(|a| {
                 a.ip().is_unspecified() || a.port() == 0 || a.is_ipv4() != local.is_ipv4()
             })
@@ -23,7 +26,15 @@ impl Managed {
             .map(|a| Self::client(&url, a, local, config))
             .transpose()?;
         Ok(Self {
-            url: url.to_string(),
+            url: NamedServer::metadata(&url, port, transport_specified),
+            request: ServerRequest {
+                host: url.host.clone(),
+                service: if turn { Service::Turn } else { Service::Stun },
+                port,
+                transport_specified,
+            },
+            remaining_targets: 0,
+            seen_addresses: Vec::new(),
             spec: url,
             address,
             client,
@@ -89,7 +100,7 @@ impl Managed {
             match config
                 .resolver
                 .as_ref()
-                .map(|r| r.start(&self.spec.host, family, now, deadline))
+                .map(|r| r.start_server(&self.request, family, now, deadline))
             {
                 Some(Ok(lookup)) => self.lookup = Some(lookup),
                 _ => self.fail(),
@@ -100,7 +111,8 @@ impl Managed {
     fn start_transaction(&mut self, now: Instant, deadline: Instant) -> Result<(), Error> {
         // Share the remaining gathering budget among untried addresses. A
         // blackholed first address cannot consume every alternative's time.
-        let share = deadline.saturating_duration_since(now) / (self.addresses.len() as u32 + 1);
+        let share = deadline.saturating_duration_since(now)
+            / (self.addresses.len() as u32 + 1 + self.remaining_targets.min(32) as u32);
         self.attempt_deadline = now.checked_add(share).map(|d| d.min(deadline));
         if let Some(client) = &mut self.client {
             if self.turn {
@@ -121,7 +133,6 @@ impl Managed {
     ) {
         self.client = None;
         self.address = None;
-        self.lookup = None;
         self.attempt_deadline = None;
         while let Some(address) = self.addresses.pop_front() {
             if self.turn && blocked.contains(&address) {
@@ -137,7 +148,9 @@ impl Managed {
                 self.address = None;
             }
         }
-        self.fail();
+        if self.lookup.is_none() {
+            self.fail();
+        }
     }
     pub(super) fn fail(&mut self) {
         self.lookup = None;
@@ -158,27 +171,34 @@ impl Managed {
         if self.done {
             return;
         }
-        if let Some(lookup) = &mut self.lookup {
-            match lookup.poll(now) {
+        if self.client.is_none()
+            && let Some(lookup) = &mut self.lookup
+        {
+            match lookup.poll_next(now) {
                 Poll::Pending => {}
-                Poll::Ready(Ok(addresses)) => {
-                    self.lookup = None;
-                    for ip in addresses {
-                        let address = SocketAddr::new(ip, self.spec.port);
-                        if ip.is_unspecified()
+                Poll::Ready(Ok(Some(batch))) => {
+                    self.remaining_targets = batch.remaining_targets.min(32);
+                    for address in batch.addresses {
+                        if address.ip().is_unspecified()
+                            || address.port() == 0
                             || address.is_ipv4() != local.is_ipv4()
-                            || self.addresses.contains(&address)
+                            || self.seen_addresses.contains(&address)
                         {
                             continue;
                         }
-                        if self.addresses.len() == 32 {
+                        if self.seen_addresses.len() == 32 {
                             break;
                         }
+                        self.seen_addresses.push(address);
                         self.addresses.push_back(address);
+                    }
+                    if self.seen_addresses.len() == 32 {
+                        self.lookup = None;
+                        self.remaining_targets = 0;
                     }
                     self.next_address(local, config, now, deadline, blocked);
                 }
-                Poll::Ready(Err(_)) => self.fail(),
+                Poll::Ready(Ok(None) | Err(_)) => self.fail(),
             }
         }
         if !self.done && self.attempt_deadline.is_some_and(|d| now >= d) {

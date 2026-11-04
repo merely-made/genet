@@ -42,7 +42,7 @@ fn immediate_resolution_refusal_precedes_gathering_completion_without_a_route() 
         },
         DiscoveryConfig {
             servers: Vec::new(),
-            named_servers: vec![Url::parse_url("turn:rtc.example.test:3478").unwrap()],
+            named_servers: vec![Url::parse_url("turn:rtc.example.test:3478").unwrap().into()],
             resolver: Some(Arc::new(Unavailable)),
             relay_only: true,
             timeout: Duration::from_secs(1),

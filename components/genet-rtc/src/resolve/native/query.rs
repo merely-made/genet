@@ -2,12 +2,13 @@
 use super::io::Io;
 use super::*;
 use hickory_proto::op::Message;
-use hickory_proto::rr::Name;
+use hickory_proto::rr::{Name, Record, RecordType};
 
 pub(super) struct Query {
     config: DnsConfig,
     current: Name,
-    family: Family,
+    record_type: RecordType,
+    allow_alias: bool,
     request: Message,
     packet: Vec<u8>,
     io: Option<Io>,
@@ -16,23 +17,25 @@ pub(super) struct Query {
     retry: Instant,
     wake: Instant,
     aliases: Vec<Name>,
-    result: Option<Result<Vec<IpAddr>, ResolveError>>,
+    result: Option<Result<Vec<Record>, ResolveError>>,
     lease: Option<Lease>,
 }
 impl Query {
     pub fn new(
         config: DnsConfig,
         name: Name,
-        family: Family,
+        record_type: RecordType,
+        allow_alias: bool,
         now: Instant,
         deadline: Instant,
-        lease: Lease,
+        lease: Option<Lease>,
     ) -> Result<Self, ResolveError> {
-        let (request, packet) = wire::request(&name, family)?;
+        let (request, packet) = wire::request(&name, record_type)?;
         let mut query = Self {
             config,
             current: name.clone(),
-            family,
+            record_type,
+            allow_alias,
             request,
             packet,
             io: None,
@@ -42,14 +45,14 @@ impl Query {
             wake: now,
             aliases: vec![name],
             result: None,
-            lease: Some(lease),
+            lease,
         };
         query.open(now)?;
         Ok(query)
     }
     fn open(&mut self, now: Instant) -> Result<(), ResolveError> {
         for _ in 0..self.config.servers.len() {
-            let (request, packet) = wire::request(&self.current, self.family)?;
+            let (request, packet) = wire::request(&self.current, self.record_type)?;
             self.request = request;
             self.packet = packet;
             match Io::udp(self.config.servers[self.server]) {
@@ -68,8 +71,8 @@ impl Query {
     }
     fn finish(
         &mut self,
-        result: Result<Vec<IpAddr>, ResolveError>,
-    ) -> Poll<Result<Vec<IpAddr>, ResolveError>> {
+        result: Result<Vec<Record>, ResolveError>,
+    ) -> Poll<Result<Vec<Record>, ResolveError>> {
         self.io = None;
         self.lease = None;
         self.result = Some(result.clone());
@@ -81,11 +84,11 @@ impl Query {
         self.open(now)
     }
 }
-impl Lookup for Query {
-    fn next_deadline(&self) -> Instant {
+impl Query {
+    pub fn next_deadline(&self) -> Instant {
         self.wake.min(self.retry).min(self.deadline)
     }
-    fn poll(&mut self, now: Instant) -> Poll<Result<Vec<IpAddr>, ResolveError>> {
+    pub fn poll(&mut self, now: Instant) -> Poll<Result<Vec<Record>, ResolveError>> {
         if let Some(result) = &self.result {
             return Poll::Ready(result.clone());
         }
@@ -117,7 +120,7 @@ impl Lookup for Query {
                     break;
                 }
             };
-            match wire::answer(&packet, &self.request, self.family, self.config.limits) {
+            match wire::answer(&packet, &self.request, self.config.limits) {
                 Ok(wire::Answer::Ignore) => {}
                 Ok(wire::Answer::Truncated) => {
                     if matches!(&self.io, Some(Io::Tcp { .. })) {
@@ -136,11 +139,11 @@ impl Lookup for Query {
                         }
                     }
                 }
-                Ok(wire::Answer::Addresses(addresses, path)) => {
+                Ok(wire::Answer::Records(records, path)) => {
                     if let Err(e) = self.remember(&path) {
                         return self.finish(Err(e));
                     }
-                    return self.finish(Ok(addresses));
+                    return self.finish(Ok(records));
                 }
                 Ok(wire::Answer::Alias(path)) => {
                     if let Err(e) = self.remember(&path) {
@@ -167,6 +170,9 @@ impl Lookup for Query {
 }
 impl Query {
     fn remember(&mut self, path: &[Name]) -> Result<(), ResolveError> {
+        if !self.allow_alias && path.len() > 1 {
+            return Err(ResolveError::Invalid);
+        }
         for name in path.iter().skip(1) {
             if self.aliases.contains(name) {
                 return Err(ResolveError::Invalid);

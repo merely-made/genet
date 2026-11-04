@@ -5,8 +5,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+mod address;
+#[cfg(test)]
+mod fixture;
 mod io;
 mod query;
+mod service;
 #[cfg(test)]
 mod tests;
 mod wire;
@@ -24,6 +28,12 @@ pub struct DnsLimits {
     pub max_response_bytes: usize,
     /// Maximum alias depth, including aliases in one answer.
     pub max_aliases: usize,
+    /// Maximum untried service targets/branches and yielded endpoints per context.
+    pub max_targets: usize,
+    /// Maximum logical service queries; each keeps its own alias/retry limits.
+    pub max_service_queries: usize,
+    /// Maximum nonterminal NAPTR path depth, including the original domain.
+    pub max_delegations: usize,
     /// Maximum lookup duration, further bounded by the gathering deadline.
     pub timeout: Duration,
     /// Name-server retry interval; configured servers are tried in order.
@@ -41,6 +51,9 @@ impl Default for DnsLimits {
             max_records: 64,
             max_response_bytes: 16384,
             max_aliases: 8,
+            max_targets: 32,
+            max_service_queries: 32,
+            max_delegations: 8,
             timeout: Duration::from_secs(2),
             retry_interval: Duration::from_millis(250),
             poll_interval: Duration::from_millis(5),
@@ -114,6 +127,9 @@ impl DnsResolver {
             || !(1..=512).contains(&l.max_records)
             || !(512..=65535).contains(&l.max_response_bytes)
             || !(1..=32).contains(&l.max_aliases)
+            || !(1..=128).contains(&l.max_targets)
+            || !(1..=256).contains(&l.max_service_queries)
+            || !(1..=32).contains(&l.max_delegations)
             || l.timeout.is_zero()
             || l.retry_interval.is_zero()
             || l.poll_interval.is_zero()
@@ -126,7 +142,7 @@ impl DnsResolver {
             active: Arc::new(AtomicUsize::new(0)),
         })
     }
-    /// Number of pending requests, useful for host scheduling and shutdown audits.
+    /// Number of owned pending lookup contexts, including idle service cursors.
     pub fn pending(&self) -> usize {
         self.active.load(Ordering::Relaxed)
     }
@@ -150,6 +166,63 @@ impl Resolver for DnsResolver {
         if deadline <= now {
             return Err(ResolveError::Timeout);
         }
+        let lease = self.reserve()?;
+        let record_type = if family == Family::V4 {
+            hickory_proto::rr::RecordType::A
+        } else {
+            hickory_proto::rr::RecordType::AAAA
+        };
+        let query = query::Query::new(
+            self.config.clone(),
+            name,
+            record_type,
+            true,
+            now,
+            deadline,
+            Some(lease),
+        )?;
+        Ok(Box::new(address::AddressQuery {
+            query,
+            family,
+            limit: self.config.limits.max_addresses,
+        }))
+    }
+    fn start_server(
+        &self,
+        request: &ServerRequest,
+        family: Family,
+        now: Instant,
+        deadline: Instant,
+    ) -> Result<Box<dyn EndpointLookup>, ResolveError> {
+        if let Some(port) = request.port {
+            if port == 0 {
+                return Err(ResolveError::Invalid);
+            }
+            return Ok(super::endpoints::address_lookup(
+                self.start(&request.host, family, now, deadline)?,
+                port,
+            ));
+        }
+        if self.config.servers.is_empty() {
+            return Err(ResolveError::Unavailable);
+        }
+        let name = wire::name(&request.host)?;
+        if deadline <= now {
+            return Err(ResolveError::Timeout);
+        }
+        Ok(Box::new(service::Cursor::new(
+            self.clone(),
+            request,
+            name,
+            family,
+            now,
+            deadline,
+            self.reserve()?,
+        )?))
+    }
+}
+impl DnsResolver {
+    fn reserve(&self) -> Result<Lease, ResolveError> {
         let mut count = self.active.load(Ordering::Acquire);
         loop {
             if count >= self.config.limits.max_queries {
@@ -161,13 +234,10 @@ impl Resolver for DnsResolver {
                 Ordering::AcqRel,
                 Ordering::Acquire,
             ) {
-                Ok(_) => break,
+                Ok(_) => return Ok(Lease(self.active.clone())),
                 Err(actual) => count = actual,
             }
         }
-        let lease = Lease(self.active.clone());
-        query::Query::new(self.config.clone(), name, family, now, deadline, lease)
-            .map(|q| Box::new(q) as Box<dyn Lookup>)
     }
 }
 struct Lease(Arc<AtomicUsize>);

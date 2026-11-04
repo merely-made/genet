@@ -1,40 +1,9 @@
+use super::fixture::*;
 use super::*;
-use hickory_proto::op::{Message, OpCode, ResponseCode};
+use hickory_proto::op::{Message, ResponseCode};
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, Ipv6Addr, TcpListener, UdpSocket};
-
-fn server() -> UdpSocket {
-    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    socket.set_nonblocking(true).unwrap();
-    socket
-}
-fn resolver(servers: Vec<SocketAddr>, limits: DnsLimits) -> DnsResolver {
-    DnsResolver::new(DnsConfig { servers, limits }).unwrap()
-}
-fn receive(socket: &UdpSocket) -> Option<(Message, SocketAddr)> {
-    let mut bytes = [0; 4096];
-    match socket.recv_from(&mut bytes) {
-        Ok((n, address)) => Some((Message::from_vec(&bytes[..n]).unwrap(), address)),
-        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => None,
-        Err(e) => panic!("DNS fixture: {e}"),
-    }
-}
-fn response(request: &Message) -> Message {
-    let mut message = Message::response(request.metadata.id, OpCode::Query);
-    message.queries = request.queries.clone();
-    message
-}
-fn a(name: Name, ip: Ipv4Addr) -> Record {
-    Record::from_rdata(name, 60, RData::A(ip.into()))
-}
-fn wait(mut step: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(2);
-    while !step() {
-        assert!(Instant::now() < deadline, "bounded fixture deadline");
-        std::thread::sleep(Duration::from_millis(1));
-    }
-}
 
 #[test]
 fn dns_address_families_aliases_deduplication_and_socket_release() {

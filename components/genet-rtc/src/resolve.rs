@@ -4,6 +4,9 @@ use std::net::IpAddr;
 use std::task::Poll;
 use std::time::Instant;
 
+mod endpoints;
+pub use endpoints::{EndpointBatch, EndpointLookup, ServerRequest, Service};
+
 /// Address family selected by the host's concrete RTC route.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Family {
@@ -57,6 +60,29 @@ pub trait Resolver: Send + Sync {
         now: Instant,
         deadline: Instant,
     ) -> Result<Box<dyn Lookup>, ResolveError>;
+
+    /// Resolve a UDP server, retaining whether port/transport were omitted.
+    /// Poll the returned cursor only when another endpoint batch is needed.
+    ///
+    /// # Errors
+    /// The default supports explicit ports through `start`. Portless service
+    /// discovery requires an implementation that overrides this method.
+    fn start_server(
+        &self,
+        request: &ServerRequest,
+        family: Family,
+        now: Instant,
+        deadline: Instant,
+    ) -> Result<Box<dyn EndpointLookup>, ResolveError> {
+        let port = request
+            .port
+            .filter(|p| *p != 0)
+            .ok_or(ResolveError::Unavailable)?;
+        Ok(endpoints::address_lookup(
+            self.start(&request.host, family, now, deadline)?,
+            port,
+        ))
+    }
 }
 
 #[cfg(feature = "dns")]

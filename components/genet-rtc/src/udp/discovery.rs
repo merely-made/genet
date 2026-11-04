@@ -20,12 +20,14 @@ use rtc::turn::client::{Client, ClientConfig, Event};
 use rtc::turn::proto::chandata::ChannelData;
 
 use super::Error;
-use crate::resolve::{Family, Lookup, Resolver};
+use crate::resolve::{EndpointLookup, Family, Resolver, ServerRequest, Service};
 use std::task::Poll;
 
 #[cfg(test)]
 mod dns_tests;
 mod managed;
+mod named;
+pub use named::NamedServer;
 
 /// An ICE server resolved by the host. Credentials are deliberately not Debug.
 #[derive(Clone)]
@@ -41,9 +43,8 @@ pub struct Server {
 pub struct DiscoveryConfig {
     /// At most 32 resolved UDP servers. Duplicate TURN endpoints are refused.
     pub servers: Vec<Server>,
-    /// UDP server URLs whose host names need address resolution. Their ports
-    /// are concrete; service-record discovery belongs to the caller.
-    pub named_servers: Vec<Url>,
+    /// UDP server names, preserving explicit versus discovered port/transport.
+    pub named_servers: Vec<NamedServer>,
     /// Caller-owned nonblocking resolver, used only when gathering starts.
     pub resolver: Option<Arc<dyn Resolver>>,
     /// Suppress all host/reflexive candidates and all direct peer traffic.
@@ -67,7 +68,10 @@ struct Managed {
     started: bool,
     spec: Url,
     addresses: VecDeque<SocketAddr>,
-    lookup: Option<Box<dyn Lookup>>,
+    lookup: Option<Box<dyn EndpointLookup>>,
+    request: ServerRequest,
+    remaining_targets: usize,
+    seen_addresses: Vec<SocketAddr>,
     attempt_deadline: Option<Instant>,
     failed: bool,
 }
@@ -93,11 +97,16 @@ impl Discovery {
             return Err(Error::Configuration("invalid discovery budgets"));
         }
         let mut clients: Vec<Managed> = Vec::new();
-        for (url, address) in config
+        for (url, address, port, transport_specified) in config
             .servers
             .iter()
-            .map(|s| (s.url.clone(), Some(s.address)))
-            .chain(config.named_servers.iter().cloned().map(|u| (u, None)))
+            .map(|s| (s.url.clone(), Some(s.address), Some(s.url.port), true))
+            .chain(
+                config
+                    .named_servers
+                    .iter()
+                    .map(|s| (s.url.clone(), None, s.port, s.transport_specified)),
+            )
         {
             if config.relay_only && url.scheme != SchemeType::Turn {
                 continue;
@@ -108,7 +117,14 @@ impl Discovery {
             {
                 return Err(Error::Configuration("duplicate TURN endpoint"));
             }
-            clients.push(Managed::new(url, address, local, &config)?);
+            clients.push(Managed::new(
+                url,
+                address,
+                port,
+                transport_specified,
+                local,
+                &config,
+            )?);
         }
         Ok(Self {
             local,
@@ -168,8 +184,12 @@ impl Discovery {
             .chain(
                 self.clients
                     .iter()
-                    .filter(|m| !m.done)
-                    .filter_map(|m| m.lookup.as_ref().map(|q| q.next_deadline())),
+                    .filter(|m| !m.done && m.client.is_none())
+                    .filter_map(|m| {
+                        m.lookup
+                            .as_ref()
+                            .map(|q| q.next_deadline().unwrap_or_else(Instant::now))
+                    }),
             )
             .chain(
                 self.clients
@@ -307,6 +327,8 @@ impl Discovery {
                         init.url = Some(managed.url.clone());
                         core.add_local_candidate(init)?;
                         managed.reflexive = Some(addr);
+                        managed.lookup = None;
+                        managed.addresses.clear();
                         managed.done = true;
                     }
                     Event::AllocateResponse(_, addr) if !managed.done => {
@@ -327,6 +349,8 @@ impl Discovery {
                         init.url = Some(managed.url.clone());
                         core.add_local_candidate(init)?;
                         managed.relay = Some(addr);
+                        managed.lookup = None;
+                        managed.addresses.clear();
                         managed.done = true;
                     }
                     Event::BindingError(..)

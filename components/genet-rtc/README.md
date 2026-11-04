@@ -39,9 +39,13 @@ peer-close events. Interface discovery, mDNS, TCP/TLS, server replacement
 and multiple-interface routing remain open host work. A remote
 candidate is not authorization to ignore the consumer's network policy.
 
-Select `dns` for the optional native A/AAAA resolver, without Tokio. Supply
-`DiscoveryConfig::named_servers` and an `Arc<dyn Resolver>` for UDP URLs with
-concrete ports. The `resolve` contract is also available with `host` for caller
+Select `dns` for the optional native DNS resolver, without Tokio. Supply
+`DiscoveryConfig::named_servers` and an `Arc<dyn Resolver>` for UDP URLs,
+preserving omitted ports and transports with `NamedServer`. Explicit ports use
+A/AAAA; portless STUN uses SRV, and portless TURN uses SRV for explicit UDP or
+S-NAPTR when transport is omitted. NAPTR delegation and S/A terminals, SRV
+priority/weight/ports, initial default fallback and explicit unavailability are
+supported. SRV targets cannot be aliases. The `resolve` contract is also available with `host` for caller
 implementations. `DnsConfig::system` reads local name-server configuration;
 explicit endpoints and `DnsLimits` let hosts choose placement and budgets.
 Each request owns nonblocking UDP, or TCP after a truncated DNS reply. Polling
@@ -50,10 +54,13 @@ No background runtime or public fallback resolver is created. Lookup failure,
 empty/wrong-family answers and exhausted address attempts yield one sanitized
 701 per original URL. Discovery tries at most 32 distinct route-compatible
 addresses within one gathering deadline. Numeric routes do not start DNS.
-Restart cancels pending names, rechecks STUN and retains existing TURN clients;
-close/drop cancels resolution. SRV/NAPTR discovery for portless hostnames,
-multicast mDNS and TURN TCP/TLS remain separate host capabilities. Genet's E2d
-receiving qualification is tracked in its plan, independently of provider tests.
+Service discovery yields one endpoint batch, pauses for the protocol attempt,
+and backtracks only on failure. Success/drop releases the cursor. Configurable
+query, target and delegation limits share one gathering deadline. Restart cancels
+pending names, rechecks STUN and retains existing TURN clients; close/drop cancels
+resolution. Multicast mDNS, TURN TCP/TLS and broader allocation-error cooldown
+and redirect policy remain separate capabilities. Genet's E2s receiving
+qualification is tracked in its plan, independently of provider tests.
 
 After applying a new local ICE generation, republish retained local candidates
 and call `restart_gathering()`. It restarts bounded STUN transactions while
@@ -82,7 +89,7 @@ profile. It does not depend on Genet, Personae, Notochord, Luggage, storage,
 `mere-transport` or the conversation service.
 
 Canonical receiving and validation plan:
-`genet/design_docs/2026-11-03_webrtc_conformance_plan.md`, qualified baseline and E2d.
+`genet/design_docs/2026-11-04_webrtc_conformance_plan.md`, qualified baseline and E2s.
 Supplier integration: `murm/design_docs/2026-11-02_murm_family_move_plan.md`,
 RTC ICE restart section. Native UDP tests are not headed-browser or WPT
 qualification.

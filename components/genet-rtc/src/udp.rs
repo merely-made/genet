@@ -23,7 +23,7 @@ use tokio::net::UdpSocket;
 
 mod discovery;
 use discovery::Discovery;
-pub use discovery::{DiscoveryConfig, Server};
+pub use discovery::{DiscoveryConfig, NamedServer, Server};
 
 mod socket;
 use socket::Socket;

@@ -79,7 +79,7 @@ and [closed E2s packet](../../../testing/genet/design_docs/archive_docs/receipts
 live under `Code/testing/genet/`. Earlier qualification keeps its original
 scope and identities; never overwrite a cited receipt.
 The [closed E2m packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md)
-records remote mDNS qualification independently of those closed packets.
+records remote mDNS qualification independently of those closed packets. The [unattended setup](2026-11-04_webrtc_mdns_plan.md#unattended-test-setup-2026-11-04) adds a stable native test executable, read-only application-rule checks and an explicit one-time administrator setup; its fresh operational receipt is separate from closed conformance evidence.
 
 The shaping [qualification receipt](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md) is also frozen externally with exact original Git bytes. Its [export manifest](../../../testing/genet/shaping-publish-20261103/receipt-export.json) records the source commit and SHA-256; [publication checks](../../../testing/genet/shaping-publish-20261103/report.md) hold the new continuation. Future outputs use new files rather than overwrite the frozen receipt.
 

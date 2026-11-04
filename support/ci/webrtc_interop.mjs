@@ -23,7 +23,7 @@
 // Firefox BiDi grants local-network access only to this fixture origin and
 // resets it on shutdown. No camera/microphone grant or WebRTC pref override.
 // Profiles stay in the marker-owned stable target cache: receiving-environment
-// automatic approval review rejected recursive deletion. Live owners forbid reuse.
+// earlier cleanup was rejected as blocked by policy; reviewer not established. Live owners forbid reuse.
 import { spawn, execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -73,7 +73,7 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
-const sourceFiles=['support/ci/webrtc_mdns_fixture.test.mjs','components/genet-webrtc/src/mdns.rs','support/ci/webrtc_mdns_fixture.mjs','support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
+const sourceFiles=['support/ci/webrtc_permissions.ps1','support/ci/webrtc_mdns_fixture.test.mjs','components/genet-webrtc/src/mdns.rs','support/ci/webrtc_mdns_fixture.mjs','support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
 const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md'));
 if(['2026-11-01','2026-11-03'].some(date=>receipt.endsWith(date+'_webrtc_conformance_plan_receipts.md')))throw Error('baseline receipt is frozen');
 if(receiptMode==='append')assertWritablePacket(await readFile(receipt,'utf8'));
@@ -296,8 +296,8 @@ class Browser {
       const marker=JSON.parse(await readFile(path.join(this.profile,'genet-rtc-owner.json'),'utf8'));
       assert(marker.kind==='genet-rtc-interop' && marker.owner===process.pid,'profile owner mismatch');
       assert(path.dirname(path.resolve(this.profile))===path.resolve(scratch),'profile cleanup outside owned scratch');
-      // Retain this bounded, marked cache: automatic approval review rejected
-      // recursive profile cleanup in the receiving environment. Reuse requires
+      // Retain this bounded, marked cache: a cleanup command was rejected as blocked by policy; reviewer not established.
+      // Preserve the marked profiles in the receiving environment. Reuse requires
       // both the previous controller and its browser to have exited.
     }
   }
@@ -351,6 +351,16 @@ function verifyStats(a,b,route) {
   }
 }
 
+// Check supported application rules before starting any listener or browser.
+try {
+  const {stdout}=await execFileAsync('C:/Program Files/PowerShell/7/pwsh.exe',[
+    '-NoLogo','-NoProfile','-NonInteractive','-File',path.join(repo,'support/ci/webrtc_permissions.ps1'),
+    '-Kind','Headed','-Browser',args.get('--browser')||'both','-NativeHost',nativeExe,'-NodeProgram',process.execPath
+  ],{encoding:'utf8',windowsHide:true,timeout:30000,maxBuffer:65536});
+  assert(JSON.parse(stdout).applicationRuleCoverage===true,'application rules not confirmed');
+} catch {
+  throw Error('RTC application-rule preflight needs attention; no listeners or browsers started. Run support/ci/webrtc_permissions.ps1 -Kind Headed for details.');
+}
 const sourceAtStart={};for(const file of sourceFiles)sourceAtStart[file]=hash(await readFile(path.join(repo,file)));
 const binaryAtStart=hash(await readFile(nativeExe));
 const lockAtStart=hash(await readFile(path.join(repo,'Cargo.lock')));
@@ -504,7 +514,7 @@ finally {
   const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
   const sourceStable=JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
   if(!sourceStable){failure={phase:'source identity',error:'source or fixture binary changed during qualification'};process.exitCode=1;}
-  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:mdnsEnabled?'native Windows remote UUID mDNS resolution, controlled numeric-host aliases and untouched browser mDNS names, fixed-interface IPv4; relay policy suppression, restart and realm cleanup. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.':dnsMode==='service'?'native Windows headed restart with portless STUN/UDP-TURN and controlled SRV/S-NAPTR at nondefault discovered ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
+  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'earlier recursive cleanup was rejected as blocked by policy; marked profiles retained for reuse; reviewer not established',scope:mdnsEnabled?'native Windows remote UUID mDNS resolution, controlled numeric-host aliases and untouched browser mDNS names, fixed-interface IPv4; relay policy suppression, restart and realm cleanup. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.':dnsMode==='service'?'native Windows headed restart with portless STUN/UDP-TURN and controlled SRV/S-NAPTR at nondefault discovered ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
   if(journal) {
     await journal.finish(failure,sourceStable);
     console.log(`${gate} ${journal.passed.size}/${expectedCases} durable cases passed; run ${journal.run}`);

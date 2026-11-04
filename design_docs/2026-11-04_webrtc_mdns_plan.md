@@ -90,8 +90,8 @@ packet, which remains below 100 KB total. Keep full raw SDP, credentials,
 profile data and captures out of public receipts. Every earlier standalone Genet RTC packet is
 closed. Reuse stable Genet and Retinue Cargo targets/build directories,
 debug=0/jobs=1; create no isolated target, Cargo home or worktree without a real
-collision. Prior automatic approval rejection of profile/home deletion remains
-in force; do not retry or bypass it.
+collision. The earlier policy rejection of profile/home deletion remains in force;
+do not retry or bypass it. The reviewer responsible was not established.
 
 ## Remaining work
 
@@ -183,8 +183,8 @@ into this cohort.
   table are covered by provider socket/drop tests, not invented endpoint counts.
 - Restoration: owned native/browser/controller processes and coturn are gone;
   the service is inactive/disabled and Firefox network-permission rows are zero.
-  Earlier automatic approval review rejected profile/home deletion as blocked
-  by policy. Retained marked profile caches belong to `genet-rtc-interop`; the
+  Earlier cleanup commands were rejected as blocked by policy; attribution to
+  automatic review was unverified. Retained profiles belong to `genet-rtc-interop`; the
   old `C:/t/cargo-homes/rtc-restart` cache belongs to `genet-rtc-ice-restart`.
   Exact paths and bytes are in the receipt. No isolated target/home/worktree was
   created for this slice.
@@ -196,3 +196,61 @@ It retains exact pins, source/lock/binary hashes, failed diagnostics and the
 durable headed case journal. The closed E2s and E2d packets retain their original
 hashes. New E2m supplier entries stay below 6 KB and total new evidence below
 250 KB; the larger historical family packet is accounted separately.
+
+
+## Unattended test setup (2026-11-04)
+
+The next local mDNS advertisement slice is authorized. Before its network runs,
+use a stable test executable and inspect application firewall rules. Cargo's
+hashed integration-test paths otherwise change after dependency revisions.
+The native wrapper builds the real Cargo test harness, checks the copy hash,
+serializes execution and retains its generated ownership marker at
+`C:/t/cargo-targets/genet/rtc-interop/native-browser-tests-owner.json`.
+It never substitutes a different implementation or treats enumeration as a pass.
+
+```powershell
+# Build/copy and enumerate; these modes open no RTC listeners.
+python -B support/ci/webrtc_native.py --list
+# Read-only audit of current programs and network profiles.
+pwsh -NoProfile -File support/ci/webrtc_permissions.ps1 -Kind All
+# Preview the one missing native rule. This changes nothing.
+pwsh -NoProfile -File support/ci/webrtc_permissions.ps1 -Kind Native -Install -WhatIf
+# Run this once in an elevated PowerShell while present, then audit again.
+pwsh -NoProfile -File support/ci/webrtc_permissions.ps1 -Kind Native -Install
+# Ordinary tests, or add --server NUMERIC_IPV4:PORT for controlled coturn tests.
+python -B support/ci/webrtc_native.py
+```
+
+`-FirewallProfile` selects explicit profiles; by default the audit reads current
+network categories. Installation adds only missing exact-program UDP rules for
+the selected profiles and local-subnet/loopback peers. It neither opens UAC nor
+removes existing rules. Existing explicit blocks require separate review. Run test
+batches from an ordinary shell; elevation is only for firewall installation. The
+audit checks a supported application-rule shape, not packet delivery or every
+managed-policy, SmartScreen, antivirus or OS permission boundary. An unattended
+native run exits before tests when the rule is missing/unreadable. Its
+`--timeout-seconds` bounds execution after compilation (default 600 seconds). The headed
+runner also audits its actual host/Node paths before any listener/browser starts.
+Firefox test-origin network permissions continue to be granted and restored
+through BiDi. The unresolved Firefox responder remains a separate receiving gate.
+
+Current Codex configuration is `approval_policy = "never"`, reviewer `user`, and
+`danger-full-access`. Changing that does not grant Windows administrator rights.
+Historical frozen packets retain their original auto-review attribution; only
+an observed `blocked by policy` command rejection was established. Future runner
+messages use the narrower description. Old cleanup is not retried.
+
+Operational validation retains at most **12 KB** in the fresh external
+`Code/testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_unattended_receipt.json`.
+The closed E2m/E2s/E2d packets remain byte-for-byte unchanged. The prepared native
+binary is reusable build output owned by `genet-rtc-native-tests`, retained to
+keep its firewall path stable. This setup gate does not claim a new headed or
+native network qualification until the missing rule is installed and tests run.
+
+Validation: six runner boundary checks and six existing Node helper checks pass.
+The exact copied Cargo artifact enumerates all 44 native tests. Headed
+application rules are present; the new stable native path has no rule yet.
+The actual native wrapper exits 2 before tests, and `-Install -WhatIf` leaves
+firewall rules unchanged. Administrative installation and a network run from
+that path remain pending the one-time Windows setup. Prior conformance results
+keep their exact original source identities.

@@ -121,7 +121,7 @@ export class RestartJournal {
       completeMatrix:complete&&this.identity.expectedCases===48,completeSelectedMatrix:complete,
       completedRestarts:this.passed.size*2,interruptedRestarts:this.passed.size,
       versions:[...this.versions.values()].map(v=>({browser:v.browser,version:v.version,headed:v.headed})),
-      profileCleanup:'automatic approval review rejected recursive profile deletion as blocked by policy; marker-owned profile caches retained'});
+      profileCleanup:'earlier recursive profile cleanup was rejected as blocked by policy; marker-owned caches retained; reviewer not established'});
   }
   async append(kind,data) {
     const old=await readFile(this.file,'utf8');

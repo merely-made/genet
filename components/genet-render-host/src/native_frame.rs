@@ -84,6 +84,10 @@ impl NativeFrames {
     }
 }
 
+#[path = "native_frame_checks.rs"]
+mod checks;
+#[path = "native_frame_progress.rs"]
+mod progress;
 #[path = "native_frame_queue.rs"]
 mod queue;
 pub(crate) use queue::NativeFrameShutdown;
@@ -111,43 +115,18 @@ struct Qualification {
     sealed: Option<Instant>,
     worker_started: Option<Instant>,
     last_observation: Option<(usize, Option<(usize, u64)>)>,
+    progress: progress::Progress,
 }
 impl Qualification {
-    fn check(&self) -> Result<Arc<RenderCore>, RasterizeFailure> {
-        if let Some(loss) = &self
-            .admission
-            .lock()
-            .expect("native admission poisoned")
-            .loss
-        {
-            return Err(RasterizeFailure::DeviceLost(loss.clone()));
-        }
-        let core = self
-            .core
-            .upgrade()
-            .ok_or_else(|| unavailable("native frame Core retired"))?;
-        if let Some(loss) = core.device_failure() {
-            return Err(RasterizeFailure::DeviceLost(loss));
-        }
-        if Instant::now() >= self.deadline {
-            let now = Instant::now();
-            return Err(RenderCore::native_raster_unavailable(format!(
-                "native frame qualification exceeded five seconds (admission={:?}, seal={:?}, worker={:?}, last scopes/backlog={})",
-                now.duration_since(self.admitted),
-                self.sealed.map(|at| now.duration_since(at)),
-                self.worker_started.map(|at| now.duration_since(at)),
-                self.last_observation
-                    .map_or_else(|| "unknown".to_string(), |value| format!("{value:?}")),
-            )));
-        }
-        Ok(core)
-    }
     fn poll(&mut self) -> Option<Result<(), RasterizeFailure>> {
         let core = match self.check() {
             Ok(core) => core,
             Err(error) => return Some(Err(error)),
         };
-        if let Err(error) = core.device().poll(wgpu::PollType::Poll) {
+        let started = Instant::now();
+        let result = core.device().poll(wgpu::PollType::Poll);
+        self.progress.last_device_poll = Some(started.elapsed());
+        if let Err(error) = result {
             return Some(Err(self.check().err().unwrap_or_else(|| {
                 RenderCore::native_raster_unavailable(format!(
                     "native completion poll failed: {error}"
@@ -157,11 +136,16 @@ impl Qualification {
         if let Err(error) = self.check() {
             return Some(Err(error));
         }
+        let started = Instant::now();
         self.observe_scopes();
+        self.progress.last_scope_poll = Some(started.elapsed());
         let mut empty = false;
         let mut last_backlog = None;
         for _ in 0..=256 {
-            match core.renderer.poll_vello_curve_quality() {
+            let started = Instant::now();
+            let result = core.renderer.poll_vello_curve_quality();
+            self.progress.last_quality_poll = Some(started.elapsed());
+            match result {
                 Ok(Some((0, 0))) => {
                     last_backlog = Some((0, 0));
                     empty = true;
@@ -183,6 +167,7 @@ impl Qualification {
             }
         }
         self.last_observation = Some((self.scopes.len(), last_backlog));
+        self.progress.last_sample = Some(Instant::now());
         if let Err(error) = self.check() {
             return Some(Err(error));
         }
@@ -217,10 +202,12 @@ impl Qualification {
             // Only the shared completion worker enters this bounded wait. Do
             // not retain the Core while waiting or introduce a UI-side poll.
             let device = self.check()?.device().clone();
-            let _ = device.poll(wgpu::PollType::Wait {
+            let started = Instant::now();
+            let wait_result = device.poll(wgpu::PollType::Wait {
                 submission_index: None,
                 timeout: Some(Duration::from_millis(5)),
             });
+            self.progress.last_wait = Some((started.elapsed(), format!("{wait_result:?}")));
             std::thread::yield_now();
         }
     }
@@ -402,6 +389,7 @@ impl RenderCore {
                 sealed: None,
                 worker_started: None,
                 last_observation: None,
+                progress: progress::Progress::default(),
             }),
             scopes,
             error: Arc::new(Mutex::new(None)),
@@ -526,11 +514,21 @@ impl<T> PendingNativeFrame<T> {
             },
         };
         self.completed.take();
+        if let Some(qualification) = &completion.qualification {
+            let now = Instant::now();
+            if completion.result.is_ok()
+                && now >= qualification.deadline
+                && std::env::var_os("GENET_NATIVE_PROGRESS_DIAGNOSTIC").is_some()
+            {
+                tracing::warn!(progress = %qualification.progress.describe(now),
+                    "qualified native frame collected after qualification deadline");
+            }
+        }
         let result = completion
             .qualification
             .as_ref()
             .expect("completion qualification")
-            .check()
+            .check_live()
             .map(|_| ())
             .and(completion.result.clone());
         match result {
@@ -562,7 +560,7 @@ impl<T> AcceptedNativeFrame<T> {
             .qualification
             .as_ref()
             .expect("native frame already published")
-            .check()?;
+            .check_live()?;
         let _publication = core.native_frames.begin_publication()?;
         // Publication may access GPU resources. Cancellation may release an
         // idle lease, but recovery must await this active callback interval.
@@ -571,7 +569,7 @@ impl<T> AcceptedNativeFrame<T> {
             .begin_operation()
             .map_err(RasterizeFailure::DeviceLost)?;
         let result = publish(self.value.take().expect("native frame value"));
-        self.qualification.as_ref().unwrap().check()?;
+        self.qualification.as_ref().unwrap().check_live()?;
         Ok(result)
     }
 }

@@ -166,3 +166,50 @@ establish another machine's throughput or a physical driver-reset guarantee.
   | `line-ceiling.log` | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
   | `clippy.log` | `8dfc8c6107c90b624ded27e6817d1a3407c1029dac33de71b1f3b7d49616d72d` |
   | `source-checks.json` | `3a3c7873f04f4653f59ec076fc74500a49dde6f203280f7bd1d6d10b006329cc` |
+
+- 2026-11-03: native qualification/collection separation at `33b23ed6882`.
+  The completion worker still checks the original five-second deadline through
+  worker-scope observation. Once that worker has qualified a frame, later
+  collection and publication check Core/device liveness and loss rather than
+  expiring the already-qualified result. Worker failures stay failures. Host
+  identity, cancellation and redraw policy are unchanged. Timeout detail now
+  includes sample age and worker phase durations; setting
+  `GENET_NATIVE_PROGRESS_DIAGNOSTIC=1` also logs a successful worker result
+  collected after its original deadline, including worker-finish age.
+
+  The GPU regression was first run with only the three collection/publication
+  checks restored to deadline enforcement; it failed on collection after a
+  successful worker result. The same regression passed with the separation.
+  An initial test compile failure from a corrected texture tuple is retained.
+  The green suite passed 5 CPU controls and all 17 native GPU controls, including
+  the original deadline and device-loss cases. Package-scoped Clippy exited zero
+  with warnings; changed-file line-ceiling passed. The existing ignored lockfile
+  was copied from the preceding shutdown qualification; its SHA-256 was
+  `1f981cb6af462aafdcefec737dff310af2f8bde8f155a490437f967c379482ff`.
+
+  Runs used `/home/markik/Code/worktrees/genet-frame-progress-diagnostic-20261103`
+  with `flock /home/markik/Code/testing/machine-heavy.lock`, a user systemd
+  scope capped at `MemoryMax=3G`, `MemorySwapMax=0`, `CPUQuota=150%`, `nice 10`
+  and `timeout 600`. `CARGO_BUILD_JOBS=1`, `RUST_TEST_THREADS=1`,
+  `CARGO_INCREMENTAL=0`, and both Cargo debug profiles were zero; target and
+  build directories were `/home/markik/Code/target`. The red command was
+  `cargo test --locked --offline -p genet-presenter native_frame::tests::qualified_frame_can_be_collected_and_published_after_deadline --lib -- --ignored --exact --test-threads=1`.
+  Green used `cargo test --locked --offline -p genet-presenter native_frame::tests --lib -- --test-threads=1`,
+  then the same command with `--ignored` before `--test-threads=1`, and
+  `cargo clippy --locked --offline -p genet-presenter --all-targets`.
+
+  Evidence is under `/home/markik/Code/testing/genet-frame-progress-diagnostic-20261103/`:
+
+  | Artifact | SHA-256 |
+  | --- | --- |
+  | `red-compile-failure.log` | `e736af1c042e6cb9ed772077fbcd9bdc75e98a10a1933461c24dd55ed38bbef7` |
+  | `red.log` | `6a99274b5b7e69bee5536055ad0c8f7b4b69e432f8989e06ecd622b17823a492` |
+  | `green-cpu.log` | `9a79a3928d52d1a85348d19686bb45a194e18726632ca83f81c976b9706214fd` |
+  | `green-gpu.log` | `2072ec7b4d82976fe5e864e49cc21511f921a6eb2e3dc2b3100ac46023bad250` |
+  | `clippy.log` | `18e28a28e64c913123589a3e568b8a28c432773786f116b791c8981e99c8967c` |
+  | `green-gates.sh` | `273b59ca6167cd28b19697cb51c0c66cc1ed26fd5d59d04fb03b7d37ae20cb3b` |
+  | `inventory.json` | `2d0419d8fb3dd35fdd3cb5a5bdec21190b43cc9e94a86a547b873d7454b81ade` |
+
+  The actual application timeout has not yet been rerun against this change.
+  Separately, the blank window-frame raster has not yet been attributed to a
+  particular provider failure; these tests do not establish a rendering fix.

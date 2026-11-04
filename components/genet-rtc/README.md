@@ -18,9 +18,10 @@ timer driver. Dropping the peer releases the socket; it spawns no tasks.
 timers and media while leaving data-channel reads under SCTP backpressure.
 
 The engine is pinned to `merely-made/rtc` commit
-`235f02199a23f00df2c554ed669218eee9627a8e`, based on upstream
+`479995928668d0db1f8cfb2aa26f818b9f03919f`, based on upstream
 `70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38`. It retains the upstream DCEP fix
-(#280) and fixes the bounded restart data path and continuing DTLS answer role.
+(#280) and fixes the bounded restart data path, continuing DTLS answer role
+and recovery of exhausted controlling checks after a fresh authenticated request.
 The published 0.21.1 release failed our
 real-packet partial-reliability check; the frozen E0 comparison still describes
 that release. This is an immutable maintained source dependency, not a local

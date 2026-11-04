@@ -62,6 +62,22 @@ their history-heavy originals, which remain whole in the dated archive.
 Adoption preserves open design questions, existing rulings and exact evidence
 limits; it does not implement or newly qualify the remaining work.
 
+## Receipt storage (2026-11-03)
+
+Historical receipt packets and the four flex ledgers are retained byte-for-byte
+under `Code/testing/genet/`, mirroring their former repository-relative paths.
+[Transfer manifest](../../../testing/genet/receipt-relocation/export-manifest.json)
+and [reader classification](../../../testing/genet/receipt-relocation/reader-classification.md)
+record identities, frozen snapshot dependencies and verification limits.
+Existing owner fixtures, WPT corpus/metadata and expectation maps remain
+versioned inputs. Historical packet scripts retain their original source/path
+requirements; do not run their writers against frozen evidence.
+
+The active [WebRTC receipt](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md)
+remains with its current owner while that lane appends results. Its retention
+does not enlarge any earlier qualification. Fresh outputs use an explicit new
+location under `Code/testing/genet/`; never overwrite a cited receipt.
+
 ## Required reading order
 
 1. The root [`README.md`](../README.md) — what genet is.
@@ -209,11 +225,11 @@ completed corpus census or bounded slice does not close its enclosing feature.
   repair passes the original 285 affected tests there. The closing review's
   submission validity, listener-mutation and native-feedback repairs pass
   678 Windows tests with zero failures or ignores; see the
-  [repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
+  [repair receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_submission_review_windows.json).
   Fresh Windows native transport/visual checks pass on all three routes. Actual
   browser submission passes 20 cases and the editing-only control after three
   browser host repairs; see the
-  [host receipt](receipts/2026-10-16_forms_native_browser_windows.json).
+  [host receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_native_browser_windows.json).
   Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
   remain open.
   Earlier A/B results, original and corrected controls, and ThinkPad host
@@ -256,7 +272,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   engine. Six crate gates pass 936 tests; eight directory maps lose zero file
   or subtest passes. The frozen-pin receipt remains historical; separate Vano repin `d7f08fecdc7`
   passed 836 affected tests and paired WPT guards, published 2026-10-05.
-  The [census lane receipt](receipts/2026-10-04_genet_census_panics/receipt.md)
+  The [census lane receipt](../../../testing/genet/design_docs/receipts/2026-10-04_genet_census_panics/receipt.md)
   records all controls, 33 attributed movements and remaining feature forks.)
 
 - [tagname_window_globals_plan](2026-09-07_tagname_window_globals_plan.md)

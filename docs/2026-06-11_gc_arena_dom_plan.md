@@ -579,7 +579,7 @@ select and implement the all-target handle contract. **S1 implemented,
 committed and validated 2026-09-08:** commit `ec5421b7591` lands replacement
 retention. Six production regressions, 37 existing crate source tests and seven
 original probe assertions pass in the exact isolated overlay documented in
-[the S1 receipt](../design_docs/receipts/2026-09-08_g5_s1/receipt.md). This is
+[the S1 receipt](../../../testing/genet/design_docs/receipts/2026-09-08_g5_s1/receipt.md). This is
 automated native store evidence, not a native headed or browser-hosted receipt.
 Concurrent parser/runtime WIP was excluded; the larger G5/backend/Ortet proof
 sequence remains open.
@@ -588,20 +588,20 @@ sequence remains open.
 five reproduced template-root failures by tracing contents to their inert owner
 and pruning stale metadata. Seven root-closure tests, 38 crate-source tests,
 six S1 tests and seven original assertions pass.
-[The S2 receipt](../design_docs/receipts/2026-09-08_g5_s2/receipt.md)
+[The S2 receipt](../../../testing/genet/design_docs/receipts/2026-09-08_g5_s2/receipt.md)
 names positive and negative cases, exact source overlays and the failing
 baseline. This is automated native store evidence. It preserves the existing
 one-inert-owner-per-arena representation; per-owning-document/adoption
 semantics and backend-root closure remain open.
 
 **S2 backend probe, 2026-09-08:** the
-[exact Boa runtime receipt](../design_docs/receipts/2026-09-08_s2_s5_backend/receipt.md)
+[exact Boa runtime receipt](../../../testing/genet/design_docs/receipts/2026-09-08_s2_s5_backend/receipt.md)
 retains JS wrappers across both replacements, forces collection, checks semantic
 readback and reattachment, then observes at least two unpins and collected nodes
 after release. This closes the narrow Boa wrapper case; queued observer/range
 roots, Nova, ownership/adoption and headed gates remain open.
 
-**S3 research, 2026-09-08:** [the repinned handle probe](../design_docs/receipts/2026-09-08_g5_s3_handle_boundary/receipt.md)
+**S3 research, 2026-09-08:** [the repinned handle probe](../../../testing/genet/design_docs/receipts/2026-09-08_g5_s3_handle_boundary/receipt.md)
 passes three native debug tests and a release model run against committed
 `ec5421b7591`; wasm32 release checks only. Actual release roots still alias.
 The 24/40 u64 model distinguishes them but does not repair production NodeId.

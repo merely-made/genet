@@ -13,7 +13,7 @@ and silent script-free validation failures. Their repair passes 678 Windows
 tests under Rust 1.99.1, with zero failures or ignores, including the new RED
 regressions, existing validation/FormData checks, and all original 285 affected
 native/scripted occurrences. The private native hook is deleted on both engines.
-[Windows repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
+[Windows repair receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_submission_review_windows.json).
 
 Fresh O-PC native Livery, Boa and Nova transport, final accessibility and visual
 checks pass, including the redirected relative image. The script-free invalid
@@ -27,7 +27,7 @@ submission so its hit-test layout remains usable; and reject superseded source
 responses before fetching their dependencies. The browser checks bind the exact
 Wasm artifact, trusted input, request bytes, response timing and painted proof
 markers. They do not qualify general browser text rendering. See the
-[Windows host receipt](receipts/2026-10-16_forms_native_browser_windows.json).
+[Windows host receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_native_browser_windows.json).
 
 Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
 remain open. Earlier ThinkPad receipts retain their recorded Linux scope.
@@ -60,7 +60,7 @@ and control captures matched with zero lost passes, twelve covering gates green,
 see "Checkpoint C qualification run on O-PC" at the end of Progress. **Accepted by Mark on
 2026-10-20:** "Accept, with the formdata-event timeout as a follow-up (Recommended)". Phase C is
 qualified at the prepared epoch; the follow-ups are named in that section and in
-`receipts/2026-10-20_forms_checkpoint_c_windows.json`.
+`Code/testing/genet/design_docs/receipts/2026-10-20_forms_checkpoint_c_windows.json`.
 
 The eleven-crate 1,943-pass receipt belongs to Genet
 `b8a3ec1d6abe88e07438ca4d53b9ca4d2b92111d`, with zero failures and nine ignores.
@@ -2083,7 +2083,7 @@ the final heading, green marker and green relative image paint correctly;
 their final accessibility projections expose the final address, heading and
 image. No stale source button remains in those final projections or images.
 The historical failing receipt is unchanged. The compact source-bound
-[local repair receipt](receipts/2026-10-16_forms_redirect_base.json) records
+[local repair receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_redirect_base.json) records
 the raw log, compiler, exact lock, binary and review identities. All five
 owned runs completed with zero OOM or memory-limit events.
 

@@ -24,9 +24,9 @@ whose method this census extends to the rest of the web platform.
 **Complete at 2026-09-30 02:48 UTC:** all 82 archived shards were measured on
 Genet `19c206873ab` plus the isolated-worker reporting repair published in
 `0c4aa9f60b8`, with Vano `8ad0841255c2cbb679f7c704417d427b3cb3e961` behind
-`--engine nova`. The [dated receipt](receipts/2026-09-29_vano_wpt_census/receipt.md)
+`--engine nova`. The [dated receipt](../../../testing/genet/design_docs/receipts/2026-09-29_vano_wpt_census/receipt.md)
 records source isolation, exact commands, validated identities and limitations;
-the [complete table](receipts/2026-09-29_vano_wpt_census/results.md) gives every
+the [complete table](../../../testing/genet/design_docs/receipts/2026-09-29_vano_wpt_census/results.md) gives every
 shard.
 
 The current runner reports **23,999 unique records**: all **21,671 genuine
@@ -63,7 +63,7 @@ commit `876c7a2cba4` removes P1-P7 Rust panics and E1's undeclared Event failure
 ordinary WPT failures and the missing SVG focus/ResizeObserver features remain.
 Six crate gates pass 936 tests. Eight directory maps preserve every passing
 file and subtest, with all 33 movements qualified in the
-[final receipt](receipts/2026-10-04_genet_census_panics/receipt.md).
+[final receipt](../../../testing/genet/design_docs/receipts/2026-10-04_genet_census_panics/receipt.md).
 Vano's fixes are separately published at `47f8d4f9`; this measurement retains
 `8ad08412`, and its repin follows census integration. Earlier full-platform
 census counts remain dated evidence. This lane stops at its local checkpoint.

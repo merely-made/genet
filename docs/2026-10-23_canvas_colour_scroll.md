@@ -17,7 +17,7 @@ paint-list data. Apply document scroll to the canonical freshly emitted list,
 before placement or page scale. Background-image emission is unchanged by this
 repair; no opaque colour is invented for a transparent canvas.
 
-The [provider receipt](receipts/canvas_scroll_20261023/README.md) preserves the
+The [provider receipt](../../../testing/genet/docs/receipts/canvas_scroll_20261023/README.md) preserves the
 red pixel checks, initial compiler refusals, final source hashes and validation.
 The first reproducer returned transparent lower-viewport pixels where opaque
 beige was expected. Final pixel tests cover propagated root/body colours,

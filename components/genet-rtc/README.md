@@ -18,7 +18,7 @@ timer driver. Dropping the peer releases the socket; it spawns no tasks.
 timers and media while leaving data-channel reads under SCTP backpressure.
 
 The engine is pinned to `merely-made/rtc` commit
-`3e03d99e5226952faf547b35b07c30ca2fdbaaa4`, based on upstream
+`235f02199a23f00df2c554ed669218eee9627a8e`, based on upstream
 `70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38`. It retains the upstream DCEP fix
 (#280) and fixes the bounded restart data path and continuing DTLS answer role.
 The published 0.21.1 release failed our
@@ -45,6 +45,8 @@ core retains only the previous nominated data route during negotiation, outside
 the fresh candidate/check tables, until replacement, failure or a bounded
 deadline. Old consent requests are authenticated and answered only on that
 retained route; they cannot populate fresh checks or extend its deadline.
+After new peer credentials arrive, the known nominated address is also checked
+as a fresh candidate. Its prior validity and transactions are discarded.
 This supports fixed-server ICE restart; it does not rebind interfaces
 or replace configured servers. Genet owns sticky requests, event ordering and
 candidate generation validation at its web boundary.
@@ -103,6 +105,6 @@ E2r passes nine ordinary tests on working Rust 1.99.1 and MSRV 1.97.1,
 the three controlled coturn tests and strict all-target Clippy. Restart-specific
 checks cover stale STUN transactions, two bounded relay-refusal generations,
 and DTLS answer policy for continued versus changed peer identity. The pinned
-core's 56 ICE tests pass on 1.97.1, including authenticated old consent confined
+core's 57 ICE tests pass on 1.97.1, including authenticated old consent confined
 to the retained route and deadline. Genet owns the established-channel
 native/WPT/headed restart receiving results in its conformance receipt.

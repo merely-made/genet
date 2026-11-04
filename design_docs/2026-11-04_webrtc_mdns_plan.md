@@ -262,6 +262,18 @@ actual native `-Install -WhatIf` preview without changing firewall rules. A
 Windows PowerShell 5.1 subprocess regression is part of the runner test suite.
 The fresh compatibility receipt shares the operational 12 KB retained cap.
 
+Firewall scope correction: Windows rejects explicit IPv6 loopback `::1` in the
+remote address filter. The fixture rule now uses `LocalSubnet` and IPv4
+`127.0.0.0/8`, retaining the exact executable, selected profile and UDP scope.
+Installation passes explicit `-ErrorAction Stop` so provider rejection cannot
+continue into a post-install report. The nine runner checks now include the
+actual installation scope validated on an unattached Windows `INetFwRule`,
+plus a simulated nonterminating rejection against the real installation
+pipeline, each under Windows PowerShell 5.1 and PowerShell 7. Neither check
+adds a firewall rule. The fresh firewall-scope receipt shares the same 12 KB
+operational cap. Administrative installation still needs a successful rerun;
+address validation and preview alone do not establish effective rule coverage.
+
 ## E2a. Local advertisement
 
 This is the next bounded slice under the user's continued RTC authorization.

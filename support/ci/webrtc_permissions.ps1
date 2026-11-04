@@ -82,7 +82,9 @@ foreach ($role in $roles) {
                 Group = 'Genet RTC fixtures'; Description = 'Caller-run local RTC fixtures; exact executable, selected profile and local peers.'
                 Program = $role.Program; Direction = 'Inbound'; Action = 'Allow'; Enabled = 'True'
                 Profile = $selectedProfile; Protocol = 'UDP'; LocalPort = $role.Port
-                RemoteAddress = @('LocalSubnet', '127.0.0.0/8', '::1'); EdgeTraversalPolicy = 'Block'
+                # Windows rejects explicit IPv6 loopback in firewall address filters.
+                RemoteAddress = @('LocalSubnet', '127.0.0.0/8'); EdgeTraversalPolicy = 'Block'
+                ErrorAction = 'Stop'
             }
             if (-not $WhatIfPreference -and -not $elevated) {
                 throw 'Install requires an elevated PowerShell, once while you are present. This script never opens UAC itself.'

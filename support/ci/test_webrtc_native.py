@@ -2,6 +2,7 @@
 import contextlib
 import io
 from pathlib import Path
+import shutil
 import types
 import unittest
 from unittest.mock import patch
@@ -11,6 +12,28 @@ from support.ci import webrtc_native as runner
 
 @unittest.skipUnless(runner.os.name == "nt", "Windows RTC receiving runner")
 class NativeRunnerTests(unittest.TestCase):
+    def check_firewall_case(self, case):
+        legacy = Path(runner.os.environ.get("SystemRoot", "C:/Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        shells = [str(legacy)] if legacy.is_file() else []
+        if modern := shutil.which("pwsh"):
+            shells.append(modern)
+        self.assertTrue(shells, "A PowerShell runtime is required on Windows")
+        for shell in shells:
+            with self.subTest(shell=shell, case=case):
+                result = runner.subprocess.run([
+                    shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-File",
+                    str(runner.ROOT / "support/ci/test_webrtc_permissions.ps1"), "-Case", case
+                ], capture_output=True, text=True, encoding="utf-8", timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                report = runner.json.loads(result.stdout)
+                self.assertTrue(report["valid" if case == "Scope" else "stopped"])
+
+    def test_firewall_scope_passes_windows_validation_without_installing(self):
+        self.check_firewall_case("Scope")
+
+    def test_firewall_rejection_stops_the_installation_pipeline(self):
+        self.check_firewall_case("Failure")
+
     def test_windows_powershell_51_accepts_the_setup_preview(self):
         legacy = Path(runner.os.environ.get("SystemRoot", "C:/Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
         if not legacy.is_file():

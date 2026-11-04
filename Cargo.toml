@@ -257,8 +257,8 @@ genet-documents = { version = "=0.1.0", path = "components/genet-documents", def
 genet-document-resources = { version = "=0.2.1", path = "components/genet-document-resources" }
 genet-host-api = { version = "=0.2.0", path = "components/genet-host-api" }
 genet-presenter = { path = "components/genet-render-host" }
-netrender = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = "=0.1.2" }
-netrender_device = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = "=0.1.2" }
+netrender = { git = "https://github.com/merely-made/netrender.git", rev = "72f54a71531f44335377ec21dec950cfd2b61def", version = "=0.1.2" }
+netrender_device = { git = "https://github.com/merely-made/netrender.git", rev = "72f54a71531f44335377ec21dec950cfd2b61def", version = "=0.1.2" }
 # (No xilem git deps remain. The Masonry-era `xilem` / `masonry` /
 # `masonry_winit` git deps left with pelt-viewer's retirement, 2026-06-12. The
 # remaining native UI substrate moved to the sibling Cambium repository in
@@ -322,7 +322,7 @@ url = "2.5"
 urlpattern = "0.3"
 utf-8 = "0.7"
 uuid = { version = "1.23.1", features = ["v4", "v5"] }
-vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
+vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", rev = "9f454193808dda0db4beb5a46aa295206bfa706d" }
 webdriver = { version = "0.53.0", default-features = false }
 webpki-roots = "1.0.10"
 web_atoms = "0.2"
@@ -360,10 +360,10 @@ layout_dom_api = { package = "layout-dom-api", version = "=0.1.1", path = "compo
 genet-compositor = { version = "=0.2.0", path = "components/genet-compositor" }
 # Moved to the netrender workspace as a neutral, engine-agnostic crate
 # (extraction plan 2026-05-20). genet is now a consumer, not the owner.
-paint_list_api = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = "=0.1.2" }
+paint_list_api = { git = "https://github.com/merely-made/netrender.git", rev = "72f54a71531f44335377ec21dec950cfd2b61def", version = "=0.1.2" }
 # The PaintCmd -> netrender::Scene translator; also lives in the netrender
 # workspace so any engine can reuse the lowering.
-paint_list_render = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = "=0.1.2" }
+paint_list_render = { git = "https://github.com/merely-made/netrender.git", rev = "72f54a71531f44335377ec21dec950cfd2b61def", version = "=0.1.2" }
 paint_types = { package = "genet-paint-types", version = "=0.2.0", path = "components/shared/paint-types" }
 # `servo = "..."` workspace.dep removed 2026-05-15 per Mark's audit:
 # genet used to be servo-the-fork, but the umbrella servo crate is no
@@ -486,9 +486,9 @@ genet-taffy = { path = "support/patches/taffy" }
 # consumers: each application must restate all three rows at this revision.
 # Classic 0.11 and its encoding/shader types share the maintained release source,
 # preserving the coarse traversal, command progress and image atlas repairs.
-netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
-vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
-vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
+netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "9f454193808dda0db4beb5a46aa295206bfa706d" }
+vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "9f454193808dda0db4beb5a46aa295206bfa706d" }
+vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "9f454193808dda0db4beb5a46aa295206bfa706d" }
 # For WebRender / netrender:
 # The netrender/ workspace (formerly the webrender-wgpu fork) dropped
 # webrender, webrender_api, and wr_malloc_size_of as separate crates. Local

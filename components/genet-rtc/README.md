@@ -98,3 +98,11 @@ local test credentials and must be stopped after the run. Execute
 from `wire/`. These checks cover STUN, relay-only encrypted fragmentation after
 allocation refresh, authentication failure and socket release. They do not
 qualify public deployment, headed interop, cross-machine routing or packet loss.
+
+E2r passes nine ordinary tests on working Rust 1.99.1 and MSRV 1.97.1,
+the three controlled coturn tests and strict all-target Clippy. Restart-specific
+checks cover stale STUN transactions, two bounded relay-refusal generations,
+and DTLS answer policy for continued versus changed peer identity. The pinned
+core's 56 ICE tests pass on 1.97.1, including authenticated old consent confined
+to the retained route and deadline. Genet owns the established-channel
+native/WPT/headed restart receiving results in its conformance receipt.

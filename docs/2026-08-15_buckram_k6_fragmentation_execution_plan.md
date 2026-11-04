@@ -508,7 +508,7 @@ cannot hide a moved regression.
   still uses its existing 16px root-font fallback for `rem`; a broader font
   metric refactor is outside K6a, as recorded in the
   [K4c table sizing plan](2026-07-28_buckram_k4c_table_inline_sizing_execution_plan.md)
-  and the [flex shorthand findings](../design_docs/2026-08-25_livery_flex_shorthand_plan.md#row-18-closure-and-remaining-work).
+  and the [flex shorthand findings](../design_docs/2026-11-03_flex_grid_remaining_plan.md#work-and-done-conditions).
   Basic constant numeric and length calc forms are covered; deferred
   environment-dependent math remains outside this typed-input receipt, per
   the [Stylo harvest H5 boundary](2026-07-20_stylo_harvest_into_livery_plan.md).

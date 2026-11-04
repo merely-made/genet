@@ -19,7 +19,7 @@ it does not wait for Commons calls or public Graphshell rendezvous.
 extraction and consumer cutover. Existing application-carrier qualification is
 in `mere/design_docs/mere_docs/implementation_strategy/2026-10-28_browser_carrier_plan.md`;
 call/media products remain in its sibling `2026-10-28_calls_and_media_plan.md`.
-The existing [Netfetcher wire adoption](2026-10-14_netfetcher_wire_adoption_plan.md)
+The existing [Netfetcher wire adoption](archive_docs/2026-11-03/2026-10-14_netfetcher_wire_adoption_plan.md)
 provides the dependency-direction precedent.
 
 ## Evaluation and ownership
@@ -98,7 +98,7 @@ using the features actually needed by each. Record protocol/API differences,
 crypto/build inputs, current dependency graphs, and the exact scope of tests.
 Keep the old August size comparison historical; do not use it as a current
 measurement of the new RTC core. Receipts are compact text/JSON under
-`murm/testing/webrtc-evaluation/receipts/`, **1 MB total retained cap**.
+`Code/testing/murm/testing/webrtc-evaluation/receipts/`, **1 MB total retained cap**.
 Source and lockfile live with that probe; builds reuse the existing approved
 `C:\t\cargo-targets\retinue` (Murm's pre-rename target), with one compiler job.
 
@@ -306,7 +306,7 @@ deployment and media remain open unless separately qualified.
   comparable compiled-byte measurements. Highest declared Rust floors are
   1.88/1.89/1.89 respectively; undeclared requirements and actual MSRV execution
   are not qualified by metadata. Full compact package lists and toolchain
-  identity: `murm/testing/webrtc-evaluation/receipts/dependency-report.json`.
+  identity: [retained dependency report](https://github.com/merely-made/murm/blob/b0e31de8b581940dcd347968585c401e3ad786ca/testing/webrtc-evaluation/receipts/dependency-report.json).
 - The existing carrier's RustCrypto feature does not imply a C/assembly-free
   build. A locked offline reverse tree for `murm-webrtc --features native`
   reaches AWS-LC via `str0m-rust-crypto -> dimpl 0.7.4`'s `rcgen` feature;

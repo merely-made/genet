@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-07
 **Status:** founded, by Mark's ruling of 2026-09-07 on mere's
-[lighter recall brief](../../mere/design_docs/eidetic_docs/research/2026-09-07_lighter_recall_and_standards_ledger_brief.md)
+[lighter recall brief](../../eidetic/design_docs/eidetic_docs/research/2026-09-07_lighter_recall_and_standards_ledger_brief.md)
 (cited by path; it is the seed and the argument). Living ledger, not a plan;
 rows are added as lanes open and as consumers name a dependency.
 
@@ -79,7 +79,7 @@ evidence from these WPT counts.
 |---|---|---|
 | 2, Selection API | [Selection/Range](2026-09-07_selection_range_plan.md) landed 2026-09-07: selection **28,582/33,621**, 12 all-pass files; live ranges, Livery geometry and selection paint projection. Subsequent DOM node work removed additional range blockers. | Exercise the consumer's gesture-to-clip path; retain the plan's selection movement, scheduling and geometry qualifications. The founding 0/280 does not describe the landed surface. |
 | 4, Intersection Observer | Founding census **0/104**; this reconciliation establishes no later implementation receipt. | Scope viewport geometry and delivery against a named consumer. Intersection evidence alone does not establish dwell or attention. |
-| 6, Mutation Observer | [Observer implementation](2026-09-07_mutation_observer_plan.md) landed 2026-09-07, initially **+495** subtest passes. Range and DOM node work closed further failures; [parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md) added parser-driven observation on 2026-09-08. | Verify the recall consumer's extraction refresh path. Missing-global census failures are historical, not the present implementation state. |
+| 6, Mutation Observer | [Observer implementation](2026-09-07_mutation_observer_plan.md) landed 2026-09-07, initially **+495** subtest passes. Range and DOM node work closed further failures; [parser/script interleaving](2026-11-03_parser_script_frontier_plan.md) added parser-driven observation on 2026-09-08. | Verify the recall consumer's extraction refresh path. Missing-global census failures are historical, not the present implementation state. |
 | 11, Workers | [Dedicated Worker](2026-09-07_worker_plan.md) landed 2026-09-07: **321/967**, 74 all-pass files. Separate-runtime thread, cross-agent messaging, both-backend automated tests and bounded native headed delivery are recorded. | Shared/module workers, nested-relay ordering, real buffer/view detachment, cooperative termination and browser-hosted scripting acceptance remain open. Native application indexing need not wait for full web Worker conformance. |
 | 14, component model | [Shadow DOM](2026-09-07_shadow_dom_plan.md) landed 2026-09-07/08: shadow-dom **1,512/8,804**, 45 all-pass files; custom-elements **2,149/3,837** in that lane. Slots, flat-tree rendering, style scoping and retargeting exist. Parser/script interleaving subsequently closed declarative registry attachment regressions. | Named gaps include constructable/adopted stylesheets, focus delegation and `:host-context()`. Qualify a concrete Cambium-in-document consumer; these counts do not mean the model is a measured fraction complete. |
 
@@ -91,7 +91,7 @@ evidence from these WPT counts.
   adoption is published as `ada6f265`, selecting Genet `19c206873ab`.
   Consumer gates passed 232 Cambium and 38 search tests (one existing timing
   test ignored); normalization and index policy remain with Mere.
-- Row 3: [accessible names](2026-09-26_accessible_names_plan.md) implements the
+- Row 3: [accessible names](2026-11-03_accessible_names_roles_plan.md) implements the
   bounded DOM name/description algorithm and native projection plumbing, with a
   joint generated-text fixture. Scripted sessions now read the retained style
   plane; both Boa and Vano attribute-update/name fixtures and all 56 document
@@ -166,7 +166,7 @@ and Checkpoint C remain pending;
 these targeted fixtures do not update the WPT percentage.
 
 **Encoding execution, 2026-10-05:** the
-[API plan](2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
+[API plan](archive_docs/2026-11-03/2026-10-05_encoding_textdecoder_plan.md) retains C1/C2/C4 and the
 corrected API-only scope. E1 authorizes per-realm native storage, a private
 finalizer and Vano job delivery. E2's adapter guard preserves empty streaming
 state in unchanged encoding_rs 0.8.35. E3's bounded timeout/completion correction
@@ -192,7 +192,7 @@ integration and the Streams assessment; the plan records the source/config
 qualification and retained resources.
 
 **Streams assessment, 2026-10-06:** the
-[Streams plan](2026-10-06_whatwg_streams_plan.md) carries C1/C3. Both C3 records
+[Streams plan](2026-11-03_streams_frontier_plan.md) carries C1/C3. Both C3 records
 still throw on both engines using the fresh merged runner. Prerequisite probes
 pass async-generator and Promise controls but fail real ArrayBuffer transfer
 on both locked engines. Vano has implementation TODOs; Boa's implementation

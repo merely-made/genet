@@ -57,7 +57,7 @@ raw logs (`Code/testing/genet/wpt-ledger/2026-09-29_vano_platform_census/disk-fi
 The result maps record only `panic`. No backtraces were captured.
 
 **Defect lane validated locally, 2026-10-04:** the
-[Genet census-panic plan](2026-10-03_census_panics_plan.md) reproduces all ten
+[Genet census-panic plan](archive_docs/2026-11-03/2026-10-03_census_panics_plan.md) reproduces all ten
 records from `bcf1b08dbe6` with backtraces on both engines. Local production
 commit `876c7a2cba4` removes P1-P7 Rust panics and E1's undeclared Event failure;
 ordinary WPT failures and the missing SVG focus/ResizeObserver features remain.
@@ -115,7 +115,7 @@ Two later rulings the same day are recorded in the
   ruling C3: the two stream getter traps (`stream-safe-creation` and
   `patched-global`) move to the Streams lane.
   **2026-10-06 assessment:** the
-  [Streams plan](2026-10-06_whatwg_streams_plan.md) records fresh merged-runner
+  [Streams plan](archive_docs/2026-11-03/2026-10-06_whatwg_streams_plan.md) records fresh merged-runner
   subsets: both C3 files remain ERROR/evaluation-threw on both engines, with
   zero observed subtests. Their original census attribution remains historical.
   Real ArrayBuffer transfer is missing on both current engine builds, so the
@@ -393,7 +393,7 @@ These are first errors only. A file that dies on `crypto` may also need
 `Worker`; the true demand for each interface is at least this count.
 
 > **Partly closed 2026-09-07** by
-> [`2026-09-07_cheap_globals_plan.md`](2026-09-07_cheap_globals_plan.md):
+> [`2026-09-07_cheap_globals_plan.md`](archive_docs/2026-11-03/2026-09-07_cheap_globals_plan.md):
 > `crypto` (86), `performance` (22), `BroadcastChannel` (14), `MessageChannel`
 > (8), `PerformanceObserver` (4), `queueMicrotask` (3) and `Image` / `Option` /
 > `Audio` are now present, as is `structuredClone`. `XMLHttpRequest` (83) was

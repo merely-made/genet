@@ -674,7 +674,7 @@ that contains `c9d8faf7663`.
 
 **2026-10-14 — residual 11 under WPT.** genet-wpt now implements
 `test_driver.get_computed_label` on branch `computed-label`, not merged
-([accessible names plan](2026-09-26_accessible_names_plan.md), section "WPT
+([accessible names plan](archive_docs/2026-11-03/2026-09-26_accessible_names_plan.md), section "WPT
 `get_computed_label` hook"). Against main `bbb466f8f36`, which contains the fix,
 `accname/name/shadowdom/basic.html` passes 2/2 and `slot.html` passes 2/4.
 Before the hook, both files failed every subtest. The two `slot.html`

@@ -5,6 +5,7 @@ use super::*;
 
 impl Job {
     pub(super) fn run(mut self) {
+        self.qualification.worker_started = Some(Instant::now());
         let result = self.observe();
         self.complete(result);
     }

@@ -12,8 +12,8 @@ cluster (Recommended),WebCrypto,Component model"**. This is the first of those
 lanes. Scope: `fetch`, `referrer-policy`, `mixed-content`,
 `content-security-policy`, `upgrade-insecure-requests`, on the qualified
 netfetcher wire adoption
-([plan](2026-10-14_netfetcher_wire_adoption_plan.md)) and the Streams
-reader-backed Fetch seam ([plan](2026-10-06_whatwg_streams_plan.md)). Engines:
+([plan](archive_docs/2026-11-03/2026-10-14_netfetcher_wire_adoption_plan.md)) and the Streams
+reader-backed Fetch seam ([plan](2026-11-03_streams_frontier_plan.md)). Engines:
 Boa and Vano (Nova), both gated; zero lost passes on either.
 
 Evidence lives in `Code/testing/genet/fetch-security/` (frozen runner, maps,

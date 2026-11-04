@@ -1426,7 +1426,7 @@ halves are split exactly where HTML splits "destroy a child navigable":
 Iframe removing steps call document destruction, which aborts the parser and releases the document; they
 do not call the unload procedure. The historical queued `pagehide`/`unload`
 behavior described below is superseded by the validated local
-[census lane](2026-10-03_census_panics_plan.md). Mark ruled
+[census lane](archive_docs/2026-11-03/2026-10-03_census_panics_plan.md). Mark ruled
 that the currently executing script finishes, then queued destruction precedes
 remaining child load work. Removed containers lose their content navigables synchronously;
 pending parent/top relations let the active script finish. Detached owners do
@@ -3172,3 +3172,13 @@ security checks remain incomplete; this slice changes URL resolution without
 claiming to close them. Server-substituted WPT resources, borrowed Location
 entry-realm attribution, lazy activation, live canvas adoption and parser timing
 retain their existing gates.
+
+## Encoding and census ownership carry (2026-11-03)
+
+The completed Encoding slice leaves legacy-charset iframe navigation/parsing
+with iframe/Realms and the parser owner. The completed census R1/R2 repair
+leaves XML navigable parsing and document.open exception behavior to those
+same current owners. Recheck the actual historical case identities against
+current source before treating either as still broken or newly complete.
+Neither the old Encoding receipts nor the Vano repin transfer broad XML,
+origin/security, parser or native qualification to this plan's current cohort.

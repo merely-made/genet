@@ -4,6 +4,10 @@
 
 #![forbid(unsafe_code)]
 
+mod channels;
+mod signaling;
+mod stats;
+
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
 use std::net::{IpAddr, SocketAddr};
@@ -18,6 +22,7 @@ use murm_rtc::rtc::ice::url::{ProtoType, SchemeType, Url};
 use murm_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use murm_rtc::rtc::peer_connection::configuration::{
     RTCBundlePolicy, RTCConfiguration, RTCConfigurationBuilder, RTCIceTransportPolicy,
+    RTCOfferOptions,
 };
 use murm_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
 use murm_rtc::rtc::peer_connection::message::RTCMessage;
@@ -72,6 +77,10 @@ pub struct NativeWebRtcFactory {
 }
 
 impl NativeWebRtcFactory {
+    /// Create a caller-driven factory.
+    ///
+    /// # Errors
+    /// Returns `TypeError` for an unspecified bind address or invalid resource budgets.
     pub fn new(settings: Settings) -> Result<Self, WebRtcError> {
         if settings.bind.is_unspecified()
             || settings.max_peers == 0
@@ -175,6 +184,14 @@ fn candidate_value(candidate: RTCIceCandidate, local: bool) -> Option<Value> {
     }
     Some(value)
 }
+fn ice_credentials(sdp: &str) -> Option<(String, String)> {
+    let field = |prefix| {
+        sdp.lines()
+            .find_map(|line| line.strip_prefix(prefix))
+            .map(str::to_owned)
+    };
+    Some((field("a=ice-ufrag:")?, field("a=ice-pwd:")?))
+}
 fn configuration(v: &Value) -> Result<RTCConfiguration, WebRtcError> {
     let servers = v["iceServers"]
         .as_array()
@@ -243,10 +260,12 @@ struct State {
     channels: BTreeMap<usize, Value>,
     notifications: VecDeque<Value>,
     gathering: bool,
+    gathered_credentials: Option<(String, String)>,
     held_candidates: Vec<Value>,
     transports: Value,
     revision: u64,
     refused_servers: Vec<String>,
+    refused_server_urls: Vec<String>,
     candidate_urls: BTreeMap<String, String>,
 }
 
@@ -299,9 +318,11 @@ impl WebRtcFactory for NativeWebRtcFactory {
                 channels: BTreeMap::new(),
                 notifications: VecDeque::new(),
                 gathering: false,
+                gathered_credentials: None,
                 held_candidates: Vec::new(),
                 transports: Value::Null,
                 revision: 0,
+                refused_server_urls: refused_servers.clone(),
                 refused_servers,
                 candidate_urls: BTreeMap::new(),
                 observable: json!({"signalingState":"stable","iceGatheringState":"new","iceConnectionState":"new","connectionState":"new"}),
@@ -316,6 +337,55 @@ impl Drop for NativePeer {
 }
 
 impl State {
+    fn begin_gathering(&mut self) -> Result<(), WebRtcError> {
+        let credentials = self
+            .endpoint
+            .core()
+            .local_description()
+            .and_then(|d| ice_credentials(&d.sdp));
+        if credentials == self.gathered_credentials || credentials.is_none() {
+            return Ok(());
+        }
+        let restarting = self.gathering;
+        if restarting {
+            self.refused_servers = self.refused_server_urls.clone();
+        }
+        self.gathered_credentials = credentials;
+        self.gathering = true;
+        self.observable["iceGatheringState"] = json!("gathering");
+        self.notify(json!({"event":"icegatheringstatechange"}));
+        if restarting {
+            let retained = self
+                .endpoint
+                .core()
+                .sctp()
+                .map(|s| s.transport().ice_transport().get_local_candidates())
+                .unwrap_or_default();
+            for mut candidate in retained {
+                candidate.url = self.candidate_urls.get(&candidate.id).cloned();
+                if let Some(value) = candidate_value(candidate, true) {
+                    self.candidate_notice(value);
+                }
+            }
+        } else {
+            for value in std::mem::take(&mut self.held_candidates) {
+                self.candidate_notice(value);
+            }
+        }
+        match &mut self.endpoint {
+            Endpoint::Host(peer) if restarting => peer.restart_gathering().map_err(protocol_error),
+            Endpoint::Host(peer) => peer.finish_host_candidates().map_err(protocol_error),
+            Endpoint::NoRoute(peer) => peer
+                .add_local_candidate(Default::default())
+                .map_err(protocol_error),
+        }
+    }
+    fn candidate_notice(&mut self, mut value: Value) {
+        if !value.is_null() {
+            value["usernameFragment"] = json!(self.gathered_credentials.as_ref().map(|c| &c.0));
+        }
+        self.notify(json!({"event":"icecandidate","candidate":value}));
+    }
     fn transports(&self) -> Value {
         self.endpoint.core().sctp().map_or(Value::Null, |sctp| {
             let dtls=sctp.transport(); let ice=dtls.ice_transport();
@@ -411,6 +481,12 @@ impl State {
         value
     }
     fn notify(&mut self, mut value: Value) {
+        if matches!(
+            value["event"].as_str(),
+            Some("icecandidate" | "icecandidateerror" | "icegatheringstatechange")
+        ) {
+            value["generation"] = json!(self.gathered_credentials.as_ref().map(|c| &c.0));
+        }
         value["state"] = self.snapshot();
         self.notifications.push_back(value);
     }
@@ -453,7 +529,7 @@ impl State {
                     value = Value::Null;
                 }
                 if self.gathering {
-                    self.notify(json!({"event":"icecandidate","candidate":value}));
+                    self.candidate_notice(value);
                 } else {
                     self.held_candidates.push(value);
                 }
@@ -526,324 +602,23 @@ impl WebRtcPeer for NativePeer {
         let now = Instant::now();
         let value = match operation {
             WebRtcOperation::Snapshot => Value::Null,
-            WebRtcOperation::CreateOffer => {
-                if data["iceRestart"] == true {
-                    if state.config["iceServers"]
-                        .as_array()
-                        .is_some_and(|s| !s.is_empty())
-                    {
-                        return Err(failure(
-                            "NotSupportedError",
-                            "ICE server restart is not yet supported",
-                        ));
-                    }
-                    state.endpoint.core_mut().restart_ice();
-                }
-                json!(
-                    state
-                        .endpoint
-                        .core_mut()
-                        .create_offer(None)
-                        .map_err(protocol_error)?
-                )
+            WebRtcOperation::CreateOffer
+            | WebRtcOperation::CreateAnswer
+            | WebRtcOperation::SetLocalDescription
+            | WebRtcOperation::SetRemoteDescription
+            | WebRtcOperation::AddIceCandidate
+            | WebRtcOperation::RestartIce
+            | WebRtcOperation::GetConfiguration
+            | WebRtcOperation::SetConfiguration => {
+                signaling::perform(&mut state, operation, data, now)?
             },
-            WebRtcOperation::CreateAnswer => json!(
-                state
-                    .endpoint
-                    .core_mut()
-                    .create_answer(None)
-                    .map_err(protocol_error)?
-            ),
-            WebRtcOperation::SetLocalDescription => {
-                let description = if data["type"].is_null() {
-                    let mut description =
-                        if state.observable["signalingState"] == "have-remote-offer" {
-                            state.endpoint.core_mut().create_answer(None)
-                        } else {
-                            state.endpoint.core_mut().create_offer(None)
-                        }
-                        .map_err(protocol_error)?;
-                    if let Some(sdp) = data["sdp"].as_str().filter(|s| !s.is_empty()) {
-                        description.sdp = sdp.to_owned();
-                    }
-                    description
-                } else {
-                    serde_json::from_value::<RTCSessionDescription>(data).map_err(protocol_error)?
-                };
-                state
-                    .endpoint
-                    .core_mut()
-                    .set_local_description(now, description)
-                    .map_err(protocol_error)?;
-                if !state.gathering {
-                    state.gathering = true;
-                    state.observable["iceGatheringState"] = json!("gathering");
-                    state.notify(json!({"event":"icegatheringstatechange"}));
-                    for candidate in std::mem::take(&mut state.held_candidates) {
-                        state.notify(json!({"event":"icecandidate","candidate":candidate}));
-                    }
-                    match &mut state.endpoint {
-                        Endpoint::Host(peer) => {
-                            peer.finish_host_candidates().map_err(protocol_error)?
-                        },
-                        Endpoint::NoRoute(peer) => peer
-                            .add_local_candidate(Default::default())
-                            .map_err(protocol_error)?,
-                    }
-                }
-                Value::Null
+            WebRtcOperation::CreateDataChannel
+            | WebRtcOperation::Send
+            | WebRtcOperation::CloseDataChannel
+            | WebRtcOperation::BufferedAmountLowThreshold => {
+                channels::perform(&mut state, operation, data, now)?
             },
-            WebRtcOperation::SetRemoteDescription => {
-                let description = serde_json::from_value::<RTCSessionDescription>(data)
-                    .map_err(protocol_error)?;
-                state
-                    .endpoint
-                    .core_mut()
-                    .set_remote_description(now, description)
-                    .map_err(protocol_error)?;
-                Value::Null
-            },
-            WebRtcOperation::AddIceCandidate => {
-                let candidate = if data.is_null() {
-                    RTCIceCandidateInit::default()
-                } else {
-                    serde_json::from_value(data).map_err(protocol_error)?
-                };
-                if candidate
-                    .candidate
-                    .split_whitespace()
-                    .nth(4)
-                    .is_some_and(|address| address.to_ascii_lowercase().ends_with(".local"))
-                {
-                    return Err(failure(
-                        "OperationError",
-                        "mDNS ICE candidate resolution is not yet supported",
-                    ));
-                }
-                state
-                    .endpoint
-                    .core_mut()
-                    .add_remote_candidate(candidate)
-                    .map_err(protocol_error)?;
-                Value::Null
-            },
-            WebRtcOperation::RestartIce => {
-                if state.config["iceServers"]
-                    .as_array()
-                    .is_some_and(|s| !s.is_empty())
-                {
-                    return Err(failure(
-                        "NotSupportedError",
-                        "ICE server restart is not yet supported",
-                    ));
-                }
-                state.endpoint.core_mut().restart_ice();
-                Value::Null
-            },
-            WebRtcOperation::GetConfiguration => state.config.clone(),
-            WebRtcOperation::SetConfiguration => {
-                if state.config["iceTransportPolicy"] != data["iceTransportPolicy"] {
-                    return Err(failure(
-                        "NotSupportedError",
-                        "Changing the host route policy is not yet supported",
-                    ));
-                }
-                if state.config["iceServers"] != data["iceServers"] {
-                    return Err(failure(
-                        "NotSupportedError",
-                        "Replacing ICE servers is not yet supported",
-                    ));
-                }
-                state
-                    .endpoint
-                    .core_mut()
-                    .set_configuration(configuration(&data)?)
-                    .map_err(protocol_error)?;
-                state.config = data;
-                Value::Null
-            },
-            WebRtcOperation::CreateDataChannel => {
-                if data["label"].as_str().unwrap_or("").len() > u16::MAX as usize
-                    || data["protocol"].as_str().unwrap_or("").len() > u16::MAX as usize
-                {
-                    return Err(failure("TypeError", "RTC channel string is too long"));
-                }
-                if state.channels.len() >= state.settings.max_channels {
-                    return Err(failure("OperationError", "RTC channel limit reached"));
-                }
-                state.refresh_channel_ids();
-                if data["negotiated"] == true
-                    && state.channels.values().any(|channel| {
-                        channel["id"] == data["id"] && channel["readyState"] != "closed"
-                    })
-                {
-                    return Err(failure(
-                        "OperationError",
-                        "RTC channel ID is already in use",
-                    ));
-                }
-                let init = RTCDataChannelInit {
-                    ordered: data["ordered"].as_bool().unwrap_or(true),
-                    protocol: data["protocol"].as_str().unwrap_or("").into(),
-                    max_packet_life_time: data["maxPacketLifeTime"].as_u64().map(|v| v as u16),
-                    max_retransmits: data["maxRetransmits"].as_u64().map(|v| v as u16),
-                    negotiated: if data["negotiated"] == true {
-                        data["id"].as_u64().map(|v| v as u16)
-                    } else {
-                        None
-                    },
-                };
-                let id = state
-                    .endpoint
-                    .core_mut()
-                    .create_data_channel(data["label"].as_str().unwrap_or(""), Some(init))
-                    .map_err(protocol_error)?
-                    .id();
-                state
-                    .channel(id)
-                    .ok_or_else(|| failure("OperationError", "RTC channel unavailable"))?
-            },
-            WebRtcOperation::Send => {
-                let id = data["channel"]
-                    .as_u64()
-                    .ok_or_else(|| failure("TypeError", "Invalid RTC channel"))?
-                    as usize;
-                let bytes: Vec<u8> =
-                    serde_json::from_value(data["data"].clone()).map_err(protocol_error)?;
-                let mut channel =
-                    state.endpoint.core_mut().data_channel(id).ok_or_else(|| {
-                        failure("InvalidStateError", "RTC channel is unavailable")
-                    })?;
-                if data["isString"] == true {
-                    channel
-                        .send_text(now, String::from_utf8(bytes).map_err(protocol_error)?)
-                        .map_err(protocol_error)?;
-                } else {
-                    channel
-                        .send(now, bytes::BytesMut::from(bytes.as_slice()))
-                        .map_err(protocol_error)?;
-                }
-                Value::Null
-            },
-            WebRtcOperation::CloseDataChannel | WebRtcOperation::BufferedAmountLowThreshold => {
-                let id = data["channel"]
-                    .as_u64()
-                    .ok_or_else(|| failure("TypeError", "Invalid RTC channel"))?
-                    as usize;
-                if let Some(mut channel) = state.endpoint.core_mut().data_channel(id) {
-                    if matches!(operation, WebRtcOperation::CloseDataChannel) {
-                        channel.close().map_err(protocol_error)?;
-                    } else {
-                        channel.set_buffered_amount_low_threshold(
-                            data["value"].as_u64().unwrap_or(0) as u32,
-                        );
-                    }
-                }
-                Value::Null
-            },
-            WebRtcOperation::GetStats => {
-                let report = state
-                    .endpoint
-                    .core_mut()
-                    .get_stats(now, StatsSelector::None);
-                let mut entries: Vec<Value> = report
-                    .iter()
-                    .filter_map(|entry| match entry {
-                        RTCStatsReportEntry::PeerConnection(v) => serde_json::to_value(v).ok(),
-                        RTCStatsReportEntry::Transport(v) => serde_json::to_value(v).ok(),
-                        RTCStatsReportEntry::LocalCandidate(v)
-                        | RTCStatsReportEntry::RemoteCandidate(v) => serde_json::to_value(v).ok(),
-                        RTCStatsReportEntry::IceCandidatePair(v) => serde_json::to_value(v).ok(),
-                        RTCStatsReportEntry::Certificate(v) => serde_json::to_value(v).ok(),
-                        RTCStatsReportEntry::DataChannel(v) => serde_json::to_value(v).ok(),
-                        _ => None,
-                    })
-                    .collect();
-                // Peer-reflexive candidates can be discovered inside ICE,
-                // without passing through the core's stats registration hook.
-                // Describe those real candidates before repairing references.
-                if let Some(sctp) = state.endpoint.core().sctp() {
-                    let ice = sctp.transport().ice_transport();
-                    let pairs: Vec<Value> = entries
-                        .iter()
-                        .filter(|v| v["type"] == "candidate-pair")
-                        .cloned()
-                        .collect();
-                    for (local, candidates, field, prefix) in [
-                        (
-                            true,
-                            ice.get_local_candidates(),
-                            "localCandidateId",
-                            "RTCLocalIceCandidate_",
-                        ),
-                        (
-                            false,
-                            ice.get_remote_candidates(),
-                            "remoteCandidateId",
-                            "RTCRemoteIceCandidate_",
-                        ),
-                    ] {
-                        for pair in &pairs {
-                            let Some(id) = pair[field].as_str() else {
-                                continue;
-                            };
-                            let raw = id.strip_prefix(prefix).unwrap_or(id);
-                            let registered = format!("{prefix}{raw}");
-                            if entries
-                                .iter()
-                                .any(|v| v["id"] == id || v["id"] == registered)
-                            {
-                                continue;
-                            }
-                            if let Some(candidate) = candidates.iter().find(|c| c.id == raw) {
-                                entries.push(json!({
-                                    "id":registered,"type":if local {"local-candidate"} else {"remote-candidate"},
-                                    "timestamp":pair["timestamp"],"transportId":pair["transportId"],
-                                    "address":candidate.address,"port":candidate.port,
-                                    "protocol":candidate.protocol.to_string(),"candidateType":candidate.typ.to_string(),
-                                    "priority":candidate.priority,"foundation":candidate.foundation,
-                                }));
-                            }
-                        }
-                    }
-                }
-                // The current core registers namespaced candidate statistics
-                // but its pair accumulator still refers to raw candidate IDs.
-                // Every web-visible reference must identify an actual map row.
-                let ids: std::collections::BTreeSet<String> = entries
-                    .iter()
-                    .filter_map(|v| v["id"].as_str().map(str::to_owned))
-                    .collect();
-                for entry in &mut entries {
-                    // W3C RTCIceCandidateStats defaults remote addresses to
-                    // null. Keep this conservative even for signaled addresses;
-                    // remote server URLs and relay protocols are never exposed.
-                    if entry["type"] == "remote-candidate"
-                        && let Some(object) = entry.as_object_mut()
-                    {
-                        object.insert("address".into(), Value::Null);
-                        object.remove("url");
-                        object.remove("relayProtocol");
-                    }
-                    if entry["type"] != "candidate-pair" {
-                        continue;
-                    }
-                    for (field, prefix) in [
-                        ("localCandidateId", "RTCLocalIceCandidate_"),
-                        ("remoteCandidateId", "RTCRemoteIceCandidate_"),
-                    ] {
-                        if let Some(raw) = entry[field].as_str()
-                            && !ids.contains(raw)
-                        {
-                            let registered = format!("{prefix}{raw}");
-                            if ids.contains(&registered) {
-                                entry[field] = json!(registered);
-                            }
-                        }
-                    }
-                }
-                json!(entries)
-            },
+            WebRtcOperation::GetStats => stats::report(&mut state, now),
             WebRtcOperation::Close => {
                 let _ = state.endpoint.core_mut().close();
                 // Nonblocking flush; dropping the per-realm handle then releases

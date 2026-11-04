@@ -3,13 +3,13 @@
 **Date:** 2026-09-08
 
 **Current status (2026-09-13):** The runtime and `WindowProxy` decisions below
-were resolved by the [Realms continuation](2026-09-08_realms_plan.md): one
+were resolved by the [Realms continuation](2026-11-03_realms_frontier_plan.md): one
 `Runtime` per agent, one document realm per browsing context, with child and
 top-level navigation and a stable `WindowProxy`. Scripted Ortet's headed G5
 acceptance is complete on both engines. The
-[current remaining-work inventory](2026-09-08_realms_plan.md#phase-residual-closure-2026-09-13)
+[current remaining-work inventory](2026-11-03_realms_frontier_plan.md)
 supersedes this lane's original runtime decision and headed-proof residuals.
-The [initial blank-load phase](2026-09-08_realms_plan.md#phase-initial-blank-load-ordering-2026-09-13)
+The [initial blank-load phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-initial-blank-load-ordering-2026-09-13)
 also closes synchronous initial iframe load ordering and parser callback removal,
 with nine Boa WPT gains and both-engine runtime and headed evidence.
 The original scope and receipts below retain their 2026-09-08 boundaries.
@@ -27,7 +27,7 @@ receipt shape used here.
 **Related:** [Ortet](2026-09-03_ortet_founding_plan.md) (the headed host and the
 digests below), [Dedicated Worker](2026-09-07_worker_plan.md) (the second
 `Runtime` and the structured-clone wire this lane's script phase reasons
-against), [parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md)
+against), [parser/script interleaving](2026-11-03_parser_script_frontier_plan.md)
 (a child document loads through the same interleaved parse), and
 [reflector identity](2026-09-07_reflector_identity_plan.md).
 

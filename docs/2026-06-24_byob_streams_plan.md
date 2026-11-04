@@ -1,7 +1,7 @@
 # BYOB byte-stream plan (type:"bytes" ReadableStream)
 
 **Historical proposal, superseded 2026-10-07:** the active
-[WHATWG Streams plan](../design_docs/2026-10-06_whatwg_streams_plan.md) owns
+[WHATWG Streams plan](../design_docs/2026-11-03_streams_frontier_plan.md) owns
 the current byte/BYOB implementation, engine rulings and qualification receipts.
 The buffered-model description below is historical. Its formal-web copying
 proposal does not authorize copying in the current lane; that remains an

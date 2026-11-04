@@ -5,6 +5,9 @@ use genet_webrtc::{NativeWebRtcFactory, Settings};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::Runtime;
 
+#[path = "browser/restart.rs"]
+mod restart;
+
 fn wired<E: ScriptEngine>() -> Runtime<E> {
     wired_with(Settings {
         max_peers: 8,
@@ -36,8 +39,9 @@ fn until<E: ScriptEngine>(rt: &mut Runtime<E>, expression: &str) {
     while read(rt, expression) != "true" {
         assert!(
             Instant::now() < deadline,
-            "timed out: {}; console: {:?}",
+            "timed out: {}; stage: {}; console: {:?}",
             read(rt, "globalThis.problem || ''"),
+            read(rt, "globalThis.restartStage || ''"),
             rt.host().borrow().console
         );
         rt.pump_webrtc(128);
@@ -286,7 +290,7 @@ fn gathering_errors<E: ScriptEngine>() {
         errors.push(e.url);
       };
       try{p.setConfiguration({iceTransportPolicy:'relay'});problem='server replacement accepted';}catch(e){if(e.name!=='NotSupportedError')problem=String(e);}
-      try{p.restartIce();problem='server restart accepted';}catch(e){if(e.name!=='NotSupportedError')problem=String(e);}
+      p.restartIce(); // Before initial negotiation this is a harmless request.
       p.setLocalDescription().catch(e=>problem=String(e));
     "#,
     );
@@ -398,6 +402,15 @@ macro_rules! both {
             #[test]
             fn gathering_errors() {
                 super::gathering_errors::<$engine>();
+            }
+            #[test]
+            fn restart() {
+                super::restart::ordinary::<$engine>();
+            }
+            #[test]
+            #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]
+            fn coturn_restart() {
+                super::restart::coturn::<$engine>();
             }
             #[test]
             #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]

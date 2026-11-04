@@ -574,3 +574,6 @@ fn native_shutdown_revokes_accepted_frame() {
     );
     assert_eq!(called.load(Ordering::SeqCst), 0);
 }
+
+#[path = "native_frame_progress_tests.rs"]
+mod progress_tests;

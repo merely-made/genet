@@ -15,7 +15,8 @@
 // resets it on shutdown. No camera/microphone grant or WebRTC pref override.
 // Profiles stay in the marker-owned stable target cache: receiving-environment
 // automatic approval review rejected recursive deletion. Live owners forbid reuse.
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { createServer as tcpServer } from 'node:net';
@@ -27,6 +28,7 @@ import { createInterface } from 'node:readline';
 import { runRestartChecks } from './webrtc_restart.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const execFileAsync = promisify(execFile);
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const restart=args.get('--restart');
@@ -107,8 +109,12 @@ function powershell(script) {
   return execFileSync('C:/Program Files/PowerShell/7/pwsh.exe', ['-NoProfile','-NonInteractive','-Command',script],
     {encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:65536}).trim();
 }
-function ownedUdp(pid) {
-  const text = powershell(`@(Get-NetUDPEndpoint -OwningProcess ${pid} -ErrorAction SilentlyContinue | ForEach-Object { @{address=$_.LocalAddress;port=$_.LocalPort} }) | ConvertTo-Json -Compress`);
+async function ownedUdp(pid) {
+  // Keep forwarding STUN/TURN datagrams while Windows measures socket ownership.
+  const {stdout} = await execFileAsync('C:/Program Files/PowerShell/7/pwsh.exe',
+    ['-NoProfile','-NonInteractive','-Command',`@(Get-NetUDPEndpoint -OwningProcess ${pid} -ErrorAction SilentlyContinue | ForEach-Object { @{address=$_.LocalAddress;port=$_.LocalPort} }) | ConvertTo-Json -Compress`],
+    {encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:65536});
+  const text=stdout.trim();
   if (!text) return []; const result = JSON.parse(text); return Array.isArray(result) ? result : [result];
 }
 async function released(routes) {
@@ -351,7 +357,7 @@ try {
           let aStats,bStats;
           for(let i=0;i<100;i++){aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');if(aStats&&bStats)break;await delay(15);}
           assert(aStats&&bStats,'stats deadline');verifyStats(aStats,bStats,route);
-          const initialSockets=restart?ownedUdp(native.process.pid):null;
+          const initialSockets=restart?await ownedUdp(native.process.pid):null;
           let restarts;
           if(restart) {
             phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats});
@@ -363,7 +369,7 @@ try {
             while(Date.now()<deadline){pending=await native.value('__interop.snapshot()');if(pending.signaling==='have-local-offer'&&pending.localCredentialsChanged)break;await delay(10);}
             assert(pending.signaling==='have-local-offer'&&pending.localCredentialsChanged,'interrupted restart did not apply an offer');
           }
-          phase='native cleanup';const sockets=ownedUdp(native.process.pid);assert(sockets.length===1,'expected one owned RTC socket');
+          phase='native cleanup';const sockets=await ownedUdp(native.process.pid);assert(sockets.length===1,'expected one owned RTC socket');
           if(restart)assert(initialSockets.length===1&&sockets[0].address===initialSockets[0].address&&sockets[0].port===initialSockets[0].port,'restart replaced or leaked the native socket');
           let cleaned;
           if(cleanup==='navigate') {
@@ -373,7 +379,7 @@ try {
             cleaned=await native.value('__interop.close()');assert(cleaned.state==='closed' && cleaned.channels.every(x=>x==='closed'),'close left live wrappers');
             assert((await native.request('metrics')).pending===0,'close retained a peer');
           }
-          assert(ownedUdp(native.process.pid).length===0,'native cleanup retained UDP ownership');await released(sockets);
+          assert((await ownedUdp(native.process.pid)).length===0,'native cleanup retained UDP ownership');await released(sockets);
           await browser.evaluate('__interop.close()');
           const summary=(snapshot,stats)=>({connected:snapshot.connected,textMessagesVerified:2,binaryBytesVerified:48000,modes:snapshot.modes,refused:snapshot.refused,gatheringErrors:snapshot.gatheringErrors,
             pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint,

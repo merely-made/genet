@@ -21739,3 +21739,381 @@ The ignored root lock is retained through this delta from the previously archive
 ```json
 {"gate":"E2r-native-test-binary-correction","referencesUTC":"2026-11-04T02:19:57.603047+00:00","field":"binarySHA256.nativeTests","actualPath":"C:\\t\\cargo-targets\\genet\\build\\debug\\deps\\browser-37312c00641cc6bc.exe","actualSHA256":"d850288a577f54b8624a2ba5aa876fd8832d7e42ea83df3beed17c4f5be77f95","reason":"The collector read the old fixed filename (0984a2ebf671402d); Cargo produced 37312c00641cc6bc after the dependency update. The live ignored-test process path was independently observed. This corrects binary attribution; the 18+4 successful commands, fixture and WPT identities are unchanged."}
 ```
+
+
+## E2r WPT after - 2026-11-04T02:32:58.046829+00:00
+
+```json
+{"gate":"E2r-WPT","phase":"after","utc":"2026-11-04T02:32:58.046829+00:00","source":"69c926551546fe5d7cdd4efaeb6b89e18e045adc","binarySHA256":"ddc85ca63781dcb7edf656aaf8af293b9cd1f421fb0f80c9dd17e9e8c0e34d17","lockSHA256":"cc8330abf8ef395b4e9aff56535557c5645bc99c71b23fad31a0ee79f95aa625","sourceSHA256":{"tests\\wpt\\tests\\webrtc\\RTCPeerConnection-constructor.html":"31cf6a8f9f9d9c36d4a00a6ca1c224b493b6ee39b848dc4e380ce5b96988d074","tests\\wpt\\tests\\webrtc\\RTCIceCandidate-constructor.html":"9bab537b6f3618bda3410d37bba9d63bbdec6116ebe9958759e67fb9fe7d5449","tests\\wpt\\tests\\webrtc\\RTCPeerConnection-createDataChannel.html":"0356665f81d466804a4fd06d73075cc03767a5b4944e3f7d62e1da002c49c71f","tests\\wpt\\tests\\webrtc\\RTCPeerConnectionIceErrorEvent.html":"4232b52ef4fbd19f75bf86164c9750ab00fadafcb0d9bf21b7e27ffb40ee25c3","tests\\wpt\\tests\\webrtc\\RTCDataChannel-iceRestart.html":"d55ece055b5de1dfefbb9c51e859db7b5f7999eb825bbcaf9bbad490f9e4d228","tests\\wpt\\tests\\webrtc\\RTCPeerConnection-restartIce.https.html":"aa0667b9333098488a9ee883e1cff0c000acb676440ee107e5def9e3840d6f19","tests\\wpt\\tests\\webrtc\\RTCPeerConnection-restartIce-onnegotiationneeded.https.html":"664fbea25291edc974a11000147edf1291297d3223b411248677e88a60b5f379","tests\\wpt\\tests\\resources\\testharness.js":"d2399236c2a09c429804ff2299ad6629e17e2b53f17a74dd341e936adb11ae3e","tests\\wpt\\tests\\webrtc\\RTCPeerConnection-helper.js":"9709abd9c5a024c8bdbedd1cfab8a8f2c47b9358a987905cedc2a770ded69d2d"},"outcomes":[{"status":"pass","subtests_passed":22,"subtests_total":22,"reason":null,"engine":"boa","test":"webrtc/RTCPeerConnection-constructor.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"b1eef917daf2017cfbaa52bd6bb89af0a748a68d933118f35759f6450f072adf"},{"status":"pass","subtests_passed":21,"subtests_total":21,"reason":null,"engine":"boa","test":"webrtc/RTCIceCandidate-constructor.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"f981b6fe5e5148f6f7c528a236f68c9d2d2864ba70ed93d3aacefb084785302d"},{"status":"fail","subtests_passed":46,"subtests_total":52,"reason":null,"engine":"boa","test":"webrtc/RTCPeerConnection-createDataChannel.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"7843fd6432d00a1ec526d8dcd33ddaefb7faea5def172df5522a1556378b279a"},{"status":"pass","subtests_passed":1,"subtests_total":1,"reason":null,"engine":"boa","test":"webrtc/RTCPeerConnectionIceErrorEvent.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"3894de4f0fa1144e6df745be07c495ecac9132e605f8b6827201ddb8821ab95c"},{"status":"pass","subtests_passed":2,"subtests_total":2,"reason":null,"engine":"boa","test":"webrtc/RTCDataChannel-iceRestart.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"4ffac631349b5e7138c0913a90e9dd9767a6a60c83b232d83d94e9ac0f614854"},{"status":"fail","subtests_passed":1,"subtests_total":28,"reason":null,"engine":"boa","test":"webrtc/RTCPeerConnection-restartIce.https.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"5c06c07a57c853cefc78ea3bce0e14682f14a3ed95ffd8f82503c32d51eb53cb"},{"status":"fail","subtests_passed":0,"subtests_total":1,"reason":null,"engine":"boa","test":"webrtc/RTCPeerConnection-restartIce-onnegotiationneeded.https.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"086a9acc50e8e210516ffa19235ea516728f8a69b72d78af47b05cbcfbcf84cd"},{"status":"pass","subtests_passed":22,"subtests_total":22,"reason":null,"engine":"nova","test":"webrtc/RTCPeerConnection-constructor.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"b1eef917daf2017cfbaa52bd6bb89af0a748a68d933118f35759f6450f072adf"},{"status":"pass","subtests_passed":21,"subtests_total":21,"reason":null,"engine":"nova","test":"webrtc/RTCIceCandidate-constructor.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"f981b6fe5e5148f6f7c528a236f68c9d2d2864ba70ed93d3aacefb084785302d"},{"status":"fail","subtests_passed":46,"subtests_total":52,"reason":null,"engine":"nova","test":"webrtc/RTCPeerConnection-createDataChannel.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"7843fd6432d00a1ec526d8dcd33ddaefb7faea5def172df5522a1556378b279a"},{"status":"pass","subtests_passed":1,"subtests_total":1,"reason":null,"engine":"nova","test":"webrtc/RTCPeerConnectionIceErrorEvent.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"3894de4f0fa1144e6df745be07c495ecac9132e605f8b6827201ddb8821ab95c"},{"status":"pass","subtests_passed":2,"subtests_total":2,"reason":null,"engine":"nova","test":"webrtc/RTCDataChannel-iceRestart.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"4ffac631349b5e7138c0913a90e9dd9767a6a60c83b232d83d94e9ac0f614854"},{"status":"fail","subtests_passed":1,"subtests_total":28,"reason":null,"engine":"nova","test":"webrtc/RTCPeerConnection-restartIce.https.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"5c06c07a57c853cefc78ea3bce0e14682f14a3ed95ffd8f82503c32d51eb53cb"},{"status":"fail","subtests_passed":0,"subtests_total":1,"reason":null,"engine":"nova","test":"webrtc/RTCPeerConnection-restartIce-onnegotiationneeded.https.html","exit":0,"caseDeltaFromReference":{"missing":[],"added":[],"changed":[]},"subtestsSHA256":"086a9acc50e8e210516ffa19235ea516728f8a69b72d78af47b05cbcfbcf84cd"}],"beforeBinarySHA256":"7d6f7c787e417b30d1d8db5406f489e6a89bf56327362d61df2184d350c5e75a","failure":null,"caseMapReference":{"utc":"2026-11-04T00:39:43.369890+00:00","binarySHA256":"5f6cfc475393bbd19cd59c70eca7356006a7af4d17c68f656a2a2130cc198428"},"comparisonMatchesReference":true,"comparisonSHA256":"b7a4387ad7e19b42d6a53f96a0f3b0d6db3ca6752f49bc9fc4f589a7e21c8b5f"}
+```
+
+
+### E2r headed run
+
+```json
+{"schema":2,"gate":"E2r-run","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:35:00.387Z","signature":"07c4e85bd28a356db8c5e38434c4be51970cbbc0ecbfa8c6f2b436ab5b640ed5","source":"69c926551546fe5d7cdd4efaeb6b89e18e045adc","sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"2fe42fa0c6fd8c3dda9c6f83c46468ee8e14046b5eadc8b33eb9667ed87745cf","components/genet-webrtc/examples/interop_host/trace.rs":"a79355fa0225cc8eed8b2c9b64e4608c3570a7c8e06181fc6f89b209c49ab857","support/ci/webrtc_interop.mjs":"990dda54c24eaf4c28dabc788600bd4311c10d47af63c81a622051c04d4771f6","support/ci/webrtc_interop_peer.js":"0547ce96a35dea59a0df3d1122104bc14d3dd8130d7c07326f8be002e55fc216","support/ci/webrtc_restart.mjs":"ee66a159ab15d2211c6861d80291136a11938b4e07f8f3716d585878a0973a65","support/ci/webrtc_receipts.mjs":"a9e6c752e009b4285c90ad81580dba68edb7a49f814b4499960745b802d9628d","components/genet-webrtc/Cargo.toml":"be6ef856db2dde7de161b159d9f450614026220e1df26fdf1038d6e598e3a1a7","components/genet-webrtc/src/lib.rs":"af13adba523d1dbc69d75bcadb05f61d4ef96d357ccecf075f25f6e294c95c22","components/genet-webrtc/src/signaling.rs":"d9f94db60d5b812a81d9a444b81f4de49fcb271808558716ebf0b32f0900ed0f","components/genet-webrtc/src/channels.rs":"d4914d3d6844339b6b740ea52989b8bc28dba52100505ad116713093d6c6a770","components/genet-webrtc/src/stats.rs":"3f6263dbb47c43434d99ee6bb3c338c1bf290571ef22ba37c808fac1f29b43a2","components/script-runtime-api/webrtc/bootstrap.js":"c84ff47e51d2add83d168fc8c85e99452e10415bb0ea8325415b0766d7bba877"},"nativeBinarySHA256":"9f24c0c5cbabb39f78ecd22d4f9af8da23da6b537d3918e5bc9485b9ea04dd3d","lockSHA256":"cc8330abf8ef395b4e9aff56535557c5645bc99c71b23fad31a0ee79f95aa625","node":"v24.11.0","server":"172.28.40.199:34790","bind":"192.168.4.36","expectedCases":48,"answerDelayMs":0,"choices":{"browser":["chrome","firefox"],"engine":["boa","nova"],"route":["direct","stun","relay"],"offerer":["native","browser"],"cleanup":["close","navigate"]},"commonAssertions":{"channelModes":["ordered reliable","unordered maxRetransmits=0"],"initialMessagesPerPeer":3,"initialBinaryBytesPerPeer":48000,"restartsPerCase":2,"liveProbesPerRestart":4,"binaryBytesPerPeerPerRestart":192000,"unicodeAndEveryBinaryByteChecked":true,"changedLocalAndRemoteCredentials":true,"sameChannelsAndCertificates":true,"staleNativeCandidateRefused":true,"nativeStatsReferencesAndPrivacyChecked":true,"nativeRelayAllocationReused":true,"certificateEvidence":"SHA256 of JSON [native SHA256 fingerprint,browser SHA256 fingerprint]","omittedGatheringErrorCodesMeansNone":true,"omittedRefusalsAndNegotiationCountsMeanZero":true,"caseVerifiedMeans":"all common assertions passed and source/native binary unchanged at checkpoint","pendingRestartInterruptedBeforeCleanup":true,"sameNativeSocketThenReleasedAndRebound":true},"scope":"Windows native data channels, fixed numeric UDP STUN/TURN and unchanged interface; broader DNS/mDNS, server/interface replacement, TCP/TLS, media and carrier gates remain separate"}
+```
+
+
+### E2r headed browser
+
+```json
+{"schema":2,"gate":"E2r-browser","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:35:01.992Z","browser":"chrome","version":"Chrome/156.0.8078.80","headed":true,"visibleWindows":2,"webrtcPreferenceOverrides":false,"networkPermissions":[]}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:35:33.220Z","browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":31.15,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"7631e33e8be6d8544f1ce74fce56cc6f00a72c0909ba5df4161a850174414bb0","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:36:05.175Z","browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":31.72,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"f8b339af5130a6ca91f1a9b720a833af670e2cd72e1b0e3923bd4892c6e5471b","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:36:28.450Z","browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":23.02,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"04f311a65bddf6bc271df94e8ead1c4452256e3c106bb551faa88f83e071f5f2","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:36:54.018Z","browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":25.34,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"942c122669184f183c1465682f24d4a1b2ce273b5b1ed721112db24ea4846a10","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:37:18.727Z","browser":"chrome","engine":"boa","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":24.48,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"2404d8b6af2c8e90685497b2b1b8919c6a2de6b25b5615b48320c462d7e670c5","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:37:45.466Z","browser":"chrome","engine":"boa","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":26.5,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"7077113e0f80577a676157ac6560c96bc2b07dee2325a9fc21c6911ead69c5b5","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:38:10.181Z","browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":24.48,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"5bb6fbeca0bcc3e6c0b3c19cc350727256bdc2529da566a9dd805d21e211a3e5","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:38:35.339Z","browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":24.93,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"564906b4333246dc824a21d9ab5dd23f1d99d0547c17f504ee5ceb3cc8ddf39b","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:39:00.863Z","browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":25.3,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"6834c8ad59c1e95e03f0053c62c65f18603d011609c9f4e8115542c1a647ff54","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:39:28.014Z","browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":26.92,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"32e3e955adb6e866a3dbe7077e5e30763587b9190a1ff8a0ae6b6b75f3a82693","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:39:50.334Z","browser":"chrome","engine":"boa","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":22.1,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"f9d1c0082632b02ec360d5d0e8c9973c2278c2d969cb67f3744c79ec6ec626dd","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:40:15.736Z","browser":"chrome","engine":"boa","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":25.17,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"bf1580dd67ad323a9d58102bc3f323d883d05d2cd29d6a94f9661b7bff3eca68","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:40:38.295Z","browser":"chrome","engine":"nova","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":22.33,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"fc6d938bab4ba8d20610438b016f2a727fa0dc9aa28286e2a718cb121297fda0","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:41:01.444Z","browser":"chrome","engine":"nova","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":22.95,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"c00908e2ab4e5de4b440582015435df4b1d6076594b5c2b14b20f9dfb2592760","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","statsSettling":{"attempts":3,"pairStates":[["succeeded","in-progress"],["succeeded","succeeded"]]}}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:41:23.283Z","browser":"chrome","engine":"nova","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":21.62,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"89d41235937a584cea737a0fe5d2bdea13ce52e35e466e7698757bf410433e6f","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:41:45.341Z","browser":"chrome","engine":"nova","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":21.86,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"4df651851876434b5c3003b301d2516a7dd5675620f0538f71e58348db6b6a5e","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:42:07.879Z","browser":"chrome","engine":"nova","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":22.34,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"44bed63c9523b82b2fd21b7ac91df778712afdd50b38d50f9cff32bc9e5ac131","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:42:30.735Z","browser":"chrome","engine":"nova","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":22.66,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"44596f06e0ec650272c82ab19f02e8dd2a659fc8f4ec810da0a94debf8438425","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:42:51.543Z","browser":"chrome","engine":"nova","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":20.61,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"4218ab48deb3acdbf222195a232284602496255086af6fc52d074203784c1f02","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:43:14.862Z","browser":"chrome","engine":"nova","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":23.11,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"54d3f4fe6a353a2d3cf5cfdb2c0b28bc7729f1def494b6533994bdc4bd5c2464","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:43:38.972Z","browser":"chrome","engine":"nova","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":23.91,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"6568d433816d1971d100bbb6b2388478f4345a4a069d6e8e0c0cbe65250974d2","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:44:03.985Z","browser":"chrome","engine":"nova","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":24.81,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"43bee03a8c23bbcd4991e906a5ad4b5d423c96be9cdc94852dfd323532364721","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:44:24.549Z","browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":20.36,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"02d5299909a79faf6f4dfc6448ad086e29232e4c0c2208b4a0f9a540b58d3b7e","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:44:46.347Z","browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":21.6,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"bb07cf4369ba45d51315d99bc30f31b0971c639bf349723c9b94a0c3297f0c1d","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed browser
+
+```json
+{"schema":2,"gate":"E2r-browser","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:44:50.168Z","browser":"firefox","version":"159.0.1","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[{"permission":"local-network","before":"prompt","after":"granted","error":null},{"permission":"loopback-network","before":"prompt","after":"granted","error":null}]}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:45:21.048Z","browser":"firefox","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":30.79,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"ba0caf8c348224b5693f9275bc6be25998c8d5a9253bc856306d7cf0dbffe254","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:45:55.554Z","browser":"firefox","engine":"boa","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":34.26,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"2a0125a6de4a278fc189495c1d63b7ee0051070e217b88c6c15f67ddef91f698","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:46:26.349Z","browser":"firefox","engine":"boa","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":30.54,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"a151c09e757ef31380b90a6e9eafcfa292bbb09d65f8024a9afc67a1efe97963","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:46:59.290Z","browser":"firefox","engine":"boa","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":32.7,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"a7870e34f3104bb00ffa8fc52f36f258f9649d4a64a8e8e17e8eadf5444dae94","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:47:31.262Z","browser":"firefox","engine":"boa","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":31.71,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"9051ff27224242f66835f16e12c72c7db3970734112dcedc58f5d068fb1ed83c","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:48:05.687Z","browser":"firefox","engine":"boa","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":34.17,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"b89dfb2c6fae3f93bfe2e78962684cf43567ec9b82f87899b93e25a6b113941f","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:48:36.365Z","browser":"firefox","engine":"boa","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":30.41,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"7d8e44770f6cb5fc2f8eeec543c3de38e7ee2551f8141069c8f4ccce638ec5ee","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:49:09.124Z","browser":"firefox","engine":"boa","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":32.51,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"6fe919f4f6abc620c0ce6b873af7702b2979672ee33d8524d472e0c9845d9140","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:49:41.010Z","browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":31.63,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"645123f30bcc3e6909628b2e1f77f5959d479329ff09ef70e01e1fe4e13c3727","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:50:15.558Z","browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":34.29,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"f9321714637855416f5e17a1538d19ff522b8f466f4bab876aeb0df01763950f","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:50:44.997Z","browser":"firefox","engine":"boa","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":29.17,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"92390d88cfe7cd7c0267dd7eb1bbcd3ed14ff988a5c63fa87017d844d110f0d2","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:51:16.708Z","browser":"firefox","engine":"boa","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":31.44,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"e080237dcf5ce3ac6d38ffc2da28e0c7881a3a1288dc4b578b4395a8ea125573","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:51:46.517Z","browser":"firefox","engine":"nova","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":29.53,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"e17fa5976eec0f49046d5d2c021cc5f99721f83b889648b47edcb8514d30ad92","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:52:17.718Z","browser":"firefox","engine":"nova","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":30.98,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"b36deab361bbd92d6edf4a7453357e255026517ee7a11141e1f792fe6583a52e","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:52:46.125Z","browser":"firefox","engine":"nova","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":28.18,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"5c6be4f7608aba6c09a63dcf1f31dfba3741be21d9a0e3781cc2ac3d80ae53e8","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:53:16.159Z","browser":"firefox","engine":"nova","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":29.81,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"eab2e1c5f71fb13aea54a981ff4223a3fc8ad11a4dca4fd09d74b108fc71684f","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:53:46.556Z","browser":"firefox","engine":"nova","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":30.17,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"9c31826c6c3fd14ab68983577ee0430a17cc69474285257c1f3dd8f7101a0310","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:54:17.866Z","browser":"firefox","engine":"nova","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":31.08,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"790c36d3de77999d0feff029953c2dd73f6f64b43cc2f7a5aab968ca5278e2e6","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:54:46.278Z","browser":"firefox","engine":"nova","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":28.18,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"3fefd71dbd88e4e6b1c83ecde8db62674613e466a95000921a04d9f027472444","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:55:16.397Z","browser":"firefox","engine":"nova","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":29.89,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"22cbc19b1d2a3f7e0b7db2d4b81753993af86bb9fe7f2cc84d4cf06cfdc30870","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:55:46.777Z","browser":"firefox","engine":"nova","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":30.15,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"76330d2501e293b020b8e3d08fc2b143e05112ece4852cb9d101427f7d4dcfb9","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:56:18.368Z","browser":"firefox","engine":"nova","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":31.37,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"0f219aa7d50c74f3d224437eabbc0304cb4274dc61f9e02dc9c2b8b1d1c2d878","restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:56:46.153Z","browser":"firefox","engine":"nova","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":27.56,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"fe8a15b6631c307c76c220484c68aab1de749307333c815aaa7964ad7c96a881","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:57:15.126Z","browser":"firefox","engine":"nova","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":28.76,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"fbfefdb7a3c11265236625f3295ea599717acce9ebe2b39b371baada004679ae","restarts":[{"method":"method","initiator":"browser"},{"method":"offer","initiator":"native"}],"verified":true}
+```
+
+
+### E2r headed run-end
+
+```json
+{"schema":2,"gate":"E2r-run-end","run":"e53dd214-4156-4830-bbf5-23caa7a63288","utc":"2026-11-04T02:57:15.606Z","failure":null,"sourceStable":true,"completedCases":48,"completeMatrix":true,"completeSelectedMatrix":true,"completedRestarts":96,"interruptedRestarts":48,"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.80","headed":true},{"browser":"firefox","version":"159.0.1","headed":true}],"profileCleanup":"automatic approval review rejected recursive profile deletion as blocked by policy; marker-owned profile caches retained"}
+```
+
+
+### E2r receiving closure and fixture audit
+
+```json
+{"gate":"E2r-closure","utc":"2026-11-04T03:02:28.373890+00:00","run":"e53dd214-4156-4830-bbf5-23caa7a63288","caseSetSourceBinaryLockReverified":true,"coturn":{"epoch":"d1ccdd68-7e09-42bf-b3c1-18be5da2b03e","counts":{"allocationRequestsSucceeded":132,"permissionRequestsSucceeded":639,"refreshRequestsSucceeded":798,"zeroLifetimeRefreshes":132},"scope":"Current controlled fixture lifetime; counts are matched coturn log events, not per-case allocation acceptance.","stoppedVerifiedPID":307,"signal":"SIGINT","exit":2,"service":"inactive/disabled","remainingProcesses":0},"ownedNativeBrowserControllerProcesses":0,"fixtureNetworkPermissionGrants":0,"historicalPermissionRestore":"Nov 2 localhost fixture grant reset to prompt through Firefox BiDi, cleanup only; read-only SQLite confirms no fixture network grants","retainedCaches":{"owner":"Genet RTC tests","profilesRoot":"C:/t/cargo-targets/genet/rtc-interop","profileBytes":323045135,"MSRVHome":"C:/t/cargo-homes/rtc-restart","MSRVOwnBytesExcludingRegistryJunction":16161390,"reason":"automatic approval review rejected deletion as blocked by policy"},"isolatedTargetsOrWorktreesCreated":false,"staleGeneratedPycRemoved":true}
+```

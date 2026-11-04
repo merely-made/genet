@@ -1,7 +1,7 @@
 # WebRTC conformance and shared transport evaluation
 
-**Status (2026-11-03): E0/E1a and E2h qualified; E2r ICE restart receiving
-qualification is in progress; broader E2, carrier cutover and E3 remain open.**
+**Status (2026-11-03): E0/E1a, E2h and fixed-server E2r qualified;
+broader E2, carrier cutover and E3 remain open.**
 The native receiving path is checked on both engines against selected unmodified
 WPT and encrypted direct/UDP-relay transfer. Ortet's scripted host compiles with
 the capability. IP-literal UDP STUN/TURN and fixed-server ICE restart are
@@ -219,7 +219,7 @@ deployment and media remain open unless separately qualified.
 
 ### E2r. ICE restart on established data channels
 
-**Status (2026-11-03): repaired provider/native gates passed; selected WPT and full headed requalification in progress.** Freeze a fresh native
+**Status (2026-11-03): qualified for unchanged interfaces and fixed numeric UDP servers.** Freeze a fresh native
 runner and unchanged WPT case map before implementation. Exercise
 `RTCDataChannel-iceRestart.html`, both `RTCPeerConnection-restartIce` files and
 the existing constructor/channel/ICE-error controls on Boa and Vano. Retain
@@ -407,10 +407,10 @@ journal; leave Git commits until the run ends. `--receipt-mode stdout` remains
 available for bounded diagnostic probes. After reconnection, the runner waits
 up to 15 seconds for actual selected-pair reports to reach `succeeded`, retaining
 any intervening states rather than relaxing route or privacy assertions.
-The headed journal retains a native-control deadline on Chrome/Vano TURN;
+An earlier headed journal retains a native-control deadline on Chrome/Vano TURN;
 the same case passes after an unchanged-profile resume. Its cause is not
-established. Matrix coverage across checkpoints does not establish an
-uninterrupted or latency-qualified run.
+established. The later complete run passes all 48 cases without a retry;
+latency qualification remains separate.
 An eight-second delayed-answer TURN probe reproduced an exhausted controlling
 pair that answered fresh authenticated requests but never checked again. The
 fork schedules a new check for that failed pair without inheriting prior
@@ -427,12 +427,6 @@ pending assertion explicitly, so recovery does not silently change the inventory
 
 ## Progress
 
-- 2026-11-03: receive provider `2ff146629e17ce8e77fc56ffa26f7b13b8b8f83a`
-  and core `479995928668d0db1f8cfb2aa26f818b9f03919f` after the headed
-  delayed-answer failure exposed an exhausted controlling pair. The same
-  eight-second-delay Firefox/TURN case passes with fresh nomination after
-  exhaustion. All 22 native checks, strict adapter/example Clippy and Ortet's
-  receiving compile pass; fresh selected WPT and headed qualification follow.
 - 2026-11-01: E0 selected rtc and established the independent provider boundary.
 - 2026-11-01: E1a qualified `murm-rtc`; application-carrier cutover remains open.
 - 2026-11-01: E1b/E2 added Genet's per-document capability, native adapter,
@@ -463,7 +457,19 @@ pending assertion explicitly, so recovery does not silently change the inventory
   native Boa/Vano, strict Clippy, Ortet compilation and the unchanged selected
   WPT comparison pass. Both restart WPT assertions and the closed-peer no-op
   pass on both engines; media failures and preliminary ERROR rows remain in
-  the receipt. The full 48-case headed restart matrix is in progress.
+  the receipt. Headed failures led to the supplier repair and final gate below.
+- 2026-11-03: receive provider `2ff146629e17ce8e77fc56ffa26f7b13b8b8f83a`
+  and core `479995928668d0db1f8cfb2aa26f818b9f03919f` after the headed
+  delayed-answer failure exposed an exhausted controlling pair. The same
+  eight-second-delay Firefox/TURN case passes with fresh nomination after
+  exhaustion. All 22 native checks, strict adapter/example Clippy and Ortet's
+  receiving compile pass.
+- 2026-11-03: E2r receiving qualifies at `69c926551546fe5d7cdd4efaeb6b89e18e045adc`:
+  the fresh headed matrix passes 48/48 cases, 96 completed restarts and 48
+  interrupted-restart cleanups without a failed attempt. Boa/Vano retain the
+  exact selected WPT maps, both data-channel restart assertions and closed-peer
+  no-op passes; media failures remain. The controlled fixture is stopped,
+  network grants restored, and retained cache exceptions recorded in the receipt.
 
 ## UDP STUN and TURN receiving gate
 

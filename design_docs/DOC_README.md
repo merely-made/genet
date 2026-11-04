@@ -1,6 +1,6 @@
 # genet Documentation Index
 
-- [WebRTC conformance and shared transport evaluation](2026-11-01_webrtc_conformance_plan.md): native Boa/Vano data channels through Murm's shared provider, selected unmodified WPT, document lifetime and headed Chrome/Firefox direct/forced-UDP-TURN interoperability. Fixed-server ICE restart is implemented with STUN/TURN reuse; E2r receiving qualification is in progress. DNS/mDNS, TCP/TLS, server replacement, interface rebinding, browser-guest, media and application-carrier cutover remain separate gates.
+- [WebRTC conformance and shared transport evaluation](2026-11-01_webrtc_conformance_plan.md): native Boa/Vano data channels through Murm's shared provider, selected unmodified WPT, document lifetime and headed Chrome/Firefox interoperability. E2r qualifies fixed-server ICE restart with UDP STUN/TURN reuse, 48 headed cases and native/WPT gates. DNS/mDNS, TCP/TLS, server replacement, interface rebinding, browser-guest, media and application-carrier cutover remain separate gates.
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 

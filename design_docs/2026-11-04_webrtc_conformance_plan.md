@@ -128,12 +128,23 @@ or application transport is needed.
 ## Progress
 
 - 2026-11-04: archived the completed E2d plan whole and opened E2s; source and
-  dependency state rechecked before product changes. Fresh WPT baseline follows.
+  dependency state rechecked before product changes. The fresh WPT baseline is retained.
+- Supplier `ef2d18fadbbdca3847ad99040af14f2bc7693a47` is published and received
+  by Genet `ff958976f2a904d250d00ee10335696c62f749b1`. Provider checks pass
+  29 ordinary plus three controlled coturn tests on working Rust/MSRV, strict
+  Clippy and the host-only graph. Genet passes 38 native tests across Boa/Vano,
+  strict adapter Clippy, Ortet scripted-host compilation and required hooks.
+  The seven selected WPT files retain every baseline case/status. Headed
+  service-discovery qualification is running against that committed source.
+- The first headed attempt retained 17 passing cases, then stopped when its
+  initial one-shot statistics capture lacked a succeeded pair. Added bounded
+  initial resampling, preserving route/certificate/privacy acceptance checks
+  and failure diagnostics. Three helper regressions pass; a new complete
+  headed matrix must qualify the revised recorder. The first attempt remains
+  in the packet and does not count toward that fresh matrix.
 
 ## Decisions
 
-- **webrtc_conformance D4 (2026-11-04, Mark):** "Continue!" Continue the next
-  bounded RTC conformance slice after E2d. E2s covers UDP service discovery;
-  mDNS and TURN TCP/TLS remain separate. The exact earlier rulings remain in
-  the archived predecessors.
-  Links: area web-platform · plans E2s E2 E3 · summary UDP service discovery
+The exact earlier design rulings D1-D3 remain in the archived predecessors.
+The user authorized this continuation with "Continue!"; this is an operational
+continuation, not a new doctrine case.

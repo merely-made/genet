@@ -16,7 +16,7 @@ function records(text) {
 function compact(c) {
   if(c.status!=='pass') {
     const d=c.restartDiagnostics;
-    return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'fail',phase:c.phase,error:c.error,
+    return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'fail',phase:c.phase,error:c.error,initialStats:c.initialStatsDiagnostics,
       diagnostics:d?{step:d.step,method:d.method,initiator:d.initiator,iceBefore:d.iceBefore,iceAfter:d.iceAfter,statsObserved:d.statsObserved,
         peers:Object.fromEntries(Object.entries(d.snapshots||{}).map(([name,s])=>[name,{
           connection:s.connectionState,ice:s.iceState,signaling:s.signaling,gathering:s.gathering,
@@ -39,7 +39,7 @@ function compact(c) {
     refusals:a.refused.length||b.refused.length?{native:counts(a.refused),browser:counts(b.refused)}:undefined,
     gatheringErrorCodes:codes.native.length||codes.browser.length?codes:undefined,
     restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,nativeNegotiationEvents:r.nativeNegotiationEvents||undefined,statsSettling:r.statsSettling})),
-    dns:c.dns,commonAssertionsVerified:true};
+    dns:c.dns,initialStatsSettling:c.initialStatsSettling,commonAssertionsVerified:true};
 }
 
 export class RestartJournal {

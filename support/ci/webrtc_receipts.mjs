@@ -73,7 +73,8 @@ export class RestartJournal {
         omittedGatheringErrorCodesMeansNone:true,
         omittedRefusalsAndNegotiationCountsMeanZero:true,
         caseVerifiedMeans:'all common assertions passed and source/native binary unchanged at checkpoint',
-        pendingRestartInterruptedBeforeCleanup:true,sameNativeRtcSocketThenAllRtcAndDnsSocketsReleasedAndRebound:true},
+        pendingRestartInterruptedBeforeCleanup:true,observableNativeRtcAndDnsEndpointsReleasedAndRebound:true,
+        sharedMdnsEvidence:identity.mdns?'Windows owner table may omit shared 5353 binds; pending tickets cancel in headed checks, actual multicast socket/drop behavior has provider tests.':undefined},
       scope:identity.mdns?'Windows native remote UUID mDNS resolution on a fixed IPv4 interface; controlled aliases for numeric browser host candidates and untouched browser mDNS names. UDP STUN/TURN regressions, relay suppression and pending-query cancellation. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.':identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
     return journal;
   }
@@ -81,7 +82,9 @@ export class RestartJournal {
     assert(fields.every(f=>this.identity.choices[f].includes(c[f])),'case outside declared matrix');
     if(this.identity.dns&&c.status==='pass'){
       const pending=Number(c.route==='stun')+Number(this.identity.mdns&&c.route!=='relay');
-      assert(c.dns&&c.dns.pendingAtCleanup===pending&&c.dns.socketsReleased===1+pending+Number(this.identity.mdns&&c.route!=='relay'),'DNS ownership evidence missing');
+      const shared=c.dns?.sharedMdnsEndpointsObserved||0;
+      assert(shared>=0&&shared<=Number(this.identity.mdns&&c.route!=='relay'),'unexpected shared mDNS endpoint count');
+      assert(c.dns&&c.dns.pendingAtCleanup===pending&&c.dns.socketsReleased===1+pending+shared,'DNS ownership evidence missing');
       assert(c.route==='direct'?c.dns.queries===0:c.dns.answers>=1&&c.dns.originalUrlAndPrivacyChecked,'DNS exchange/metadata evidence missing');
       if(c.route==='stun')assert(c.dns.held>=1,'DNS cancellation case lacked a pending request');
       if(this.identity.dnsMode==='service'&&c.route!=='direct'){

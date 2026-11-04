@@ -442,7 +442,11 @@ try {
           const interruptedMdns=mdnsEnabled&&route!=='relay';
           assert(dnsPending===Number(interruptedDns)+Number(interruptedMdns),'unexpected pending DNS ownership');
           const sockets=await ownedUdp(native.process.pid);
-          assert(sockets.length===1+dnsPending+Number(interruptedMdns),'unexpected RTC/DNS socket ownership');
+          // Windows' UDP owner table can omit shared 5353 bindings (confirmed
+          // with an independent live bind). Count only observable endpoints;
+          // provider socket/drop tests cover the receive-only membership.
+          const sharedMdnsEndpointsObserved=sockets.filter(s=>s.port===5353).length;
+          assert(sharedMdnsEndpointsObserved<=Number(interruptedMdns)&&sockets.length===1+dnsPending+sharedMdnsEndpointsObserved,'unexpected observable RTC/DNS socket ownership');
           if(restart)assert(initialSockets.length===1&&sockets.some(s=>s.address===initialSockets[0].address&&s.port===initialSockets[0].port),'restart replaced the native RTC socket');
           let cleaned;
           if(cleanup==='navigate') {
@@ -458,7 +462,7 @@ try {
           const summary=(snapshot,stats)=>({connected:snapshot.connected,textMessagesVerified:2,binaryBytesVerified:48000,modes:snapshot.modes,refused:snapshot.refused,gatheringErrors:snapshot.gatheringErrors,
             pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint,
             remoteAddressesRedacted:stats.remoteAddressesRedacted,peerReflexiveInRemoteList:stats.peerReflexiveInRemoteList});
-          const dns=dnsFixture?{mode:dnsMode,queries:dnsFixture.queries-dnsBefore.queries,answers:dnsFixture.answers-dnsBefore.answers,held:dnsFixture.held-dnsBefore.held,types:Object.fromEntries(Object.entries(dnsFixture.types).map(([type,count])=>[type,count-dnsBefore.types[type]])),pendingAtCleanup:dnsPending,socketsReleased:sockets.length,originalUrlAndPrivacyChecked:route!=='direct'}:undefined;
+          const dns=dnsFixture?{mode:dnsMode,queries:dnsFixture.queries-dnsBefore.queries,answers:dnsFixture.answers-dnsBefore.answers,held:dnsFixture.held-dnsBefore.held,types:Object.fromEntries(Object.entries(dnsFixture.types).map(([type,count])=>[type,count-dnsBefore.types[type]])),pendingAtCleanup:dnsPending,socketsReleased:sockets.length,sharedMdnsEndpointsObserved,originalUrlAndPrivacyChecked:route!=='direct'}:undefined;
           if(dns){assert(!dnsFixture.error,dnsFixture.error);assert(route==='direct'?dns.queries===0:dns.answers>=1,'missing controlled DNS exchange');assert(!a.gatheringErrors.length,'hostname gathering failed');if(interruptedDns)assert(dns.held>=1,'missing held DNS request at interruption');}
           if(dnsMode==='service'&&route!=='direct'){assert(dns.types.srv>=1&&dns.types.a>=1,'missing service lookup');assert(route==='relay'?dns.types.naptr===1:dns.types.naptr===0,'unexpected S-NAPTR ownership');}
           const mdns=mdnsFixture?{started:metrics.mdnsStarted,resolved:metrics.mdnsResolved,controlledNames:mdnsFixture.endpoints.size,browserNames:mdnsFixture.browserNames.size,answers:mdnsFixture.answers-mdnsBefore.answers,held:mdnsFixture.held-mdnsBefore.held,pendingAtCleanup:Number(interruptedMdns),relaySuppressed:route==='relay',namesAndStatsPrivate:true}:undefined;

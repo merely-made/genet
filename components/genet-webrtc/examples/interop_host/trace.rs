@@ -1,7 +1,7 @@
 //! Test-only counters. Protocol log text, addresses and credentials are never emitted.
 use std::sync::atomic::{AtomicU64, Ordering};
 
-const NAMES: [&str; 8] = [
+const NAMES: [&str; 13] = [
     "freshRequests",
     "freshResponses",
     "usernameRefusals",
@@ -10,8 +10,13 @@ const NAMES: [&str; 8] = [
     "unknownTransactions",
     "roleConflicts",
     "checksSent",
+    "pairsFailed",
+    "successfulChecks",
+    "nominationsSent",
+    "selectedPairs",
+    "invalidPairResponses",
 ];
-static COUNTS: [AtomicU64; 8] = [const { AtomicU64::new(0) }; 8];
+static COUNTS: [AtomicU64; 13] = [const { AtomicU64::new(0) }; 13];
 struct Counters;
 impl log::Log for Counters {
     fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
@@ -38,6 +43,16 @@ impl log::Log for Counters {
             Some(6)
         } else if text.contains("ping STUN from") {
             Some(7)
+        } else if text.contains("marking it as failed") {
+            Some(8)
+        } else if text.contains("Found valid candidate pair:") {
+            Some(9)
+        } else if text.contains("ping STUN (nominate candidate pair") {
+            Some(10)
+        } else if text.contains("Set selected candidate pair:") {
+            Some(11)
+        } else if text.contains("Success response from invalid candidate pair") {
+            Some(12)
         } else {
             None
         };

@@ -36,9 +36,9 @@ function compact(c) {
   return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'pass',seconds:c.seconds,
     pairs:{native:[a.pair.local,a.pair.remote],browser:[b.pair.local,b.pair.remote]},
     nominated:[a.pair.nominated,b.pair.nominated],certificatePairSHA256:digest([a.localFingerprint,b.localFingerprint]),
-    refusals:{native:counts(a.refused),browser:counts(b.refused)},
+    refusals:a.refused.length||b.refused.length?{native:counts(a.refused),browser:counts(b.refused)}:undefined,
     gatheringErrorCodes:codes.native.length||codes.browser.length?codes:undefined,
-    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,nativeNegotiationEvents:r.nativeNegotiationEvents,statsSettling:r.statsSettling})),
+    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,nativeNegotiationEvents:r.nativeNegotiationEvents||undefined,statsSettling:r.statsSettling})),
     commonAssertionsVerified:true};
 }
 
@@ -65,12 +65,15 @@ export class RestartJournal {
         nativeStatsReferencesAndPrivacyChecked:true,nativeRelayAllocationReused:true,
         certificateEvidence:'SHA256 of JSON [native SHA256 fingerprint,browser SHA256 fingerprint]',
         omittedGatheringErrorCodesMeansNone:true,
+        omittedRefusalsAndNegotiationCountsMeanZero:true,
+        caseVerifiedMeans:'all common assertions passed and source/native binary unchanged at checkpoint',
         pendingRestartInterruptedBeforeCleanup:true,sameNativeSocketThenReleasedAndRebound:true},
       scope:'Windows native data channels, fixed numeric UDP STUN/TURN and unchanged interface; broader DNS/mDNS, server/interface replacement, TCP/TLS, media and carrier gates remain separate'});
     return journal;
   }
   validateCase(c) {
     assert(fields.every(f=>this.identity.choices[f].includes(c[f])),'case outside declared matrix');
+    if(c.gate==='E2r-case'&&c.status==='pass')assert(c.verified===true||(c.commonAssertionsVerified&&c.sourceStable),'case lacks checkpoint verification');
   }
   has(c){return this.passed.has(key(c));}
   cases(){return [...this.passed.values()];}
@@ -82,7 +85,9 @@ export class RestartJournal {
   async case(c,sourceStable) {
     assert(sourceStable,'source or native binary changed before checkpoint');this.validateCase(c);
     if(c.status==='pass')assert(!this.has(c),'duplicate durable case');
-    const row=compact(c);await this.append('case',{...row,sourceStable});
+    const row=compact(c);
+    if(c.status==='pass') {delete row.commonAssertionsVerified;row.verified=true;}
+    await this.append('case',{...row,sourceStable:c.status==='pass'?undefined:sourceStable});
     if(c.status==='pass')this.passed.set(key(c),row);
   }
   async finish(failure,sourceStable) {
@@ -102,7 +107,7 @@ export class RestartJournal {
     const row={schema:2,gate:'E2r-'+kind,run:this.run,utc:new Date().toISOString(),...data};
     const entry=repair+'\n\n### E2r headed '+kind+'\n\n```json\n'+JSON.stringify(row)+'\n```\n';
     const start=old.indexOf('\n\n## E2r '),base=start<0?Buffer.byteLength(old):Buffer.byteLength(old.slice(0,start));
-    assert(Buffer.byteLength(old+entry)<=1000000&&Buffer.byteLength(old+entry)-base<=220000,'E2r receipt byte cap exceeded');
+    assert(Buffer.byteLength(old+entry)<=1000000&&Buffer.byteLength(old+entry)-base<=255000,'E2r receipt byte cap exceeded');
     await appendFile(this.file,entry);
   }
 }

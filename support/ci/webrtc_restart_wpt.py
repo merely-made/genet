@@ -53,7 +53,10 @@ def main():
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument("--phase", choices=["before", "after"], required=True)
     parser.add_argument("--runner", type=Path, required=True)
+    parser.add_argument("--compact", action="store_true", help="retain deltas against an archived complete after map")
     args = parser.parse_args()
+    if args.compact and args.phase != "after":
+        parser.error("--compact requires --phase after")
     text = RECEIPT.read_text(encoding="utf-8")
     tests = ROOT / "tests/wpt/tests"
     sources = [tests / "webrtc" / name for name in FILES]
@@ -113,12 +116,30 @@ def main():
     except Exception as error:
         failure = str(error)[:300]
     result["failure"] = failure
+    if args.compact:
+        reference = next(r for r in reversed(list(records(text))) if r.get("gate") == "E2r-WPT" and r.get("phase") == "after" and not r.get("failure") and all("subtests" in o for o in r["outcomes"]))
+        result["caseMapReference"] = {key: reference[key] for key in ["utc", "binarySHA256"]}
+        normalized = lambda rows: json.dumps([{**row, "changed": sorted(row["changed"])} for row in rows], sort_keys=True, separators=(",", ":"))
+        comparison = normalized(result["comparisons"])
+        if comparison == normalized(reference["comparisons"]):
+            result["comparisonMatchesReference"] = True
+            result["comparisonSHA256"] = hashlib.sha256(comparison.encode()).hexdigest()
+            del result["comparisons"]
+        by_case = {(o["engine"], o["test"]): o for o in reference["outcomes"]}
+        for outcome in result["outcomes"]:
+            prior = by_case[(outcome["engine"], outcome["test"])]
+            a, b = case_map(prior["subtests"]), case_map(outcome["subtests"])
+            outcome["caseDeltaFromReference"] = {
+                "missing": sorted(a.keys() - b.keys()), "added": sorted(b.keys() - a.keys()),
+                "changed": [[key, a[key], b[key]] for key in sorted(a.keys() & b.keys()) if a[key] != b[key]],
+            }
+            outcome["subtestsSHA256"] = hashlib.sha256(json.dumps(outcome.pop("subtests"), separators=(",", ":")).encode()).hexdigest()
     entry = "\n\n## E2r WPT " + args.phase + " - " + result["utc"] + "\n\n```json\n" + json.dumps(result, separators=(",", ":")) + "\n```\n"
     current = RECEIPT.read_text(encoding="utf-8")
     start = current.find("\n\n## E2r ")
     base = len(current[:start].encode()) if start >= 0 else len(current.encode())
     assert len((current + entry).encode()) <= 1_000_000
-    assert len((current + entry).encode()) - base <= 220_000
+    assert len((current + entry).encode()) - base <= 255_000
     with RECEIPT.open("a", encoding="utf-8", newline="\n") as stream:
         stream.write(entry)
     if failure:

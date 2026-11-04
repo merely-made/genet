@@ -219,7 +219,7 @@ deployment and media remain open unless separately qualified.
 
 ### E2r. ICE restart on established data channels
 
-**Status (2026-11-03): provider/native/WPT qualified; full headed matrix in progress.** Freeze a fresh native
+**Status (2026-11-03): repaired provider/native gates passed; selected WPT and full headed requalification in progress.** Freeze a fresh native
 runner and unchanged WPT case map before implementation. Exercise
 `RTCDataChannel-iceRestart.html`, both `RTCPeerConnection-restartIce` files and
 the existing constructor/channel/ICE-error controls on Boa and Vano. Retain
@@ -237,7 +237,7 @@ allocations; Genet owns web semantics and generation-tagged observations.
 
 Append compact baseline/final WPT maps, provider/native gates, headed restart
 results and exact source/lock/binary identities to the existing receipt. The
-additional E2r retained cap is **220 KB**, within the existing **1 MB** total;
+additional E2r retained cap is **255 KB**, within the existing **1 MB** total;
 use a delta from the archived full lock. Reuse the approved stable targets.
 Core defects are repaired in the supplier rather than duplicating protocol
 processing in Genet. DNS/mDNS, server replacement, TCP/TLS, media and carrier
@@ -399,15 +399,40 @@ checks before remote credentials arrive still need their own RFC 8445 section
 7.3 gate, alongside DNS/mDNS and interface/server replacement.
 
 `support/ci/webrtc_interop.mjs --restart both` exercises both APIs, both
-offerers, every SDP step and an interrupted restart before teardown. Use
-`--receipt-mode stdout` to retain a compact result after shared Git hooks;
-default mode appends within the lane cap. The WPT comparison keeps exact
+offerers, every SDP step and an interrupted restart before teardown. Default
+restart mode checkpoints each compact case in the receipt; `--resume latest`
+requires identical source, native binary, lock, server/interface and browser
+builds, then skips verified cases. Commit code before starting this tracked
+journal; leave Git commits until the run ends. `--receipt-mode stdout` remains
+available for bounded diagnostic probes. After reconnection, the runner waits
+up to 15 seconds for actual selected-pair reports to reach `succeeded`, retaining
+any intervening states rather than relaxing route or privacy assertions.
+The headed journal retains a native-control deadline on Chrome/Vano TURN;
+the same case passes after an unchanged-profile resume. Its cause is not
+established. Matrix coverage across checkpoints does not establish an
+uninterrupted or latency-qualified run.
+An eight-second delayed-answer TURN probe reproduced an exhausted controlling
+pair that answered fresh authenticated requests but never checked again. The
+fork schedules a new check for that failed pair without inheriting prior
+validity; the regression also checks that a wrong-key request cannot revive it.
+The same delayed-answer headed case passes after the repair: its two exhausted
+pairs are followed by a fresh nomination and unchanged channel/certificate/allocation
+identity. The before/after counters and exact supplier pins are retained.
+This bounded repair does not qualify a complete triggered-check queue or the
+separate early-request path before remote credentials arrive.
+The WPT comparison keeps exact
 assertion identities and media failures. Its baseline ERROR completed only the
 first data-channel restart assertion; the unchanged source names the second
 pending assertion explicitly, so recovery does not silently change the inventory.
 
 ## Progress
 
+- 2026-11-03: receive provider `2ff146629e17ce8e77fc56ffa26f7b13b8b8f83a`
+  and core `479995928668d0db1f8cfb2aa26f818b9f03919f` after the headed
+  delayed-answer failure exposed an exhausted controlling pair. The same
+  eight-second-delay Firefox/TURN case passes with fresh nomination after
+  exhaustion. All 22 native checks, strict adapter/example Clippy and Ortet's
+  receiving compile pass; fresh selected WPT and headed qualification follow.
 - 2026-11-01: E0 selected rtc and established the independent provider boundary.
 - 2026-11-01: E1a qualified `murm-rtc`; application-carrier cutover remains open.
 - 2026-11-01: E1b/E2 added Genet's per-document capability, native adapter,

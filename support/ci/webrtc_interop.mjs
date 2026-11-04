@@ -11,6 +11,8 @@
 // --restart both exercises both APIs at every negotiation step; adds configured STUN.
 // Restart append mode checkpoints each case. --resume latest continues a run
 // only with identical source, native binary, lock, server/interface and browsers.
+// --answer-delay-ms 0..10000 holds restart answers for the bounded late-check
+// regression. The delay is part of checkpoint identity.
 // --bind selects the Windows interface explicitly. Default is the default-route
 // IPv4 interface; the UDP fixture front end accepts only local-machine clients.
 // Firefox BiDi grants local-network access only to this fixture origin and
@@ -36,6 +38,9 @@ const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const restart=args.get('--restart');
 if(restart && restart!=='both')throw Error('--restart requires both');
+// Diagnostic signaling delay, bounded below the retained-route deadline.
+const answerDelayMs=Number(args.get('--answer-delay-ms')||0);
+if(!Number.isSafeInteger(answerDelayMs)||answerDelayMs<0||answerDelayMs>10000||(!restart&&answerDelayMs))throw Error('invalid restart answer delay');
 const receiptMode=args.get('--receipt-mode')||'append';
 if(!['append','stdout'].includes(receiptMode))throw Error('invalid receipt mode');
 if(args.has('--resume')&&(!restart||receiptMode!=='append'))throw Error('--resume requires --restart both and append mode');
@@ -290,7 +295,8 @@ class Native {
     });
   }
   request(op,extra={}) {
-    const id=++this.next;return timeout(new Promise((resolve,reject)=>{this.pending.set(id,{resolve,reject});this.process.stdin.write(JSON.stringify({id,op,...extra})+'\n');}),15000,'native control deadline');
+    const kind=op==='eval'?(extra.source.startsWith('JSON.stringify(')?'value':'evaluate'):op;
+    const id=++this.next;return timeout(new Promise((resolve,reject)=>{this.pending.set(id,{resolve,reject});this.process.stdin.write(JSON.stringify({id,op,...extra})+'\n');}),15000,'native '+kind+' control deadline');
   }
   evaluate(source) { return this.request('eval',{source}); }
   async value(expression) { return JSON.parse(await this.evaluate(`JSON.stringify(${expression})`)); }
@@ -334,7 +340,7 @@ const sourceStableNow=async()=>{
   return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
-  sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,
+  sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
@@ -376,7 +382,7 @@ try {
           const initialSockets=restart?await ownedUdp(native.process.pid):null;
           let restarts;
           if(restart) {
-            phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats});
+            phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs});
             a=await native.value('__interop.snapshot()');b=await browser.value('__interop.snapshot()');
             aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');verifyStats(aStats,bStats,route);
             phase='restart interruption';

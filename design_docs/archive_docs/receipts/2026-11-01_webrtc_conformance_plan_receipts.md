@@ -21298,3 +21298,444 @@ The ignored root lock is retained through this delta from the previously archive
 ```json
 {"gate":"E2r-receiving-interruption","utc":"2026-11-04T01:04:57.837627+00:00","source":"2d492f014d72a938da328498c4085ff8fae44653","observedCasesPassed":13,"completeMatrix":false,"reason":"Desktop tool backend reset stopped the in-memory stdout run and coturn supervisor. No partial browser coverage is promoted to a complete matrix. Native/provider/WPT receipts survived; test processes and old turnserver PID312 were absent after reset.","continuation":"Restart append mode now checkpoints compact cases in this receipt and can resume only identical source, binary, lock, server/interface and browser build."}
 ```
+
+
+### E2r headed run
+
+```json
+{"schema":2,"gate":"E2r-run","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:10:21.088Z","signature":"05d630a8c760698c8187732ad3bf7d513798aad47ed60bfa9c1a1ebec9065591","source":"00bb92c4300bc24bdeea92b79e222b2196e20512","sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"2fe42fa0c6fd8c3dda9c6f83c46468ee8e14046b5eadc8b33eb9667ed87745cf","components/genet-webrtc/examples/interop_host/trace.rs":"b780bde3fcc298fd144282a2e7ccc8aaaa7867ffc102a2e77204fbb98b37b99c","support/ci/webrtc_interop.mjs":"9ed90497ba6e8c014d8699a5bc313d4a18fee5c09112a14303d4b367e46b364e","support/ci/webrtc_interop_peer.js":"0547ce96a35dea59a0df3d1122104bc14d3dd8130d7c07326f8be002e55fc216","support/ci/webrtc_restart.mjs":"6c8e222a9ae0aba06979baddd2e963f7ddff9c073198f556c2a1e43fd8d3b9a3","support/ci/webrtc_receipts.mjs":"0786d88cde2b149b994b23fa8b1b1c0fca8bf401b4945f3cacfcd85ca18359d9","components/genet-webrtc/Cargo.toml":"c5d37445f4f53e800b6808938ebe172a1b3c4e6f8ed894459d0a4801b74762af","components/genet-webrtc/src/lib.rs":"af13adba523d1dbc69d75bcadb05f61d4ef96d357ccecf075f25f6e294c95c22","components/genet-webrtc/src/signaling.rs":"d9f94db60d5b812a81d9a444b81f4de49fcb271808558716ebf0b32f0900ed0f","components/genet-webrtc/src/channels.rs":"d4914d3d6844339b6b740ea52989b8bc28dba52100505ad116713093d6c6a770","components/genet-webrtc/src/stats.rs":"3f6263dbb47c43434d99ee6bb3c338c1bf290571ef22ba37c808fac1f29b43a2","components/script-runtime-api/webrtc/bootstrap.js":"c84ff47e51d2add83d168fc8c85e99452e10415bb0ea8325415b0766d7bba877"},"nativeBinarySHA256":"ccec1bcd3d7ed8ed8d1fef538923b5507c386f002f20fe0af3c45032c3814b36","lockSHA256":"9c5bf7ac95b5c8321520b7b64aa7965d040b11fe30e47e8b2e8d560a220d2642","node":"v24.11.0","server":"172.28.40.199:34790","bind":"192.168.4.36","expectedCases":48,"choices":{"browser":["chrome","firefox"],"engine":["boa","nova"],"route":["direct","stun","relay"],"offerer":["native","browser"],"cleanup":["close","navigate"]},"commonAssertions":{"channelModes":["ordered reliable","unordered maxRetransmits=0"],"initialMessagesPerPeer":3,"initialBinaryBytesPerPeer":48000,"restartsPerCase":2,"liveProbesPerRestart":4,"binaryBytesPerPeerPerRestart":192000,"unicodeAndEveryBinaryByteChecked":true,"changedLocalAndRemoteCredentials":true,"sameChannelsAndCertificates":true,"staleNativeCandidateRefused":true,"nativeStatsReferencesAndPrivacyChecked":true,"nativeRelayAllocationReused":true,"pendingRestartInterruptedBeforeCleanup":true,"sameNativeSocketThenReleasedAndRebound":true},"scope":"Windows native data channels, fixed numeric UDP STUN/TURN and unchanged interface; broader DNS/mDNS, server/interface replacement, TCP/TLS, media and carrier gates remain separate"}
+```
+
+
+### E2r headed browser
+
+```json
+{"schema":2,"gate":"E2r-browser","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:10:23.210Z","browser":"chrome","version":"Chrome/156.0.8078.80","headed":true,"visibleWindows":2,"webrtcPreferenceOverrides":false,"networkPermissions":[]}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:11:00.756Z","browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":37.44,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"4a4ec8dbc3789fc4b7cc511b77c090bbd81559d98fae95f623bd25192277bbd0","browser":"61415115b684a268a50555d6914f0a6550613b9ecdcde6b9ee38870996434469"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:11:37.607Z","browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":36.59,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"9473a2ecb6d427703ee8424024bd07415cb19ecefafefa76efba667786aa5166","browser":"a871294bbed2dc60dd9944f0f9c5921bc687908c87a444806160072cc79f62c6"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:12:09.121Z","browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":31.25,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"71cf88f987ecdbfee69d4e14c7828db4617d4674b1155d8fafff69993d0813e8","browser":"a5f7dba57e7a1d145adbabddcb7e40af04414d5e98077806f171bfa81227c870"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:12:44.787Z","browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":35.4,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"c60542a49b824e5db26b76cdc44ce20547d9bd17401f991b5c84ce62cf078b98","browser":"cd6166cd67f30efa87c2d07ee28e9181bedaa1651607bce3022a7df38b715a2d"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:13:12.620Z","browser":"chrome","engine":"boa","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":27.55,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"889ce4582729b6420c8c645f5c9f39b53a4e45772271b7444c18518a88d2f3bc","browser":"cf62ce43dc7103ea28ffc49bde2544094fa11e773c63218349a4d81053922047"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:13:47.265Z","browser":"chrome","engine":"boa","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":34.39,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"1de2c87d9f57272f5587481f1b74bbeeb6c7371dab8c5f1431bffb379e861bf6","browser":"4ed5ea361700bdb3e62c1516f5b40b9c35993efa56990d4f40c74196637a4b8b"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:14:16.129Z","browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"close","status":"fail","phase":"ICE restart","error":"selected candidate pair unavailable","diagnostics":{"step":"stale candidate refusal","method":"offer","initiator":"native","iceBefore":{"checksSent":40,"credentialsPending":0,"freshRequests":10,"freshResponses":10,"integrityRefusals":0,"roleConflicts":0,"unknownTransactions":0,"usernameRefusals":12},"iceAfter":{"checksSent":81,"credentialsPending":6,"freshRequests":13,"freshResponses":19,"integrityRefusals":0,"roleConflicts":7,"unknownTransactions":0,"usernameRefusals":13},"peers":{"native":{"connection":"connected","ice":"connected","signaling":"stable","gathering":"complete","receivedMessages":3,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true},"browser":{"connection":"connected","ice":"connected","signaling":"stable","gathering":"complete","receivedMessages":3,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true}}},"sourceStable":true}
+```
+
+
+### E2r headed run-end
+
+```json
+{"schema":2,"gate":"E2r-run-end","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:14:16.739Z","failure":{"phase":"ICE restart","case":{"browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"close"},"error":"selected candidate pair unavailable"},"sourceStable":true,"completedCases":6,"completeMatrix":false,"completeSelectedMatrix":false,"completedRestarts":12,"interruptedRestarts":6,"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.80","headed":true}],"profileCleanup":"automatic approval review rejected recursive profile deletion as blocked by policy; marker-owned profile caches retained"}
+```
+
+
+### E2r headed resume
+
+```json
+{"schema":2,"gate":"E2r-resume","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:14:53.023Z","source":"00bb92c4300bc24bdeea92b79e222b2196e20512","completed":6}
+```
+
+
+### E2r headed browser
+
+```json
+{"schema":2,"gate":"E2r-browser","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:14:54.673Z","browser":"chrome","version":"Chrome/156.0.8078.80","headed":true,"visibleWindows":2,"webrtcPreferenceOverrides":false,"networkPermissions":[]}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:15:26.435Z","browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":31.67,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"c69bd20c38e6d9180640409ca7a6e2c8447d759109d188be8e4af9a92c4eef67","browser":"90f236db82b49d2a728a4b7e85c49551aa5d329a00e38f198984d1cf2e7950b9"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:16:00.063Z","browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":33.39,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificateSHA256":{"native":"a046838829266782c292c7b024c03542d0e9555bb6a1d6c91d5a465580c27d5d","browser":"bbbb2422207f9553675709a674a3ff35f34616ec730d65b687606abfec1cd165"},"refusals":{"native":{"mdns:OperationError":6},"browser":{}},"gatheringErrorCodes":{"native":[],"browser":[]},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:16:20.579Z","browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"fail","phase":"ICE restart","error":"selected candidate pair unavailable","diagnostics":{"step":"stale candidate refusal","method":"method","initiator":"native","iceBefore":{"checksSent":4,"credentialsPending":0,"freshRequests":6,"freshResponses":4,"integrityRefusals":0,"roleConflicts":0,"unknownTransactions":0,"usernameRefusals":0},"iceAfter":{"checksSent":8,"credentialsPending":5,"freshRequests":9,"freshResponses":7,"integrityRefusals":0,"roleConflicts":0,"unknownTransactions":0,"usernameRefusals":0},"peers":{"native":{"connection":"connected","ice":"connected","signaling":"stable","gathering":"complete","receivedMessages":3,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true},"browser":{"connection":"connected","ice":"connected","signaling":"stable","gathering":"complete","receivedMessages":3,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true}}},"sourceStable":true}
+```
+
+
+### E2r headed run-end
+
+```json
+{"schema":2,"gate":"E2r-run-end","run":"2d4f3924-f000-4095-be9b-f2a84fe202d5","utc":"2026-11-04T01:16:21.240Z","failure":{"phase":"ICE restart","case":{"browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"close"},"error":"selected candidate pair unavailable"},"sourceStable":true,"completedCases":8,"completeMatrix":false,"completeSelectedMatrix":false,"completedRestarts":16,"interruptedRestarts":8,"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.80","headed":true}],"profileCleanup":"automatic approval review rejected recursive profile deletion as blocked by policy; marker-owned profile caches retained"}
+```
+
+
+### E2r headed run
+
+```json
+{"schema":2,"gate":"E2r-run","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:23:10.697Z","signature":"cc0250019833640937d6a60c46b14d0017dcf57b162849bfdad56eb0cd1c3107","source":"b05a2a01b32c4a610b4f8f2883b6cfb1c3e89243","sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"2fe42fa0c6fd8c3dda9c6f83c46468ee8e14046b5eadc8b33eb9667ed87745cf","components/genet-webrtc/examples/interop_host/trace.rs":"b780bde3fcc298fd144282a2e7ccc8aaaa7867ffc102a2e77204fbb98b37b99c","support/ci/webrtc_interop.mjs":"9ed90497ba6e8c014d8699a5bc313d4a18fee5c09112a14303d4b367e46b364e","support/ci/webrtc_interop_peer.js":"0547ce96a35dea59a0df3d1122104bc14d3dd8130d7c07326f8be002e55fc216","support/ci/webrtc_restart.mjs":"8d00ce5d4c0d04176017080d588787e15d09727e87bbeda66c77c3fb851c7e43","support/ci/webrtc_receipts.mjs":"0a83fe67a8dbbe936ce6f6242b2e14eba382e35aa4ee7d3220823b0e762fd25e","components/genet-webrtc/Cargo.toml":"c5d37445f4f53e800b6808938ebe172a1b3c4e6f8ed894459d0a4801b74762af","components/genet-webrtc/src/lib.rs":"af13adba523d1dbc69d75bcadb05f61d4ef96d357ccecf075f25f6e294c95c22","components/genet-webrtc/src/signaling.rs":"d9f94db60d5b812a81d9a444b81f4de49fcb271808558716ebf0b32f0900ed0f","components/genet-webrtc/src/channels.rs":"d4914d3d6844339b6b740ea52989b8bc28dba52100505ad116713093d6c6a770","components/genet-webrtc/src/stats.rs":"3f6263dbb47c43434d99ee6bb3c338c1bf290571ef22ba37c808fac1f29b43a2","components/script-runtime-api/webrtc/bootstrap.js":"c84ff47e51d2add83d168fc8c85e99452e10415bb0ea8325415b0766d7bba877"},"nativeBinarySHA256":"ccec1bcd3d7ed8ed8d1fef538923b5507c386f002f20fe0af3c45032c3814b36","lockSHA256":"9c5bf7ac95b5c8321520b7b64aa7965d040b11fe30e47e8b2e8d560a220d2642","node":"v24.11.0","server":"172.28.40.199:34790","bind":"192.168.4.36","expectedCases":48,"choices":{"browser":["chrome","firefox"],"engine":["boa","nova"],"route":["direct","stun","relay"],"offerer":["native","browser"],"cleanup":["close","navigate"]},"commonAssertions":{"channelModes":["ordered reliable","unordered maxRetransmits=0"],"initialMessagesPerPeer":3,"initialBinaryBytesPerPeer":48000,"restartsPerCase":2,"liveProbesPerRestart":4,"binaryBytesPerPeerPerRestart":192000,"unicodeAndEveryBinaryByteChecked":true,"changedLocalAndRemoteCredentials":true,"sameChannelsAndCertificates":true,"staleNativeCandidateRefused":true,"nativeStatsReferencesAndPrivacyChecked":true,"nativeRelayAllocationReused":true,"certificateEvidence":"SHA256 of JSON [native SHA256 fingerprint,browser SHA256 fingerprint]","omittedGatheringErrorCodesMeansNone":true,"pendingRestartInterruptedBeforeCleanup":true,"sameNativeSocketThenReleasedAndRebound":true},"scope":"Windows native data channels, fixed numeric UDP STUN/TURN and unchanged interface; broader DNS/mDNS, server/interface replacement, TCP/TLS, media and carrier gates remain separate"}
+```
+
+
+### E2r headed browser
+
+```json
+{"schema":2,"gate":"E2r-browser","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:23:12.909Z","browser":"chrome","version":"Chrome/156.0.8078.80","headed":true,"visibleWindows":2,"webrtcPreferenceOverrides":false,"networkPermissions":[]}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:23:51.372Z","browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":38.35,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"dc6bed2668c64fc79b7005d59bcc500ae56e7c816f04f16ee5f164a3afca50c1","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:24:32.869Z","browser":"chrome","engine":"boa","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":41.21,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"32091151bf2076fc79d5ee33cfad4b3ff39418e3ba83e74adf04e761b43e5737","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:25:06.939Z","browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":33.8,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"eb1de65b633aabc99e917b312aae4ed10f829e6d652f0a5659ad2a341dedc309","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:25:39.597Z","browser":"chrome","engine":"boa","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":32.41,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"f97d08bf65037452500717863eacb18b10e32eacb483dd8905e0cdbdd74bb5c4","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:26:09.714Z","browser":"chrome","engine":"boa","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":29.85,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"b60df3c08b05c6ffe80b29cd79e4f4c86e14d29f358bfb167553977454f7e9c1","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:26:42.331Z","browser":"chrome","engine":"boa","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":32.39,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"1b17b0f112271ae0915d4a9ee6d3815e6e86f54e69549b46667938f9b6b7ed5a","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:27:08.941Z","browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":26.35,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"207fd1adabb62cc742628ee4cb6d426b4a982211182b854ed15bcafe07b8cedd","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:27:43.047Z","browser":"chrome","engine":"boa","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":33.87,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"101245eed119a70cbeac0866559c396108ea9692b6d236770b3fae76593892e0","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:28:17.818Z","browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":34.5,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"05fe29a85fe113a86dca9563d37985251c15c9a4e87e1cd2d144681addb2d91f","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:28:57.582Z","browser":"chrome","engine":"boa","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":39.5,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"15a5ec76e197ad0231d8c41a239dd2d02c2d4e593233f24fcdd100ff2709d827","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:29:32.288Z","browser":"chrome","engine":"boa","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":34.43,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"9c5737280f1633cb53bd068d4bf3be129d7bc8a472f7c92bb25ac248214b4801","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:30:08.969Z","browser":"chrome","engine":"boa","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":36.42,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"420d3aa933c55805c44282aa655a1ed88a00915f844138202455b769ff41ced9","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:30:42.636Z","browser":"chrome","engine":"nova","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":33.39,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"f420f241694fba839d6f301f0944824128e0f2a11dc686dac691da072dbfa779","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:31:18.615Z","browser":"chrome","engine":"nova","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":35.75,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"2a591227a219da863e2b1c5c00c46accbf057bd1edd4efbf4a9984545481575b","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:31:54.198Z","browser":"chrome","engine":"nova","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":35.35,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"6b1858bd3843662a188e79c109df14e4fc6a3f7509311e14a4d7de88547dee7e","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:32:31.834Z","browser":"chrome","engine":"nova","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":37.39,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"769fe09af090a4ceafec20cbaf6253b689dcaaf1e6242ada4acd11ce3cefc72c","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:33:08.257Z","browser":"chrome","engine":"nova","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":36.18,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"01b957bc06dfac43e072c1ce6d86ff338a0db483b1ddd6aaa2a79ec05c640dbf","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:33:38.831Z","browser":"chrome","engine":"nova","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":30.36,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"398c37cc3ad4f44331c68e718506523b9a82dc917e60fec9c2ea64a495bf29cd","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:34:05.963Z","browser":"chrome","engine":"nova","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":26.91,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"dfc9e9ac06d43f2149defcee67860672ad9c783f48449bd0a6750edbfdc228c0","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:34:32.539Z","browser":"chrome","engine":"nova","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":26.35,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"7e132f5122d23cf0e26846bf0bd71c527324a26f712ac6806584e8748018fa6e","refusals":{"native":{"mdns:OperationError":6},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:35:04.357Z","browser":"chrome","engine":"nova","route":"relay","offerer":"native","cleanup":"close","status":"pass","seconds":31.6,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"53a9570276072d2ebc3adf8ba3ac5ace7caa1a718fad89ac0e18abdef3b482ec","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:35:34.320Z","browser":"chrome","engine":"nova","route":"relay","offerer":"native","cleanup":"navigate","status":"pass","seconds":29.75,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"95033d692ec409eb089132be499d5bdd4ff7009c1d59608f77fe1296dabfe059","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:36:23.356Z","browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"close","status":"fail","phase":"ICE restart","error":"native control deadline","diagnostics":{"step":"after local answer","method":"method","initiator":"browser","iceBefore":{"checksSent":3,"credentialsPending":0,"freshRequests":6,"freshResponses":3,"integrityRefusals":0,"roleConflicts":0,"unknownTransactions":0,"usernameRefusals":0},"iceAfter":{"checksSent":21,"credentialsPending":0,"freshRequests":16,"freshResponses":6,"integrityRefusals":0,"roleConflicts":0,"unknownTransactions":0,"usernameRefusals":31},"peers":{"native":{"connection":"connecting","ice":"checking","signaling":"stable","gathering":"complete","receivedMessages":1,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true},"browser":{"connection":"connected","ice":"connected","signaling":"have-local-offer","gathering":"complete","receivedMessages":3,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":false}}},"sourceStable":true}
+```
+
+
+### E2r headed run-end
+
+```json
+{"schema":2,"gate":"E2r-run-end","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:36:38.195Z","failure":{"phase":"ICE restart","case":{"browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"close"},"error":"native control deadline"},"sourceStable":true,"completedCases":22,"completeMatrix":false,"completeSelectedMatrix":false,"completedRestarts":44,"interruptedRestarts":22,"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.80","headed":true}],"profileCleanup":"automatic approval review rejected recursive profile deletion as blocked by policy; marker-owned profile caches retained"}
+```
+
+
+### E2r headed resume
+
+```json
+{"schema":2,"gate":"E2r-resume","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:37:16.245Z","source":"b05a2a01b32c4a610b4f8f2883b6cfb1c3e89243","completed":22}
+```
+
+
+### E2r headed browser
+
+```json
+{"schema":2,"gate":"E2r-browser","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:37:20.238Z","browser":"chrome","version":"Chrome/156.0.8078.80","headed":true,"visibleWindows":2,"webrtcPreferenceOverrides":false,"networkPermissions":[]}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:38:15.292Z","browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"close","status":"pass","seconds":54.96,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"e54b921fcaae24671702639b53c804b33b7787ad46b85efb4eb585f9ab36dc2d","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:38:45.851Z","browser":"chrome","engine":"nova","route":"relay","offerer":"browser","cleanup":"navigate","status":"pass","seconds":30.35,"pairs":{"native":["relay","relay"],"browser":["relay","relay"]},"nominated":[true,true],"certificatePairSHA256":"c72c48327eff6ee8ed577629366c337dcddbf581a9135b4bb5c9612ab66aa198","refusals":{"native":{},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed browser
+
+```json
+{"schema":2,"gate":"E2r-browser","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:38:50.474Z","browser":"firefox","version":"159.0.1","headed":true,"visibleWindows":1,"webrtcPreferenceOverrides":false,"networkPermissions":[{"permission":"local-network","before":"prompt","after":"granted","error":null},{"permission":"loopback-network","before":"prompt","after":"granted","error":null}]}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:39:18.057Z","browser":"firefox","engine":"boa","route":"direct","offerer":"native","cleanup":"close","status":"pass","seconds":27.47,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"d1c9a0bd30000eb03cf7363f88fdcf4b2be86c4f5155dc95075a048ba6c9df4f","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:39:54.142Z","browser":"firefox","engine":"boa","route":"direct","offerer":"native","cleanup":"navigate","status":"pass","seconds":35.8,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"b03730be388d446a908f14e68cd5e83db3379da16c173e79aad24bf180d6f8d4","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:40:29.171Z","browser":"firefox","engine":"boa","route":"direct","offerer":"browser","cleanup":"close","status":"pass","seconds":34.74,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"0d9fb21d8d50222a216e07524d20efb9b590db5dfdb769394a0e6f3bbde5b5e5","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:41:03.686Z","browser":"firefox","engine":"boa","route":"direct","offerer":"browser","cleanup":"navigate","status":"pass","seconds":34.25,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"9c0f23b63b96f3177d707181557b675a8d1bbc07f0ce6f0df990d8434927583c","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:41:38.228Z","browser":"firefox","engine":"boa","route":"stun","offerer":"native","cleanup":"close","status":"pass","seconds":34.27,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"68afcf16d240bd5781c22839df8f194ef63e4a7fab4f3da97f7a8c64d9a807c8","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:42:13.801Z","browser":"firefox","engine":"boa","route":"stun","offerer":"native","cleanup":"navigate","status":"pass","seconds":35.31,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"7c074f2307b01b1caf02dcb652cd2921291d259a8d0d415a553b3cf219cb9852","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"native","nativeNegotiationEvents":1},{"method":"offer","initiator":"browser","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:42:43.124Z","browser":"firefox","engine":"boa","route":"stun","offerer":"browser","cleanup":"close","status":"pass","seconds":29.04,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"ed6194184d6cb63be60ab92ff15e6674f91a9b980d9ef208e9f3936899597572","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:43:06.145Z","browser":"firefox","engine":"boa","route":"stun","offerer":"browser","cleanup":"navigate","status":"pass","seconds":22.8,"pairs":{"native":["host","prflx"],"browser":["host","host"]},"nominated":[true,true],"certificatePairSHA256":"0245e1c051ac5455b7849cdecaf7466a353dc3bbe94308f8d228f5b44ed2950f","refusals":{"native":{"mdns:OperationError":12},"browser":{}},"restarts":[{"method":"method","initiator":"browser","nativeNegotiationEvents":0},{"method":"offer","initiator":"native","nativeNegotiationEvents":0}],"commonAssertionsVerified":true,"sourceStable":true}
+```
+
+
+### E2r headed case
+
+```json
+{"schema":2,"gate":"E2r-case","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:43:48.475Z","browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"fail","phase":"ICE restart","error":"restart fresh ICE connected deadline","diagnostics":{"step":"fresh ICE connected","method":"offer","initiator":"browser","iceBefore":{"checksSent":7,"credentialsPending":10,"freshRequests":5,"freshResponses":6,"integrityRefusals":0,"roleConflicts":0,"unknownTransactions":0,"usernameRefusals":0},"iceAfter":{"checksSent":25,"credentialsPending":10,"freshRequests":8,"freshResponses":8,"integrityRefusals":0,"roleConflicts":0,"unknownTransactions":0,"usernameRefusals":0},"statsObserved":[["succeeded","succeeded"]],"peers":{"native":{"connection":"connecting","ice":"checking","signaling":"stable","gathering":"complete","receivedMessages":3,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true},"browser":{"connection":"connected","ice":"connected","signaling":"stable","gathering":"complete","receivedMessages":3,"channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true}}},"sourceStable":true}
+```
+
+
+### E2r headed run-end
+
+```json
+{"schema":2,"gate":"E2r-run-end","run":"4f568c69-6ba5-49af-aea0-055df5427bb7","utc":"2026-11-04T01:43:50.436Z","failure":{"phase":"ICE restart","case":{"browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close"},"error":"restart fresh ICE connected deadline"},"sourceStable":true,"completedCases":32,"completeMatrix":false,"completeSelectedMatrix":false,"completedRestarts":64,"interruptedRestarts":32,"versions":[{"browser":"chrome","version":"Chrome/156.0.8078.80","headed":true},{"browser":"firefox","version":"159.0.1","headed":true}],"profileCleanup":"automatic approval review rejected recursive profile deletion as blocked by policy; marker-owned profile caches retained"}
+```
+
+
+### E2r nomination diagnostic
+
+```json
+{"gate":"E2r-nomination-diagnostic","utc":"2026-11-04T01:49:22.362Z","source":"b05a2a01b32c4a610b4f8f2883b6cfb1c3e89243","sourceStable":true,"sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"2fe42fa0c6fd8c3dda9c6f83c46468ee8e14046b5eadc8b33eb9667ed87745cf","components/genet-webrtc/examples/interop_host/trace.rs":"a79355fa0225cc8eed8b2c9b64e4608c3570a7c8e06181fc6f89b209c49ab857","support/ci/webrtc_interop.mjs":"9ed90497ba6e8c014d8699a5bc313d4a18fee5c09112a14303d4b367e46b364e","support/ci/webrtc_interop_peer.js":"0547ce96a35dea59a0df3d1122104bc14d3dd8130d7c07326f8be002e55fc216","support/ci/webrtc_restart.mjs":"8d00ce5d4c0d04176017080d588787e15d09727e87bbeda66c77c3fb851c7e43","support/ci/webrtc_receipts.mjs":"0a83fe67a8dbbe936ce6f6242b2e14eba382e35aa4ee7d3220823b0e762fd25e","components/genet-webrtc/Cargo.toml":"c5d37445f4f53e800b6808938ebe172a1b3c4e6f8ed894459d0a4801b74762af","components/genet-webrtc/src/lib.rs":"af13adba523d1dbc69d75bcadb05f61d4ef96d357ccecf075f25f6e294c95c22","components/genet-webrtc/src/signaling.rs":"d9f94db60d5b812a81d9a444b81f4de49fcb271808558716ebf0b32f0900ed0f","components/genet-webrtc/src/channels.rs":"d4914d3d6844339b6b740ea52989b8bc28dba52100505ad116713093d6c6a770","components/genet-webrtc/src/stats.rs":"3f6263dbb47c43434d99ee6bb3c338c1bf290571ef22ba37c808fac1f29b43a2","components/script-runtime-api/webrtc/bootstrap.js":"c84ff47e51d2add83d168fc8c85e99452e10415bb0ea8325415b0766d7bba877"},"lockSHA256":"92de44713c759b35151a96ab970d763b04dfedfdf6056ef9d98b412abd0101fd","nativeBinarySHA256":"3a2e7e898c551371f5fbb4b28d85657ace4b5a7d7a317771406c166b0a2c2ff9","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790","--restart","both","--browser","firefox","--engine","boa","--route","relay","--offerer","native","--cleanup","close","--receipt-mode","stdout"],"exit":0,"case":{"browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","phase":null,"error":null,"seconds":34.64},"restarts":[{"method":"method","initiator":"native","credentialsChangedOnBothPeers":true,"channelIdentityPreserved":true,"certificateIdentityPreserved":true,"nativeNegotiationEvents":1,"liveChannelProbes":4,"binaryBytesPerPeer":192000,"staleCandidateRefused":true,"relayAllocationReused":true},{"method":"offer","initiator":"browser","credentialsChangedOnBothPeers":true,"channelIdentityPreserved":true,"certificateIdentityPreserved":true,"nativeNegotiationEvents":0,"liveChannelProbes":4,"binaryBytesPerPeer":192000,"staleCandidateRefused":true,"relayAllocationReused":true}],"diagnostics":null}
+```
+
+
+### E2r delayed-answer before
+
+```json
+{"gate":"E2r-delayed-answer-before","utc":"2026-11-04T01:52:52.390Z","source":"b05a2a01b32c4a610b4f8f2883b6cfb1c3e89243","core":"235f02199a23f00df2c554ed669218eee9627a8e","sourceStable":true,"sourceSHA256":{"components/genet-webrtc/examples/interop_host.rs":"2fe42fa0c6fd8c3dda9c6f83c46468ee8e14046b5eadc8b33eb9667ed87745cf","components/genet-webrtc/examples/interop_host/trace.rs":"a79355fa0225cc8eed8b2c9b64e4608c3570a7c8e06181fc6f89b209c49ab857","support/ci/webrtc_interop.mjs":"6aaf71e6e93641fa12939383b7a0de89213694515dadf2fb787002e29202f812","support/ci/webrtc_interop_peer.js":"0547ce96a35dea59a0df3d1122104bc14d3dd8130d7c07326f8be002e55fc216","support/ci/webrtc_restart.mjs":"ee66a159ab15d2211c6861d80291136a11938b4e07f8f3716d585878a0973a65","support/ci/webrtc_receipts.mjs":"3fb90ab75a1ab625d5b88a0208be6d53903e76312aa555d8baacab183d16e301","components/genet-webrtc/Cargo.toml":"c5d37445f4f53e800b6808938ebe172a1b3c4e6f8ed894459d0a4801b74762af","components/genet-webrtc/src/lib.rs":"af13adba523d1dbc69d75bcadb05f61d4ef96d357ccecf075f25f6e294c95c22","components/genet-webrtc/src/signaling.rs":"d9f94db60d5b812a81d9a444b81f4de49fcb271808558716ebf0b32f0900ed0f","components/genet-webrtc/src/channels.rs":"d4914d3d6844339b6b740ea52989b8bc28dba52100505ad116713093d6c6a770","components/genet-webrtc/src/stats.rs":"3f6263dbb47c43434d99ee6bb3c338c1bf290571ef22ba37c808fac1f29b43a2","components/script-runtime-api/webrtc/bootstrap.js":"c84ff47e51d2add83d168fc8c85e99452e10415bb0ea8325415b0766d7bba877"},"lockSHA256":"92de44713c759b35151a96ab970d763b04dfedfdf6056ef9d98b412abd0101fd","nativeBinarySHA256":"3a2e7e898c551371f5fbb4b28d85657ace4b5a7d7a317771406c166b0a2c2ff9","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790","--restart","both","--browser","firefox","--engine","boa","--route","relay","--offerer","native","--cleanup","close","--answer-delay-ms","8000","--receipt-mode","stdout"],"exit":1,"case":{"browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"fail","phase":"ICE restart","error":"restart fresh ICE connected deadline","seconds":null},"restarts":null,"diagnostics":{"step":"fresh ICE connected","method":"offer","initiator":"browser","iceBefore":{"checksSent":8,"credentialsPending":14,"freshRequests":4,"freshResponses":7,"integrityRefusals":0,"invalidPairResponses":0,"nominationsSent":2,"pairsFailed":0,"roleConflicts":0,"selectedPairs":2,"successfulChecks":7,"unknownTransactions":0,"usernameRefusals":0},"iceAfter":{"checksSent":25,"credentialsPending":14,"freshRequests":7,"freshResponses":8,"integrityRefusals":0,"invalidPairResponses":0,"nominationsSent":2,"pairsFailed":2,"roleConflicts":0,"selectedPairs":2,"successfulChecks":8,"unknownTransactions":0,"usernameRefusals":0},"statsObserved":[["succeeded","succeeded"]],"peers":{"native":{"connectionState":"connecting","iceState":"checking","signaling":"stable","gathering":"complete","channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true},"browser":{"connectionState":"connected","iceState":"connected","signaling":"stable","gathering":"complete","channelStates":["open","open"],"localCredentialsChanged":true,"remoteCredentialsChanged":true}}}}
+```
+
+
+### E2r late-check receiving lock
+
+```json
+{"gate":"E2r-receiving-lock-late-check","utc":"2026-11-04T02:17:12.211252+00:00","base":"Final root-lock delta above, reconstructing UTF-8 LF lock","baseSHA256":"9c5bf7ac95b5c8321520b7b64aa7965d040b11fe30e47e8b2e8d560a220d2642","replaceAllInOrderOldNewExpectedCount":[["377b9ca1b59f48b0c491e25b7d70bb57a23faedd","2ff146629e17ce8e77fc56ffa26f7b13b8b8f83a",2],["235f02199a23f00df2c554ed669218eee9627a8e","479995928668d0db1f8cfb2aa26f818b9f03919f",32]],"unifiedDiffAfterSubstitutions":"--- after-hash-substitutions\n+++ receiving-Cargo.lock\n@@ -2473,0 +2474 @@\n+ \"rayon\",\n","resultSHA256":"cc8330abf8ef395b4e9aff56535557c5645bc99c71b23fad31a0ee79f95aa625","replayVerified":true,"scope":"Retains the concurrent renderer rayon edge required after the main merge; RTC source revisions change only by these exact substitutions."}
+```
+
+
+### E2r delayed-answer after
+
+```json
+{"gate":"E2r-delayed-answer-after","utc":"2026-11-04T02:19:20.874Z","parent":"b05a2a01b32c4a610b4f8f2883b6cfb1c3e89243","core":"479995928668d0db1f8cfb2aa26f818b9f03919f","provider":"2ff146629e17ce8e77fc56ffa26f7b13b8b8f83a","sourceStable":true,"lockSHA256":"cc8330abf8ef395b4e9aff56535557c5645bc99c71b23fad31a0ee79f95aa625","nativeBinarySHA256":"9f24c0c5cbabb39f78ecd22d4f9af8da23da6b537d3918e5bc9485b9ea04dd3d","command":["node","support/ci/webrtc_interop.mjs","--server","172.28.40.199:34790","--restart","both","--browser","firefox","--engine","boa","--route","relay","--offerer","native","--cleanup","close","--answer-delay-ms","8000","--receipt-mode","stdout"],"exit":0,"case":{"browser":"firefox","engine":"boa","route":"relay","offerer":"native","cleanup":"close","status":"pass","phase":null,"error":null,"seconds":55.26},"restarts":[{"method":"method","initiator":"native","credentialsChangedOnBothPeers":true,"channelIdentityPreserved":true,"certificateIdentityPreserved":true,"nativeNegotiationEvents":1,"liveChannelProbes":4,"binaryBytesPerPeer":192000,"staleCandidateRefused":true,"relayAllocationReused":true,"nativeIce":{"before":{"checksSent":4,"credentialsPending":0,"freshRequests":3,"freshResponses":4,"integrityRefusals":0,"invalidPairResponses":0,"nominationsSent":1,"pairsFailed":0,"roleConflicts":0,"selectedPairs":1,"successfulChecks":4,"unknownTransactions":0,"usernameRefusals":0},"after":{"checksSent":8,"credentialsPending":14,"freshRequests":5,"freshResponses":7,"integrityRefusals":0,"invalidPairResponses":0,"nominationsSent":2,"pairsFailed":0,"roleConflicts":0,"selectedPairs":2,"successfulChecks":7,"unknownTransactions":0,"usernameRefusals":0}}},{"method":"offer","initiator":"browser","credentialsChangedOnBothPeers":true,"channelIdentityPreserved":true,"certificateIdentityPreserved":true,"nativeNegotiationEvents":0,"liveChannelProbes":4,"binaryBytesPerPeer":192000,"staleCandidateRefused":true,"relayAllocationReused":true,"nativeIce":{"before":{"checksSent":8,"credentialsPending":14,"freshRequests":5,"freshResponses":7,"integrityRefusals":0,"invalidPairResponses":0,"nominationsSent":2,"pairsFailed":0,"roleConflicts":0,"selectedPairs":2,"successfulChecks":7,"unknownTransactions":0,"usernameRefusals":0},"after":{"checksSent":28,"credentialsPending":14,"freshRequests":7,"freshResponses":11,"integrityRefusals":0,"invalidPairResponses":0,"nominationsSent":3,"pairsFailed":2,"roleConflicts":0,"selectedPairs":3,"successfulChecks":11,"unknownTransactions":0,"usernameRefusals":0}}}]}
+```
+
+
+### E2r native late-check gates
+
+```json
+{"gate":"E2r-native-late-check","utc":"2026-11-04T02:19:57.603047+00:00","parent":"b05a2a01b32c4a610b4f8f2883b6cfb1c3e89243","provider":"2ff146629e17ce8e77fc56ffa26f7b13b8b8f83a","core":"479995928668d0db1f8cfb2aa26f818b9f03919f","compiler":"rustc 1.99.1 (58cf8f9c3 2026-10-13)","lockSHA256":"cc8330abf8ef395b4e9aff56535557c5645bc99c71b23fad31a0ee79f95aa625","commands":[{"command":["cargo","test","-p","genet-webrtc","--test","browser","--locked","--offline","-j","1","--","--test-threads=1"],"exit":0,"seconds":100.62,"results":["test result: ok. 18 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 73.57s","Finished `test` profile [unoptimized] target(s) in 25.97s"]},{"command":["cargo","test","-p","genet-webrtc","--test","browser","--locked","--offline","-j","1","--","--ignored","--test-threads=1"],"exit":0,"seconds":47.84,"results":["test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 18 filtered out; finished in 45.13s","Finished `test` profile [unoptimized] target(s) in 2.58s"]},{"command":["cargo","clippy","-p","genet-webrtc","--lib","--example","interop_host","--no-deps","--locked","--offline","-j","1","--","-D","warnings"],"exit":0,"seconds":16.0,"results":["Finished `dev` profile [unoptimized] target(s) in 15.77s"]},{"command":["cargo","build","-p","genet-wpt","--no-default-features","--features","webrtc","--locked","--offline","-j","1"],"exit":0,"seconds":103.45,"results":["Finished `dev` profile [unoptimized] target(s) in 1m 43s"]},{"command":["cargo","check","-p","ortet","--features","scripted-nova","--all-targets","--locked","--offline","-j","1"],"exit":0,"seconds":394.95,"results":["Finished `dev` profile [unoptimized] target(s) in 6m 34s"]}],"binarySHA256":{"nativeTests":"93bc4613d2e8eafd919ab52dd934f02e162e222b01e524ba8e920c107b3c45be","nativeFixture":"9f24c0c5cbabb39f78ecd22d4f9af8da23da6b537d3918e5bc9485b9ea04dd3d","wpt":"ddc85ca63781dcb7edf656aaf8af293b9cd1f421fb0f80c9dd17e9e8c0e34d17"}}
+```
+
+
+### E2r native test executable correction
+
+```json
+{"gate":"E2r-native-test-binary-correction","referencesUTC":"2026-11-04T02:19:57.603047+00:00","field":"binarySHA256.nativeTests","actualPath":"C:\\t\\cargo-targets\\genet\\build\\debug\\deps\\browser-37312c00641cc6bc.exe","actualSHA256":"d850288a577f54b8624a2ba5aa876fd8832d7e42ea83df3beed17c4f5be77f95","reason":"The collector read the old fixed filename (0984a2ebf671402d); Cargo produced 37312c00641cc6bc after the dependency update. The live ignored-test process path was independently observed. This corrects binary attribution; the 18+4 successful commands, fixture and WPT identities are unchanged."}
+```

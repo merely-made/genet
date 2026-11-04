@@ -1,6 +1,6 @@
 // ICE-restart checks shared by the installed-browser receiving runner.
 // Signaling descriptions stay in memory; receipts contain only assertions.
-export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats}) {
+export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0}) {
   const peers={native,browser}, opposite=name=>name==='native'?'browser':'native';
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -56,6 +56,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       await wait(()=>descriptions.some(s=>s.signal.description.type==='answer'),'local answer');
       const answer=descriptions.shift();assert(answer.from===answerer&&answer.signal.description.type==='answer','unexpected restart answer');
       await probe('after local answer');
+      if(answerDelayMs)await delay(answerDelayMs);
       await peers[initiator].evaluate(`__interop.receive(${JSON.stringify(answer.signal)})`);
       await wait(()=>Object.values(snapshots).every(s=>s.signaling==='stable'&&s.localCredentialsChanged&&s.remoteCredentialsChanged&&['connected','completed'].includes(s.iceState)&&s.gathering==='complete'),'fresh ICE connected');
       await probe('after remote answer',true);
@@ -77,7 +78,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       assert(snapshots.native.restartNegotiations===expectedEvents,'restart negotiationneeded count mismatch');
       const relayAllocationReused=route!=='relay'||(a.localEndpoint!==null&&a.localEndpoint===before.localEndpoint);
       assert(relayAllocationReused,'native TURN allocation replaced during restart');
-      results.push({method,initiator,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
+      results.push({method,initiator,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
       assert(!descriptions.length,'unexpected duplicate negotiation');
     }
     return results;

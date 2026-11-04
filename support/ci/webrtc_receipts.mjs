@@ -39,22 +39,24 @@ function compact(c) {
     refusals:a.refused.length||b.refused.length?{native:counts(a.refused),browser:counts(b.refused)}:undefined,
     gatheringErrorCodes:codes.native.length||codes.browser.length?codes:undefined,
     restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,nativeNegotiationEvents:r.nativeNegotiationEvents||undefined,statsSettling:r.statsSettling})),
-    commonAssertionsVerified:true};
+    dns:c.dns,commonAssertionsVerified:true};
 }
 
 export class RestartJournal {
   static async open(file,identity,source,resume) {
+    assert(!file.endsWith('2026-11-01_webrtc_conformance_plan_receipts.md'),'baseline receipt is frozen');
+    const gate=identity.gate||'E2d';
     const old=await readFile(file,'utf8'),rows=records(old),signature=digest(identity);
-    const start=resume?rows.findLast(r=>r.gate==='E2r-run'&&(resume==='latest'||r.run===resume)):null;
+    const start=resume?rows.findLast(r=>r.gate===gate+'-run'&&(resume==='latest'||r.run===resume)):null;
     if(resume)assert(start&&start.signature===signature,'restart resume requires identical source, binary, lock and fixture profile');
     const journal=new RestartJournal();
-    Object.assign(journal,{file,identity,signature,run:start?.run||randomUUID(),passed:new Map(),versions:new Map()});
+    Object.assign(journal,{file,identity,gate,signature,run:start?.run||randomUUID(),passed:new Map(),versions:new Map()});
     if(start) {
       for(const r of rows.filter(r=>r.run===start.run)) {
-        if(r.gate==='E2r-case'&&r.status==='pass') {
+        if(r.gate===gate+'-case'&&r.status==='pass') {
           journal.validateCase(r);assert(!journal.passed.has(key(r)),'duplicate durable case');journal.passed.set(key(r),r);
         }
-        if(r.gate==='E2r-browser')journal.versions.set(r.browser,r);
+        if(r.gate===gate+'-browser')journal.versions.set(r.browser,r);
       }
       await journal.append('resume',{source,completed:journal.passed.size});
     } else await journal.append('run',{signature,source,...identity,
@@ -67,13 +69,19 @@ export class RestartJournal {
         omittedGatheringErrorCodesMeansNone:true,
         omittedRefusalsAndNegotiationCountsMeanZero:true,
         caseVerifiedMeans:'all common assertions passed and source/native binary unchanged at checkpoint',
-        pendingRestartInterruptedBeforeCleanup:true,sameNativeSocketThenReleasedAndRebound:true},
-      scope:'Windows native data channels, fixed numeric UDP STUN/TURN and unchanged interface; broader DNS/mDNS, server/interface replacement, TCP/TLS, media and carrier gates remain separate'});
+        pendingRestartInterruptedBeforeCleanup:true,sameNativeRtcSocketThenAllRtcAndDnsSocketsReleasedAndRebound:true},
+      scope:identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
     return journal;
   }
   validateCase(c) {
     assert(fields.every(f=>this.identity.choices[f].includes(c[f])),'case outside declared matrix');
-    if(c.gate==='E2r-case'&&c.status==='pass')assert(c.verified===true||(c.commonAssertionsVerified&&c.sourceStable),'case lacks checkpoint verification');
+    if(this.identity.dns&&c.status==='pass'){
+      const pending=c.route==='stun'?1:0;
+      assert(c.dns&&c.dns.pendingAtCleanup===pending&&c.dns.socketsReleased===1+pending,'DNS ownership evidence missing');
+      assert(c.route==='direct'?c.dns.queries===0:c.dns.answers>=1&&c.dns.originalUrlAndPrivacyChecked,'DNS exchange/metadata evidence missing');
+      if(pending)assert(c.dns.held>=1,'DNS cancellation case lacked a pending request');
+    }
+    if(c.gate===this.gate+'-case'&&c.status==='pass')assert(c.verified===true||(c.commonAssertionsVerified&&c.sourceStable),'case lacks checkpoint verification');
   }
   has(c){return this.passed.has(key(c));}
   cases(){return [...this.passed.values()];}
@@ -104,10 +112,9 @@ export class RestartJournal {
     // fresh block; only complete, parsed records can count as passed cases.
     const lastFence=[...old.matchAll(/(?:^|\n)```[^\n]*(?:\n|$)/g)].at(-1)?.[0].trim();
     const repair=lastFence&&lastFence!=='```'?'\n```\n\nInterrupted checkpoint retained; incomplete JSON is not counted.\n':'';
-    const row={schema:2,gate:'E2r-'+kind,run:this.run,utc:new Date().toISOString(),...data};
-    const entry=repair+'\n\n### E2r headed '+kind+'\n\n```json\n'+JSON.stringify(row)+'\n```\n';
-    const start=old.indexOf('\n\n## E2r '),base=start<0?Buffer.byteLength(old):Buffer.byteLength(old.slice(0,start));
-    assert(Buffer.byteLength(old+entry)<=1000000&&Buffer.byteLength(old+entry)-base<=255000,'E2r receipt byte cap exceeded');
+    const row={schema:2,gate:this.gate+'-'+kind,run:this.run,utc:new Date().toISOString(),...data};
+    const entry=repair+'\n\n### '+this.gate+' headed '+kind+'\n\n```json\n'+JSON.stringify(row)+'\n```\n';
+    assert(Buffer.byteLength(old+entry)<=220000,'E2d receipt byte cap exceeded');
     await appendFile(this.file,entry);
   }
 }

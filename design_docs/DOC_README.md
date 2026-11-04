@@ -1,6 +1,6 @@
 # genet Documentation Index
 
-- [WebRTC conformance and shared transport evaluation](2026-11-01_webrtc_conformance_plan.md): native Boa/Vano data channels through Murm's shared provider, selected unmodified WPT, document lifetime and headed Chrome/Firefox interoperability. E2r qualifies fixed-server ICE restart with UDP STUN/TURN reuse, 48 headed cases and native/WPT gates. DNS/mDNS, TCP/TLS, server replacement, interface rebinding, browser-guest, media and application-carrier cutover remain separate gates.
+- [WebRTC conformance continuation](2026-11-03_webrtc_conformance_plan.md): nonblocking hostname ICE-server resolution in progress; prior native/WPT and 48-case headed restart qualification retained. SRV/NAPTR, mDNS, TCP/TLS, server/interface replacement, browser-guest, media and carrier adoption remain separate gates.
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 
@@ -73,10 +73,10 @@ Existing owner fixtures, WPT corpus/metadata and expectation maps remain
 versioned inputs. Historical packet scripts retain their original source/path
 requirements; do not run their writers against frozen evidence.
 
-The active [WebRTC receipt](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md)
-remains with its current owner while that lane appends results. Its retention
-does not enlarge any earlier qualification. Fresh outputs use an explicit new
-location under `Code/testing/genet/`; never overwrite a cited receipt.
+The completed [WebRTC baseline packet](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md)
+is frozen at its cited path. The [current WebRTC packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md)
+lives under `Code/testing/genet/`. Earlier qualification keeps its original
+scope and identities; never overwrite a cited receipt.
 
 The shaping [qualification receipt](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md) is also frozen externally with exact original Git bytes. Its [export manifest](../../../testing/genet/shaping-publish-20261103/receipt-export.json) records the source commit and SHA-256; [publication checks](../../../testing/genet/shaping-publish-20261103/report.md) hold the new continuation. Future outputs use new files rather than overwrite the frozen receipt.
 

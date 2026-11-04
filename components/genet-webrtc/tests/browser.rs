@@ -5,6 +5,9 @@ use genet_webrtc::{NativeWebRtcFactory, Settings};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::Runtime;
 
+#[path = "browser/dns.rs"]
+mod dns;
+
 #[path = "browser/restart.rs"]
 mod restart;
 
@@ -404,8 +407,25 @@ macro_rules! both {
                 super::gathering_errors::<$engine>();
             }
             #[test]
+            fn dns_fallback() {
+                super::dns::fallback::<$engine>();
+            }
+            #[test]
+            fn dns_cancellation() {
+                super::dns::cancellation::<$engine>();
+            }
+            #[test]
+            fn dns_errors() {
+                super::dns::errors::<$engine>();
+            }
+            #[test]
             fn restart() {
                 super::restart::ordinary::<$engine>();
+            }
+            #[test]
+            #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]
+            fn coturn_dns_restart() {
+                super::dns::coturn::<$engine>();
             }
             #[test]
             #[ignore = "requires controlled coturn; MURM_RTC_TEST_SERVER numeric endpoint"]

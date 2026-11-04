@@ -3,7 +3,6 @@
 import argparse
 import collections
 import datetime
-import difflib
 import hashlib
 import itertools
 import json
@@ -15,6 +14,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 RECEIPT = ROOT / "design_docs/archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md"
+CURRENT = ROOT.parents[1] / "testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md"
 FILES = [
     "RTCPeerConnection-constructor.html",
     "RTCIceCandidate-constructor.html",
@@ -54,15 +54,21 @@ def main():
     parser.add_argument("--phase", choices=["before", "after"], required=True)
     parser.add_argument("--runner", type=Path, required=True)
     parser.add_argument("--compact", action="store_true", help="retain deltas against an archived complete after map")
+    parser.add_argument("--receipt", type=Path, default=CURRENT)
+    parser.add_argument("--reference-receipt", type=Path, default=RECEIPT)
+    parser.add_argument("--gate", choices=["E2d", "E2r"], default="E2d")
     args = parser.parse_args()
     if args.compact and args.phase != "after":
         parser.error("--compact requires --phase after")
-    text = RECEIPT.read_text(encoding="utf-8")
+    if args.receipt.resolve() == RECEIPT.resolve():
+        parser.error("the completed E2r packet is read-only; select a fresh receipt")
+    text = args.receipt.read_text(encoding="utf-8")
+    reference_text = args.reference_receipt.read_text(encoding="utf-8")
     tests = ROOT / "tests/wpt/tests"
     sources = [tests / "webrtc" / name for name in FILES]
     sources += [tests / "resources/testharness.js", tests / "webrtc/RTCPeerConnection-helper.js"]
     result = {
-        "gate": "E2r-WPT", "phase": args.phase,
+        "gate": args.gate + "-WPT", "phase": args.phase,
         "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "source": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "binarySHA256": digest(args.runner), "lockSHA256": digest(ROOT / "Cargo.lock"),
@@ -70,9 +76,8 @@ def main():
         "outcomes": [], "comparisons": [],
     }
     if args.phase == "before":
-        old = re.search(r"```toml\n(.*?)\n```", text[text.index("### Final receiving Cargo.lock"):], re.S).group(1) + "\n"
-        current = (ROOT / "Cargo.lock").read_text(encoding="utf-8")
-        result["lockDeltaFromArchivedFull"] = "".join(difflib.unified_diff(old.splitlines(True), current.splitlines(True)))
+        assert any(result["lockSHA256"] in [r.get("lockSHA256"), r.get("resultSHA256")] for r in records(reference_text)), "matching archived lock reference required"
+        result["lockReference"] = {"file": str(args.reference_receipt), "packetSHA256": digest(args.reference_receipt)}
     failure = None
     try:
         for engine, name in itertools.product(["boa", "nova"], FILES):
@@ -94,7 +99,7 @@ def main():
             print(engine, name, outcome["subtests_passed"], "/", outcome["subtests_total"], outcome["status"], flush=True)
             assert process.returncode == 0
         if args.phase == "after":
-            before = next(r for r in reversed(list(records(text))) if r.get("gate") == "E2r-WPT" and r.get("phase") == "before" and not r.get("failure"))
+            before = next(r for r in reversed(list(records(text))) if r.get("gate") == result["gate"] and r.get("phase") == "before" and not r.get("failure"))
             assert result["sourceSHA256"] == before["sourceSHA256"], "WPT source drift"
             result["beforeBinarySHA256"] = before["binarySHA256"]
             for old, new in zip(before["outcomes"], result["outcomes"], strict=True):
@@ -117,7 +122,7 @@ def main():
         failure = str(error)[:300]
     result["failure"] = failure
     if args.compact:
-        reference = next(r for r in reversed(list(records(text))) if r.get("gate") == "E2r-WPT" and r.get("phase") == "after" and not r.get("failure") and all("subtests" in o for o in r["outcomes"]))
+        reference = next(r for r in reversed(list(records(reference_text)) + list(records(text))) if r.get("gate") in ["E2r-WPT", result["gate"]] and r.get("phase") == "after" and not r.get("failure") and all("subtests" in o for o in r["outcomes"]))
         result["caseMapReference"] = {key: reference[key] for key in ["utc", "binarySHA256"]}
         normalized = lambda rows: json.dumps([{**row, "changed": sorted(row["changed"])} for row in rows], sort_keys=True, separators=(",", ":"))
         comparison = normalized(result["comparisons"])
@@ -134,13 +139,10 @@ def main():
                 "changed": [[key, a[key], b[key]] for key in sorted(a.keys() & b.keys()) if a[key] != b[key]],
             }
             outcome["subtestsSHA256"] = hashlib.sha256(json.dumps(outcome.pop("subtests"), separators=(",", ":")).encode()).hexdigest()
-    entry = "\n\n## E2r WPT " + args.phase + " - " + result["utc"] + "\n\n```json\n" + json.dumps(result, separators=(",", ":")) + "\n```\n"
-    current = RECEIPT.read_text(encoding="utf-8")
-    start = current.find("\n\n## E2r ")
-    base = len(current[:start].encode()) if start >= 0 else len(current.encode())
-    assert len((current + entry).encode()) <= 1_000_000
-    assert len((current + entry).encode()) - base <= 255_000
-    with RECEIPT.open("a", encoding="utf-8", newline="\n") as stream:
+    entry = "\n\n## " + args.gate + " WPT " + args.phase + " - " + result["utc"] + "\n\n```json\n" + json.dumps(result, separators=(",", ":")) + "\n```\n"
+    current = args.receipt.read_text(encoding="utf-8")
+    assert len((current + entry).encode()) <= 220_000
+    with args.receipt.open("a", encoding="utf-8", newline="\n") as stream:
         stream.write(entry)
     if failure:
         print(failure, file=sys.stderr)

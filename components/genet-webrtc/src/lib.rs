@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod channels;
+mod discovery;
 mod signaling;
 mod stats;
 
@@ -15,10 +16,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use murm_rtc::rtc::crypto::{RTCCryptoProvider, default_provider};
+use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, Resolver};
+use murm_rtc::rtc::crypto::default_provider;
 use murm_rtc::rtc::data_channel::RTCDataChannelInit;
 use murm_rtc::rtc::ice::mdns::MulticastDnsMode;
-use murm_rtc::rtc::ice::url::{ProtoType, SchemeType, Url};
 use murm_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngineBuilder;
 use murm_rtc::rtc::peer_connection::configuration::{
     RTCBundlePolicy, RTCConfiguration, RTCConfigurationBuilder, RTCIceTransportPolicy,
@@ -34,7 +35,7 @@ use murm_rtc::rtc::peer_connection::{RTCPeerConnection, RTCPeerConnectionBuilder
 use murm_rtc::rtc::sansio::Protocol;
 use murm_rtc::rtc::statistics::StatsSelector;
 use murm_rtc::rtc::statistics::report::RTCStatsReportEntry;
-use murm_rtc::udp::{DiscoveryConfig, IoLimits, Output, ReadInterest, Server, UdpPeer};
+use murm_rtc::udp::{IoLimits, Output, ReadInterest, UdpPeer};
 use script_runtime_api::{WebRtcError, WebRtcFactory, WebRtcOperation, WebRtcPeer};
 use serde_json::{Value, json};
 
@@ -73,6 +74,7 @@ impl Default for Settings {
 /// Native peer factory; sharing it between realms shares its resource ceiling.
 pub struct NativeWebRtcFactory {
     settings: Settings,
+    resolver: Arc<dyn Resolver>,
     live: Rc<Cell<usize>>,
 }
 
@@ -82,6 +84,20 @@ impl NativeWebRtcFactory {
     /// # Errors
     /// Returns `TypeError` for an unspecified bind address or invalid resource budgets.
     pub fn new(settings: Settings) -> Result<Self, WebRtcError> {
+        let resolver = DnsResolver::new(DnsConfig::system(DnsLimits::default()))
+            .map_err(|_| failure("TypeError", "Invalid RTC resolver budgets"))?;
+        Self::with_resolver(settings, Arc::new(resolver))
+    }
+
+    /// Use caller-owned DNS placement and budgets, shared across realms.
+    /// Requests are polled by the document host; no worker or executor is created.
+    ///
+    /// # Errors
+    /// Returns `TypeError` for an unspecified bind address or invalid host budgets.
+    pub fn with_resolver(
+        settings: Settings,
+        resolver: Arc<dyn Resolver>,
+    ) -> Result<Self, WebRtcError> {
         if settings.bind.is_unspecified()
             || settings.max_peers == 0
             || settings.max_channels == 0
@@ -93,73 +109,10 @@ impl NativeWebRtcFactory {
         }
         Ok(Self {
             settings,
+            resolver,
             live: Rc::new(Cell::new(0)),
         })
     }
-}
-
-fn discovery(
-    config: &Value,
-    settings: Settings,
-    crypto: Arc<dyn RTCCryptoProvider>,
-) -> Result<(DiscoveryConfig, Vec<String>), WebRtcError> {
-    let mut servers: Vec<Server> = Vec::new();
-    let mut refused = Vec::new();
-    let relay_only = config["iceTransportPolicy"] == "relay";
-    let mut count = 0;
-    for server in config["iceServers"].as_array().into_iter().flatten() {
-        for raw in server["urls"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-        {
-            count += 1;
-            if count > 32 {
-                return Err(failure(
-                    "QuotaExceededError",
-                    "RTC ICE server limit reached",
-                ));
-            }
-            let mut url = Url::parse_url(raw).map_err(protocol_error)?;
-            if relay_only && matches!(url.scheme, SchemeType::Stun | SchemeType::Stuns) {
-                continue;
-            }
-            url.username = server["username"].as_str().unwrap_or("").into();
-            url.password = server["credential"].as_str().unwrap_or("").into();
-            let ip = url.host.parse::<IpAddr>().ok();
-            if url.proto != ProtoType::Udp
-                || !matches!(url.scheme, SchemeType::Stun | SchemeType::Turn)
-                || ip
-                    .is_none_or(|ip| ip.is_unspecified() || ip.is_ipv4() != settings.bind.is_ipv4())
-            {
-                refused.push(url.to_string());
-                continue;
-            }
-            let address = SocketAddr::new(ip.expect("validated numeric host"), url.port);
-            if url.scheme == SchemeType::Turn
-                && servers
-                    .iter()
-                    .any(|s| s.url.scheme == SchemeType::Turn && s.address == address)
-            {
-                // One allocation per physical socket/server five-tuple. Preserve
-                // getConfiguration, and report the extra unsupported attempt.
-                refused.push(url.to_string());
-                continue;
-            }
-            servers.push(Server { url, address });
-        }
-    }
-    Ok((
-        DiscoveryConfig {
-            servers,
-            relay_only,
-            timeout: settings.gathering_timeout,
-            allocation_refresh_interval_cap: settings.allocation_refresh_interval_cap,
-            crypto_provider: crypto,
-        },
-        refused,
-    ))
 }
 
 fn failure(name: &'static str, message: &str) -> WebRtcError {
@@ -276,7 +229,12 @@ impl WebRtcFactory for NativeWebRtcFactory {
         }
         let config: Value = serde_json::from_str(configuration_json).map_err(protocol_error)?;
         let crypto = default_provider().map_err(protocol_error)?;
-        let (discovery, refused_servers) = discovery(&config, self.settings, crypto.clone())?;
+        let (discovery, refused_servers) = discovery::configuration(
+            &config,
+            self.settings,
+            crypto.clone(),
+            self.resolver.clone(),
+        )?;
         // mDNS requires its own multicast socket. Enabling the core's default
         // QueryOnly mode without that route wedges the single UDP output queue.
         let settings_engine = SettingEngineBuilder::new()
@@ -295,7 +253,10 @@ impl WebRtcFactory for NativeWebRtcFactory {
             .with_configuration(configuration(&engine_config)?)
             .build(Instant::now())
             .map_err(protocol_error)?;
-        let endpoint = if config["iceTransportPolicy"] == "relay" && discovery.servers.is_empty() {
+        let endpoint = if config["iceTransportPolicy"] == "relay"
+            && discovery.servers.is_empty()
+            && discovery.named_servers.is_empty()
+        {
             Endpoint::NoRoute(Box::new(core))
         } else {
             Endpoint::Host(Box::new(
@@ -620,7 +581,14 @@ impl WebRtcPeer for NativePeer {
             },
             WebRtcOperation::GetStats => stats::report(&mut state, now),
             WebRtcOperation::Close => {
-                let _ = state.endpoint.core_mut().close();
+                match &mut state.endpoint {
+                    Endpoint::Host(peer) => {
+                        let _ = peer.close();
+                    },
+                    Endpoint::NoRoute(peer) => {
+                        let _ = peer.close();
+                    },
+                }
                 // Nonblocking flush; dropping the per-realm handle then releases
                 // the socket independently of VM collection or native threads.
                 if let Endpoint::Host(peer) = &mut state.endpoint {

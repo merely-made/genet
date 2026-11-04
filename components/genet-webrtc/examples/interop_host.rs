@@ -1,9 +1,11 @@
 //! Test-only JSONL host for the headed browser interoperability runner.
 //! Uses the real per-document runtime/factory, with no signaling network service.
 
+use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver};
 use std::io::{self, BufRead, Read, Write};
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -23,15 +25,33 @@ impl script_runtime_api::ScriptResourceLoader for Page {
     }
 }
 
-fn run<E: ScriptEngine>(bind: IpAddr) -> Result<(), String> {
+fn runtime<E: ScriptEngine>(
+    bind: IpAddr,
+    dns_server: Option<SocketAddr>,
+) -> Result<(Runtime<E>, Arc<DnsResolver>), String> {
     let mut rt = Runtime::<E>::new().map_err(|_| "runtime initialization failed")?;
+    let limits = DnsLimits {
+        timeout: Duration::from_secs(5),
+        ..DnsLimits::default()
+    };
+    let config = dns_server.map_or_else(
+        || DnsConfig::system(limits),
+        |server| DnsConfig {
+            servers: vec![server],
+            limits,
+        },
+    );
+    let resolver = Arc::new(DnsResolver::new(config).map_err(|_| "DNS configuration failed")?);
     rt.set_webrtc_factory(Rc::new(
-        NativeWebRtcFactory::new(Settings {
-            bind,
-            gathering_timeout: Duration::from_secs(5),
-            allocation_refresh_interval_cap: Some(Duration::from_secs(1)),
-            ..Settings::default()
-        })
+        NativeWebRtcFactory::with_resolver(
+            Settings {
+                bind,
+                gathering_timeout: Duration::from_secs(5),
+                allocation_refresh_interval_cap: Some(Duration::from_secs(1)),
+                ..Settings::default()
+            },
+            resolver.clone(),
+        )
         .map_err(|_| "factory initialization failed")?,
     ));
     rt.set_base_url("https://rtc-interop.invalid/one.html")
@@ -41,6 +61,11 @@ fn run<E: ScriptEngine>(bind: IpAddr) -> Result<(), String> {
         "<html><body>RTC native test peer</body></html>",
         &script_runtime_api::NoScriptLoader,
     );
+    Ok((rt, resolver))
+}
+
+fn run<E: ScriptEngine>(bind: IpAddr, dns_server: Option<SocketAddr>) -> Result<(), String> {
+    let (mut rt, resolver) = runtime::<E>(bind, dns_server)?;
     let (sender, receiver) = mpsc::sync_channel(1);
     std::thread::spawn(move || {
         let stdin = io::stdin();
@@ -84,7 +109,9 @@ fn run<E: ScriptEngine>(bind: IpAddr) -> Result<(), String> {
                     Err(error) => Err(rt.describe_error(&error)),
                 }
             },
-            Some("metrics") => Ok(json!({"pending":rt.pending_webrtc(),"ice":trace::snapshot()})),
+            Some("metrics") => Ok(
+                json!({"pending":rt.pending_webrtc(),"dnsPending":resolver.pending(),"ice":trace::snapshot()}),
+            ),
             Some("navigate") => {
                 let stale = rt
                     .eval(
@@ -148,13 +175,17 @@ fn fixture() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
     let bind = args
         .get(2)
-        .ok_or("usage: interop_host boa|nova BIND_IP")?
+        .ok_or("usage: interop_host boa|nova BIND_IP [DNS_IP:PORT]")?
         .parse()
         .map_err(|_| "invalid bind IP")?;
+    let dns_server = args
+        .get(3)
+        .map(|s| s.parse().map_err(|_| "invalid DNS endpoint"))
+        .transpose()?;
     match args.get(1).map(String::as_str) {
-        Some("boa") => run::<script_engine_boa::BoaEngine>(bind),
+        Some("boa") => run::<script_engine_boa::BoaEngine>(bind, dns_server),
         #[cfg(target_pointer_width = "64")]
-        Some("nova") => run::<script_engine_nova::NovaEngine>(bind),
+        Some("nova") => run::<script_engine_nova::NovaEngine>(bind, dns_server),
         _ => Err("unknown engine".into()),
     }
 }

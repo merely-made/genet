@@ -6,6 +6,8 @@
 //   cargo build -p genet-webrtc --example interop_host --locked --offline -j 1
 // Start murm/wire/crates/rtc/tests/coturn.sh in WSL, then from Genet:
 //   node support/ci/webrtc_interop.mjs --server NUMERIC_WSL_IP:34790
+// Add --dns controlled for explicit-port native hostname URLs, controlled A
+// replies, and interrupted-DNS cleanup. Browser peers use the numeric endpoint.
 // Optional matrix filters: --browser chrome|firefox --engine boa|nova
 // --route direct|relay --offerer native|browser --cleanup close|navigate.
 // --restart both exercises both APIs at every negotiation step; adds configured STUN.
@@ -31,12 +33,16 @@ import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { runRestartChecks } from './webrtc_restart.mjs';
 import { RestartJournal } from './webrtc_receipts.mjs';
+import { DnsFixture } from './webrtc_dns_fixture.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const execFileAsync = promisify(execFile);
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const restart=args.get('--restart');
+const dnsEnabled=args.get('--dns')==='controlled';
+if(args.has('--dns')&&!dnsEnabled)throw Error('--dns requires controlled');
+const gate=dnsEnabled?'E2d':restart?'E2r':'E2h';
 if(restart && restart!=='both')throw Error('--restart requires both');
 // Diagnostic signaling delay, bounded below the retained-route deadline.
 const answerDelayMs=Number(args.get('--answer-delay-ms')||0);
@@ -56,8 +62,9 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
-const sourceFiles=['components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
-const receipt = path.join(repo, 'design_docs/archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md');
+const sourceFiles=['components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
+const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md'));
+if(receipt.endsWith('2026-11-01_webrtc_conformance_plan_receipts.md'))throw Error('baseline receipt is frozen');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = data => createHash('sha256').update(data).digest('hex');
 const assert = (value, message) => { if (!value) throw Error(message); };
@@ -282,8 +289,8 @@ class Browser {
   }
 }
 class Native {
-  start(engine,bind) {
-    this.process=spawn(nativeExe,[engine,bind],{stdio:['pipe','pipe','pipe'],windowsHide:true});
+  start(engine,bind,dns) {
+    this.process=spawn(nativeExe,[engine,bind,...(dns?[dns]:[])],{stdio:['pipe','pipe','pipe'],windowsHide:true});
     this.next=0;this.pending=new Map();this.stderr='';
     this.ready=new Promise(resolve=>{this.markReady=resolve;});
     this.process.stderr.on('data',chunk=>{this.stderr=(this.stderr+chunk.toString()).slice(-4096);});
@@ -340,12 +347,14 @@ const sourceStableNow=async()=>{
   return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
-  sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
+  gate,dns:dnsEnabled,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
 const udpFixture=new UdpFixture();
 const frontend=await udpFixture.start(bind);
+const dnsFixture=dnsEnabled?new DnsFixture():null;
+const dnsServer=dnsFixture?await dnsFixture.start(bind):null;
 try {
   for(const browserName of choose('--browser',['chrome','firefox'])) {
     const browser=new Browser();
@@ -357,12 +366,15 @@ try {
         current={browser:browserName,engine,route,offerer,cleanup};
         if(journal?.has(current))continue;
         const native=new Native();const start=Date.now();let a,b;
+        const dnsBefore=dnsFixture?.snapshot();
         try {
-          phase='peer startup';await browser.reset(url+'?case='+cases.length);native.start(engine,bind);await timeout(native.ready,45000,'native initialization deadline');
+          phase='peer startup';await browser.reset(url+'?case='+cases.length);native.start(engine,bind,dnsServer);await timeout(native.ready,45000,'native initialization deadline');
           const config={iceTransportPolicy:route==='relay'?'relay':'all',iceServers:route==='relay'?
             [{urls:[`turn:${frontend}?transport=udp`],username:'rtc-test',credential:'rtc-test-password'}]:route==='stun'?[{urls:[`stun:${frontend}`]}]:[]};
+          const nativeConfig=JSON.parse(JSON.stringify(config));
+          if(dnsEnabled&&route!=='direct')nativeConfig.iceServers[0].urls=nativeConfig.iceServers[0].urls.map(url=>url.replace(frontend,'rtc.example.test:'+frontend.split(':')[1]));
           await native.evaluate(source);await browser.evaluate(source);
-          await native.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(config)},'native',${offerer==='native'});__interop.start()`);
+          await native.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(nativeConfig)},'native',${offerer==='native'});__interop.start()`);
           await browser.evaluate(`globalThis.__interop=makeInteropPeer(${JSON.stringify(config)},'browser',${offerer==='browser'});__interop.start()`);
           phase='negotiation and transfer';const exchangeStart=Date.now();
           for(let i=0;i<600;i++) {
@@ -379,6 +391,12 @@ try {
           let aStats,bStats;
           for(let i=0;i<100;i++){aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');if(aStats&&bStats)break;await delay(15);}
           assert(aStats&&bStats,'stats deadline');verifyStats(aStats,bStats,route);
+          if(dnsEnabled&&route!=='direct'){
+            const local=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type!=="host").map(c=>({type:c.type,url:c.url,relayProtocol:c.relayProtocol,relatedAddress:c.relatedAddress,relatedPort:c.relatedPort,signalingKeys:Object.keys(c.toJSON())}))');
+            assert(local.length>0&&local.every(c=>c.url===nativeConfig.iceServers[0].urls[0]),'original hostname URL metadata missing');
+            assert(local.every(c=>!c.signalingKeys.includes('url')&&!c.signalingKeys.includes('relayProtocol')),'local metadata leaked into signaling');
+            if(route==='relay')assert(local.every(c=>c.type==='relay'&&c.relayProtocol==='udp'&&c.relatedAddress==='0.0.0.0'&&c.relatedPort===0),'hostname relay privacy failed');
+          }
           const initialSockets=restart?await ownedUdp(native.process.pid):null;
           let restarts;
           if(restart) {
@@ -386,13 +404,19 @@ try {
             a=await native.value('__interop.snapshot()');b=await browser.value('__interop.snapshot()');
             aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');verifyStats(aStats,bStats,route);
             phase='restart interruption';
+            if(dnsFixture&&route==='stun')dnsFixture.pause=true;
             await native.evaluate('__interop.captureRestart();__interop.restart("method")');
             const deadline=Date.now()+15000;let pending;
             while(Date.now()<deadline){pending=await native.value('__interop.snapshot()');if(pending.signaling==='have-local-offer'&&pending.localCredentialsChanged)break;await delay(10);}
             assert(pending.signaling==='have-local-offer'&&pending.localCredentialsChanged,'interrupted restart did not apply an offer');
           }
-          phase='native cleanup';const sockets=await ownedUdp(native.process.pid);assert(sockets.length===1,'expected one owned RTC socket');
-          if(restart)assert(initialSockets.length===1&&sockets[0].address===initialSockets[0].address&&sockets[0].port===initialSockets[0].port,'restart replaced or leaked the native socket');
+          phase='native cleanup';
+          const dnsPending=(await native.request('metrics')).dnsPending;
+          const interruptedDns=dnsEnabled&&restart&&route==='stun';
+          assert(dnsPending===(interruptedDns?1:0),'unexpected pending DNS ownership');
+          const sockets=await ownedUdp(native.process.pid);
+          assert(sockets.length===(interruptedDns?2:1),'unexpected RTC/DNS socket ownership');
+          if(restart)assert(initialSockets.length===1&&sockets.some(s=>s.address===initialSockets[0].address&&s.port===initialSockets[0].port),'restart replaced the native RTC socket');
           let cleaned;
           if(cleanup==='navigate') {
             cleaned=await native.request('navigate');assert(cleaned.pending===0,'navigation retained a peer');
@@ -401,12 +425,15 @@ try {
             cleaned=await native.value('__interop.close()');assert(cleaned.state==='closed' && cleaned.channels.every(x=>x==='closed'),'close left live wrappers');
             assert((await native.request('metrics')).pending===0,'close retained a peer');
           }
+          assert((await native.request('metrics')).dnsPending===0,'native cleanup retained DNS work');
           assert((await ownedUdp(native.process.pid)).length===0,'native cleanup retained UDP ownership');await released(sockets);
           await browser.evaluate('__interop.close()');
           const summary=(snapshot,stats)=>({connected:snapshot.connected,textMessagesVerified:2,binaryBytesVerified:48000,modes:snapshot.modes,refused:snapshot.refused,gatheringErrors:snapshot.gatheringErrors,
             pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint,
             remoteAddressesRedacted:stats.remoteAddressesRedacted,peerReflexiveInRemoteList:stats.peerReflexiveInRemoteList});
-          cases.push({...current,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
+          const dns=dnsFixture?{queries:dnsFixture.queries-dnsBefore.queries,answers:dnsFixture.answers-dnsBefore.answers,held:dnsFixture.held-dnsBefore.held,pendingAtCleanup:dnsPending,socketsReleased:sockets.length,originalUrlAndPrivacyChecked:route!=='direct'}:undefined;
+          if(dns){assert(!dnsFixture.error,dnsFixture.error);assert(route==='direct'?dns.queries===0:dns.answers>=1,'missing controlled DNS exchange');assert(!a.gatheringErrors.length,'hostname gathering failed');if(interruptedDns)assert(dns.held>=1,'missing held DNS request at interruption');}
+          cases.push({...current,dns,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
           if(journal)await journal.case(cases.at(-1),await sourceStableNow());
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
         } catch(error) {
@@ -418,20 +445,20 @@ try {
           throw error;
         } finally {
           try {await browser.evaluate('globalThis.__interop?.close()');}catch{}
-          await native.close();await delay(100);await udpFixture.clear();
+          await native.close();if(dnsFixture)dnsFixture.pause=false;await delay(100);await udpFixture.clear();
         }
       }
     } finally {await browser.close();}
   }
 } catch(error) {failure={phase,case:current,error:error.message.slice(0,180)};console.error(JSON.stringify(failure));process.exitCode=1;}
 finally {
+  if(dnsFixture)await dnsFixture.close();
   await udpFixture.close();
   await new Promise(resolve=>http.close(resolve));
   const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
   const sourceStable=JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
   if(!sourceStable){failure={phase:'source identity',error:'source or fixture binary changed during qualification'};process.exitCode=1;}
-  const gate=restart?'E2r':'E2h';
-  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:restart?'native Windows headed data-channel restart on fixed direct/STUN/UDP-TURN routes; DNS/mDNS, server replacement, TCP/TLS, interface rebinding, media and carrier acceptance remain open':'native Windows headed data channels, controlled WSL UDP server'};
+  const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
   if(journal) {
     await journal.finish(failure,sourceStable);
     console.log(`${gate} ${journal.passed.size}/${expectedCases} durable cases passed; run ${journal.run}`);
@@ -440,12 +467,8 @@ finally {
     console.log('RTC_RECEIPT '+JSON.stringify(record));
   } else {
   const old=await readFile(receipt,'utf8'),marker='\n\n## '+gate+' automated browser interoperability';
-  const laneStart=old.indexOf(restart?'\n\n## E2r ':'\n\n## E2h automated browser interoperability');
-  const base=laneStart<0?Buffer.byteLength(old):Buffer.byteLength(old.slice(0,laneStart));
   const entry=marker+' - '+record.utc+'\n\n```json\n'+JSON.stringify(record)+'\n```\n';
-  const laneEnd=restart?-1:old.indexOf('\n\n## E2r ',laneStart);
-  const historical=laneEnd<0?Buffer.byteLength(old)-base:Buffer.byteLength(old.slice(laneStart,laneEnd));
-  assert(Buffer.byteLength(old+entry)<=1000000 && historical+Buffer.byteLength(entry)<=(restart?220000:256000),gate+' receipt byte cap exceeded');
+  assert(Buffer.byteLength(old+entry)<=220000,gate+' receipt byte cap exceeded');
   await appendFile(receipt,entry);console.log(`${gate} ${cases.filter(c=>c.status==='pass').length}/${cases.length} passed; compact receipt appended`);
   }
 }

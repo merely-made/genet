@@ -145,7 +145,7 @@ def main():
             outcome["subtestsSHA256"] = hashlib.sha256(json.dumps(outcome.pop("subtests"), separators=(",", ":")).encode()).hexdigest()
     entry = "\n\n## " + args.gate + " WPT " + args.phase + " - " + result["utc"] + "\n\n```json\n" + json.dumps(result, separators=(",", ":")) + "\n```\n"
     current = args.receipt.read_text(encoding="utf-8")
-    assert len((current + entry).encode()) <= 220_000
+    assert len((current + entry).encode()) <= (244_000 if args.gate == "E2m" else 220_000)
     with args.receipt.open("a", encoding="utf-8", newline="\n") as stream:
         stream.write(entry)
     if failure:

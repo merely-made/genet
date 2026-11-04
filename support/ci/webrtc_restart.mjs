@@ -17,7 +17,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       const descriptions=[];
       async function pump() {
         for(const name of ['native','browser'])for(let signal of await peers[name].value('__interop.takeSignals()')) {
-          if(name==='browser')signal=mapBrowserSignal(signal);
+          if(name==='browser')signal=await mapBrowserSignal(signal);
           if(signal.description)descriptions.push({from:name,signal});
           else await peers[opposite(name)].evaluate(`__interop.receive(${JSON.stringify(signal)})`);
         }

@@ -9,6 +9,8 @@
 // Add --dns controlled for explicit-port native hostname URLs, controlled A
 // replies, and interrupted-DNS cleanup. Browser peers use the numeric endpoint.
 // --dns service instead uses portless URLs and controlled SRV/S-NAPTR replies.
+// --mdns-alias-browser firefox explicitly tests its local sockets with fixture
+// names, leaving that browser's own mDNS advertisement gate unqualified.
 // Optional matrix filters: --browser chrome|firefox --engine boa|nova
 // --route direct|relay --offerer native|browser --cleanup close|navigate.
 // --restart both exercises both APIs at every negotiation step; adds configured STUN.
@@ -46,6 +48,8 @@ const restart=args.get('--restart');
 const dnsMode=args.get('--dns')||null;
 const dnsEnabled=dnsMode!==null;
 const mdnsEnabled=args.get('--mdns')==='controlled';
+const mdnsAliasBrowser=args.get('--mdns-alias-browser')||null;
+if(mdnsAliasBrowser&&(!mdnsEnabled||mdnsAliasBrowser!=='firefox'))throw Error('--mdns-alias-browser requires mDNS and a named installed browser');
 if(args.has('--mdns')&&!mdnsEnabled)throw Error('--mdns requires controlled');
 if(mdnsEnabled&&restart!=='both')throw Error('--mdns requires --restart both');
 if(dnsEnabled&&!['controlled','service'].includes(dnsMode))throw Error('--dns requires controlled or service');
@@ -359,7 +363,7 @@ const sourceStableNow=async()=>{
   return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
-  gate,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
+  gate,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,mdnsAliasBrowser,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
@@ -369,10 +373,14 @@ const dnsFixture=dnsEnabled?new DnsFixture():null;
 const dnsServer=dnsFixture?await dnsFixture.start(bind,dnsMode==='service'?Number(frontend.split(':')[1]):null):null;
 const mdnsFixture=mdnsEnabled?new MdnsFixture():null;
 if(mdnsFixture)await mdnsFixture.start(bind);
-const mapBrowserSignal=signal=>mdnsFixture?mdnsFixture.rewrite(signal):signal;
 try {
   for(const browserName of choose('--browser',['chrome','firefox'])) {
     const browser=new Browser();
+    const mapBrowserSignal=async signal=>{
+      const alias=current?.browser===mdnsAliasBrowser;
+      if(mdnsFixture&&alias)await mdnsFixture.prepareBrowser(signal,[browser.process.pid,browser.windowPid]);
+      return mdnsFixture?mdnsFixture.rewrite(signal,alias):signal;
+    };
     try {
       phase='browser startup';await browser.start(browserName,url);
       if(journal)await journal.browser(versions.at(-1));
@@ -395,7 +403,7 @@ try {
           phase='negotiation and transfer';const exchangeStart=Date.now();
           for(let i=0;i<600;i++) {
             for(const signal of await native.value('__interop.takeSignals()'))await browser.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
-            for(const signal of await browser.value('__interop.takeSignals()'))await native.evaluate(`__interop.receive(${JSON.stringify(mapBrowserSignal(signal))})`);
+            for(const signal of await browser.value('__interop.takeSignals()'))await native.evaluate(`__interop.receive(${JSON.stringify(await mapBrowserSignal(signal))})`);
             a=await native.value('__interop.snapshot()');b=await browser.value('__interop.snapshot()');
             assert(!udpFixture.error,udpFixture.error);
             assert(!a.errors.length && !b.errors.length,'peer error '+[...a.errors,...b.errors].join(','));
@@ -467,13 +475,13 @@ try {
           const dns=dnsFixture?{mode:dnsMode,queries:dnsFixture.queries-dnsBefore.queries,answers:dnsFixture.answers-dnsBefore.answers,held:dnsFixture.held-dnsBefore.held,types:Object.fromEntries(Object.entries(dnsFixture.types).map(([type,count])=>[type,count-dnsBefore.types[type]])),pendingAtCleanup:dnsPending,socketsReleased:sockets.length,sharedMdnsEndpointsObserved,originalUrlAndPrivacyChecked:route!=='direct'}:undefined;
           if(dns){assert(!dnsFixture.error,dnsFixture.error);assert(route==='direct'?dns.queries===0:dns.answers>=1,'missing controlled DNS exchange');assert(!a.gatheringErrors.length,'hostname gathering failed');if(interruptedDns)assert(dns.held>=1,'missing held DNS request at interruption');}
           if(dnsMode==='service'&&route!=='direct'){assert(dns.types.srv>=1&&dns.types.a>=1,'missing service lookup');assert(route==='relay'?dns.types.naptr===1:dns.types.naptr===0,'unexpected S-NAPTR ownership');}
-          const mdns=mdnsFixture?{started:metrics.mdnsStarted,resolved:metrics.mdnsResolved,controlledNames:mdnsFixture.endpoints.size,browserNames:mdnsFixture.browserNames.size,answers:mdnsFixture.answers-mdnsBefore.answers,held:mdnsFixture.held-mdnsBefore.held,pendingAtCleanup:Number(interruptedMdns),relaySuppressed:route==='relay',namesAndStatsPrivate:true}:undefined;
+          const mdns=mdnsFixture?{started:metrics.mdnsStarted,resolved:metrics.mdnsResolved,controlledNames:mdnsFixture.endpoints.size,browserNames:mdnsFixture.browserNames.size,aliasedBrowserNames:mdnsFixture.aliasedBrowserNames.size,answers:mdnsFixture.answers-mdnsBefore.answers,held:mdnsFixture.held-mdnsBefore.held,pendingAtCleanup:Number(interruptedMdns),relaySuppressed:route==='relay',namesAndStatsPrivate:true}:undefined;
           if(mdnsFixture)assert(!mdnsFixture.error,mdnsFixture.error);
           cases.push({...current,dns,mdns,initialStatsSettling:initialStats.settling,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
           if(journal)await journal.case(cases.at(-1),await sourceStableNow());
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
         } catch(error) {
-          let resolution;try{const m=await native.request('metrics');resolution={started:m.mdnsStarted,resolved:m.mdnsResolved,pending:m.dnsPending,fixture:mdnsFixture?.snapshot()};}catch{}
+          let resolution;try{const m=await native.request('metrics');resolution={started:m.mdnsStarted,resolved:m.mdnsResolved,pending:m.dnsPending,diagnostics:m.mdnsDiagnostics,fixture:mdnsFixture?.snapshot()};}catch{}
           try { await native.evaluate('__interop.inspect()'); await browser.evaluate('__interop.inspect()'); await delay(100); } catch {}
           let observedStats; try {observedStats={native:await native.value('__interop.stats'),browser:await browser.value('__interop.stats')};} catch {}
           for(const stats of Object.values(observedStats||{}))if(stats){stats.remoteDER_SHA256=(stats.remoteCertificates||[]).map(bytes=>hash(Buffer.from(bytes)));delete stats.remoteCertificates;}
@@ -506,7 +514,7 @@ finally {
   } else {
   const old=await readFile(receipt,'utf8'),marker='\n\n## '+gate+' automated browser interoperability';
   const entry=marker+' - '+record.utc+'\n\n```json\n'+JSON.stringify(record)+'\n```\n';
-  assert(Buffer.byteLength(old+entry)<=220000,gate+' receipt byte cap exceeded');
+  assert(Buffer.byteLength(old+entry)<=(gate==='E2m'?244000:220000),gate+' receipt byte cap exceeded');
   await appendFile(receipt,entry);console.log(`${gate} ${cases.filter(c=>c.status==='pass').length}/${cases.length} passed; compact receipt appended`);
   }
 }

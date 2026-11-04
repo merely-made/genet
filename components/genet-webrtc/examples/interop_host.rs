@@ -118,9 +118,13 @@ fn run<E: ScriptEngine>(bind: IpAddr, dns_server: Option<SocketAddr>) -> Result<
                     Err(error) => Err(rt.describe_error(&error)),
                 }
             },
-            Some("metrics") => Ok(
-                json!({"pending":rt.pending_webrtc(),"dnsPending":resolver.pending(),"mdnsStarted":resolver.mdns_counts().0,"mdnsResolved":resolver.mdns_counts().1,"ice":trace::snapshot()}),
-            ),
+            Some("metrics") => {
+                let d = resolver.mdns_diagnostics();
+                Ok(
+                    json!({"pending":rt.pending_webrtc(),"dnsPending":resolver.pending(),"mdnsStarted":resolver.mdns_counts().0,"mdnsResolved":resolver.mdns_counts().1,"ice":trace::snapshot(),
+                    "mdnsDiagnostics":{"timeouts":d.timeouts,"ioErrors":d.io_errors,"invalidAnswers":d.invalid_answers,"multicastReceived":d.multicast_received,"sourceRefusals":d.source_refusals,"messageRefusals":d.message_refusals}}),
+                )
+            },
             Some("navigate") => {
                 let stale = rt
                     .eval(

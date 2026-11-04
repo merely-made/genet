@@ -75,7 +75,7 @@ export class RestartJournal {
         caseVerifiedMeans:'all common assertions passed and source/native binary unchanged at checkpoint',
         pendingRestartInterruptedBeforeCleanup:true,observableNativeRtcAndDnsEndpointsReleasedAndRebound:true,
         sharedMdnsEvidence:identity.mdns?'Windows owner table may omit shared 5353 binds; pending tickets cancel in headed checks, actual multicast socket/drop behavior has provider tests.':undefined},
-      scope:identity.mdns?'Windows native remote UUID mDNS resolution on a fixed IPv4 interface; controlled aliases for numeric browser host candidates and untouched browser mDNS names. UDP STUN/TURN regressions, relay suppression and pending-query cancellation. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.':identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
+      scope:identity.mdns?`Windows native remote UUID mDNS resolution on a fixed IPv4 interface; ${identity.mdnsAliasBrowser ? identity.mdnsAliasBrowser+' host names replaced by controlled selected-IPv4 fixture aliases; its own advertisements remain unqualified. Other browser names stay untouched.' : 'controlled numeric-host aliases and untouched browser names.'} UDP STUN/TURN regressions, relay suppression and pending-query cancellation. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.`:identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
     return journal;
   }
   validateCase(c) {
@@ -94,6 +94,7 @@ export class RestartJournal {
     }
     if(this.identity.mdns&&c.status==='pass'){
       assert(c.mdns&&c.mdns.namesAndStatsPrivate,'mDNS privacy evidence missing');
+      if(c.route!=='relay'&&c.browser===this.identity.mdnsAliasBrowser)assert(c.mdns.aliasedBrowserNames>=1&&c.mdns.answers>=1,'controlled browser-name profile evidence missing');
       if(c.route==='relay')assert(c.mdns.started===0&&c.mdns.resolved===0&&c.mdns.pendingAtCleanup===0,'relay policy issued mDNS');
       else {assert(c.mdns.resolved>=1&&c.mdns.pendingAtCleanup===1&&c.mdns.held>=1,'mDNS resolution/cancellation evidence missing');assert(c.restarts.length===2&&c.restarts.every(r=>r.mdnsResolved>=1),'fresh mDNS restart evidence missing');}
     }
@@ -131,7 +132,7 @@ export class RestartJournal {
     const repair=lastFence&&lastFence!=='```'?'\n```\n\nInterrupted checkpoint retained; incomplete JSON is not counted.\n':'';
     const row={...data,schema:2,gate:this.gate+'-'+kind,run:this.run,utc:new Date().toISOString()};
     const entry=repair+'\n\n### '+this.gate+' headed '+kind+'\n\n```json\n'+JSON.stringify(row)+'\n```\n';
-    assert(Buffer.byteLength(old+entry)<=220000,this.gate+' receipt byte cap exceeded');
+    assert(Buffer.byteLength(old+entry)<=(this.gate==='E2m'?244000:220000),this.gate+' receipt byte cap exceeded');
     await appendFile(this.file,entry);
   }
 }

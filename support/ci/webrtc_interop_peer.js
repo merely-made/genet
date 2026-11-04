@@ -107,7 +107,7 @@
     };
     state.snapshot = function () {
       return {connected:state.connected,connectionState:pc.connectionState,iceState:pc.iceConnectionState,signaling:pc.signalingState,remoteSet:state.remoteSet,received,sent,modes,errors,refused,remoteProtocols,gatheringErrors,
-        channelStates:channels.map(c=>c.readyState),gathering:pc.iceGatheringState,round:state.round,waitingToAnswer:state.waitingToAnswer,
+        channelStates:channels.map(c=>c.readyState),channelBufferedBytes:channels.map(c=>c.bufferedAmount),gathering:pc.iceGatheringState,round:state.round,waitingToAnswer:state.waitingToAnswer,
         localCredentialsChanged:changed(pc.localDescription,beforeLocal),remoteCredentialsChanged:changed(pc.remoteDescription,beforeRemote),
         negotiations:state.negotiations,restartNegotiations:state.negotiations-beforeNegotiations,channelCount:channels.length,staleRefused:!!state.staleRefused,
         channelsPreserved:!!beforeChannels&&channels.length===beforeChannels.length&&beforeChannels.every((old,i)=>old.channel===channels[i]&&old.id===channels[i].id)};

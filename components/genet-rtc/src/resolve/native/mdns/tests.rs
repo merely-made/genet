@@ -193,7 +193,7 @@ fn malformed_ambiguous_alias_and_off_link_answers_are_not_accepted() {
         now,
         now + Duration::from_secs(1),
         Lease(Arc::new(AtomicUsize::new(1))),
-        Arc::new(AtomicUsize::new(0)),
+        Arc::default(),
     )
     .unwrap();
     assert!(!query.config.on_link(Ipv4Addr::new(192, 0, 2, 2)));
@@ -284,7 +284,7 @@ fn multicast_zero_id_questionless_cache_flush_answer_is_accepted_only_on_the_joi
         now,
         now + Duration::from_secs(1),
         Lease(Arc::new(AtomicUsize::new(1))),
-        Arc::new(AtomicUsize::new(0)),
+        Arc::default(),
     )
     .unwrap();
     echo_id.metadata.id = query.request.metadata.id;

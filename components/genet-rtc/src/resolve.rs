@@ -103,7 +103,7 @@ pub trait Resolver: Send + Sync {
 #[cfg(feature = "dns")]
 mod native;
 #[cfg(feature = "dns")]
-pub use native::mdns::MdnsConfig;
+pub use native::mdns::{MdnsConfig, MdnsDiagnostics};
 #[cfg(feature = "dns")]
 pub use native::{DnsConfig, DnsLimits, DnsResolver};
 

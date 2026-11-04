@@ -11,6 +11,52 @@ mod link;
 #[cfg(test)]
 mod tests;
 
+/// Aggregate host diagnostics, containing no names, addresses or packet data.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MdnsDiagnostics {
+    /// Requests that reached their deadline.
+    pub timeouts: usize,
+    /// Requests terminated by a socket error.
+    pub io_errors: usize,
+    /// Requests terminated by an invalid or ambiguous answer.
+    pub invalid_answers: usize,
+    /// Datagrams received on the multicast membership socket.
+    pub multicast_received: usize,
+    /// Datagrams refused by source port or subnet validation.
+    pub source_refusals: usize,
+    /// Source-valid datagrams without an acceptable answer for this request.
+    pub message_refusals: usize,
+}
+#[derive(Default)]
+pub(super) struct Counters {
+    pub started: AtomicUsize,
+    pub resolved: AtomicUsize,
+    details: [AtomicUsize; 6],
+}
+impl Counters {
+    pub fn snapshot(&self) -> MdnsDiagnostics {
+        let [
+            timeouts,
+            io_errors,
+            invalid_answers,
+            multicast_received,
+            source_refusals,
+            message_refusals,
+        ] = self.details.each_ref().map(|v| v.load(Ordering::Relaxed));
+        MdnsDiagnostics {
+            timeouts,
+            io_errors,
+            invalid_answers,
+            multicast_received,
+            source_refusals,
+            message_refusals,
+        }
+    }
+    fn count(&self, index: usize) {
+        self.details[index].fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 /// Selected local-link placement and bounded one-shot query policy.
 #[derive(Clone, Copy, Debug)]
 pub struct MdnsConfig {
@@ -76,7 +122,7 @@ pub(super) struct Query {
     wake: Instant,
     attempts: u8,
     lease: Option<Lease>,
-    resolved: Arc<AtomicUsize>,
+    counters: Arc<Counters>,
     result: Option<Result<Vec<IpAddr>, ResolveError>>,
 }
 impl Query {
@@ -87,7 +133,7 @@ impl Query {
         now: Instant,
         deadline: Instant,
         lease: Lease,
-        resolved: Arc<AtomicUsize>,
+        counters: Arc<Counters>,
     ) -> Result<Self, ResolveError> {
         if !is_mdns_candidate_name(host) {
             return Err(ResolveError::Invalid);
@@ -157,7 +203,7 @@ impl Query {
             wake: now,
             attempts: 0,
             lease: Some(lease),
-            resolved,
+            counters,
             result: None,
         })
     }
@@ -169,7 +215,14 @@ impl Query {
         self.multicast = None;
         self.lease = None;
         if result.is_ok() {
-            self.resolved.fetch_add(1, Ordering::Relaxed);
+            self.counters.resolved.fetch_add(1, Ordering::Relaxed);
+        } else {
+            match result {
+                Err(ResolveError::Timeout) => self.counters.count(0),
+                Err(ResolveError::Io) => self.counters.count(1),
+                Err(ResolveError::Invalid) => self.counters.count(2),
+                _ => {}
+            }
         }
         self.result = Some(result.clone());
         Poll::Ready(result)
@@ -277,17 +330,25 @@ impl Lookup for Query {
             } else {
                 self.socket.as_ref().unwrap()
             };
-            match socket.recv_from(&mut self.buffer) {
+            let received = socket.recv_from(&mut self.buffer);
+            if received.is_ok() && self.read_multicast {
+                self.counters.count(3);
+            }
+            match received {
                 Ok((n, SocketAddr::V4(from)))
                     if from.port() == 5353 && self.config.on_link(*from.ip()) =>
                 {
                     match self.answer(&self.buffer[..n], self.read_multicast) {
                         Ok(Some(ip)) => return self.finish(Ok(vec![ip])),
-                        Ok(None) => {}
+                        Ok(None) => {
+                            self.counters.count(5);
+                        }
                         Err(e) => return self.finish(Err(e)),
                     }
                 }
-                Ok(_) => {}
+                Ok(_) => {
+                    self.counters.count(4);
+                }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
                 Err(e) if cfg!(windows) && e.raw_os_error() == Some(10040) => {}
                 Err(_) => return self.finish(Err(ResolveError::Io)),

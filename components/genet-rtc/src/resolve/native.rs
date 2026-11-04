@@ -111,8 +111,7 @@ pub struct DnsResolver {
     config: DnsConfig,
     active: Arc<AtomicUsize>,
     mdns: Option<mdns::MdnsConfig>,
-    mdns_started: Arc<AtomicUsize>,
-    mdns_resolved: Arc<AtomicUsize>,
+    mdns_counters: Arc<mdns::Counters>,
 }
 impl DnsResolver {
     /// Validate caller policy. Creates no thread, task, lookup or socket.
@@ -145,8 +144,7 @@ impl DnsResolver {
             config,
             active: Arc::new(AtomicUsize::new(0)),
             mdns: None,
-            mdns_started: Arc::new(AtomicUsize::new(0)),
-            mdns_resolved: Arc::new(AtomicUsize::new(0)),
+            mdns_counters: Arc::default(),
         })
     }
     /// Number of owned pending lookup contexts, including idle service cursors.
@@ -167,9 +165,14 @@ impl DnsResolver {
     /// Host-only monotonic query/resolution counters, never exposed to scripts.
     pub fn mdns_counts(&self) -> (usize, usize) {
         (
-            self.mdns_started.load(Ordering::Relaxed),
-            self.mdns_resolved.load(Ordering::Relaxed),
+            self.mdns_counters.started.load(Ordering::Relaxed),
+            self.mdns_counters.resolved.load(Ordering::Relaxed),
         )
+    }
+
+    /// Aggregate host diagnostics; never contains names, addresses or packet data.
+    pub fn mdns_diagnostics(&self) -> mdns::MdnsDiagnostics {
+        self.mdns_counters.snapshot()
     }
 }
 impl Resolver for DnsResolver {
@@ -191,9 +194,9 @@ impl Resolver for DnsResolver {
             now,
             deadline,
             self.reserve()?,
-            self.mdns_resolved.clone(),
+            self.mdns_counters.clone(),
         )?;
-        self.mdns_started.fetch_add(1, Ordering::Relaxed);
+        self.mdns_counters.started.fetch_add(1, Ordering::Relaxed);
         Ok(Box::new(query))
     }
     fn start(

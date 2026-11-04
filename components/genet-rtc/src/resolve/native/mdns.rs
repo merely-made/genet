@@ -8,6 +8,7 @@ use std::io;
 use std::net::{Ipv4Addr, UdpSocket};
 
 mod link;
+mod receive;
 #[cfg(test)]
 mod tests;
 
@@ -110,7 +111,7 @@ impl MdnsConfig {
 
 pub(super) struct Query {
     socket: Option<UdpSocket>,
-    multicast: Option<UdpSocket>,
+    multicast: Option<receive::Receiver>,
     read_multicast: bool,
     config: MdnsConfig,
     limits: DnsLimits,
@@ -175,23 +176,10 @@ impl Query {
         // Some browser responders multicast even replies to an ephemeral-port
         // query. This receive-only membership lives exactly as long as this
         // request; it never advertises, sends from 5353 or caches other names.
-        let multicast = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))
-            .map_err(|_| ResolveError::Io)?;
-        multicast
-            .set_reuse_address(true)
-            .map_err(|_| ResolveError::Io)?;
-        multicast
-            .bind(&"0.0.0.0:5353".parse::<SocketAddr>().unwrap().into())
-            .map_err(|_| ResolveError::Io)?;
-        multicast
-            .join_multicast_v4(&Ipv4Addr::new(224, 0, 0, 251), &config.interface)
-            .map_err(|_| ResolveError::Io)?;
-        multicast
-            .set_nonblocking(true)
-            .map_err(|_| ResolveError::Io)?;
+        let multicast = receive::Receiver::new(config.interface).map_err(|_| ResolveError::Io)?;
         Ok(Self {
             socket: Some(socket.into()),
-            multicast: Some(multicast.into()),
+            multicast: Some(multicast),
             read_multicast: false,
             config,
             limits,
@@ -325,18 +313,22 @@ impl Lookup for Query {
         }
         for _ in 0..self.limits.packets_per_poll {
             self.read_multicast = !self.read_multicast;
-            let socket = if self.read_multicast {
-                self.multicast.as_ref().unwrap()
+            let received = if self.read_multicast {
+                self.multicast.as_ref().unwrap().recv(&mut self.buffer)
             } else {
-                self.socket.as_ref().unwrap()
+                self.socket
+                    .as_ref()
+                    .unwrap()
+                    .recv_from(&mut self.buffer)
+                    .map(Some)
             };
-            let received = socket.recv_from(&mut self.buffer);
             if received.is_ok() && self.read_multicast {
                 self.counters.count(3);
             }
             match received {
-                Ok((n, SocketAddr::V4(from)))
-                    if from.port() == 5353 && self.config.on_link(*from.ip()) =>
+                Ok(Some((n, SocketAddr::V4(from))))
+                    if from.port() == 5353
+                        && (self.read_multicast || self.config.on_link(*from.ip())) =>
                 {
                     match self.answer(&self.buffer[..n], self.read_multicast) {
                         Ok(Some(ip)) => return self.finish(Ok(vec![ip])),

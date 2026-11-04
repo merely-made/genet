@@ -307,3 +307,55 @@ fn multicast_zero_id_questionless_cache_flush_answer_is_accepted_only_on_the_joi
     ));
     assert!(query.socket.is_none() && query.multicast.is_none() && query.lease.is_none());
 }
+
+#[test]
+fn multicast_destination_allows_overlay_subnets_but_unicast_stays_on_link() {
+    let _guard = FIXTURE.lock().unwrap();
+    let socket = responder();
+    let resolver = resolver()
+        .with_mdns(MdnsConfig::new(Ipv4Addr::LOCALHOST, 32))
+        .unwrap();
+    let now = Instant::now();
+    let mut lookup = resolver
+        .start_mdns(
+            HOST,
+            Ipv4Addr::LOCALHOST.into(),
+            now,
+            now + Duration::from_secs(2),
+        )
+        .unwrap();
+    assert!(lookup.poll(now).is_pending());
+    let (q, from) = receive(&socket);
+    let sender = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).unwrap();
+    sender.set_reuse_address(true).unwrap();
+    sender
+        .bind(&"127.0.0.2:5353".parse::<SocketAddr>().unwrap().into())
+        .unwrap();
+    sender.set_multicast_if_v4(&Ipv4Addr::LOCALHOST).unwrap();
+    sender.set_multicast_loop_v4(true).unwrap();
+    let sender: UdpSocket = sender.into();
+    let mut reply = response(&q, &[Ipv4Addr::LOCALHOST]);
+    let refusals = resolver.mdns_diagnostics().source_refusals;
+    sender.send_to(&reply.to_vec().unwrap(), from).unwrap();
+    wait(|| {
+        assert!(lookup.poll(Instant::now()).is_pending());
+        resolver.mdns_diagnostics().source_refusals > refusals
+    });
+    reply.metadata.id = 0;
+    reply.queries.clear();
+    // A questionless unicast to shared 5353 must not be mistaken for multicast.
+    sender
+        .send_to(&reply.to_vec().unwrap(), "127.0.0.1:5353")
+        .unwrap();
+    for _ in 0..8 {
+        assert!(lookup.poll(Instant::now()).is_pending());
+    }
+    // Same off-subnet source is valid at the actual link-local destination.
+    sender
+        .send_to(&reply.to_vec().unwrap(), "224.0.0.251:5353")
+        .unwrap();
+    wait(|| matches!(lookup.poll(Instant::now()), Poll::Ready(Ok(_))));
+    assert_eq!(resolver.mdns_counts(), (1, 1));
+    assert_eq!(resolver.pending(), 0);
+    UdpSocket::bind(from).unwrap();
+}

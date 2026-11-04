@@ -9,6 +9,8 @@
 // Optional matrix filters: --browser chrome|firefox --engine boa|nova
 // --route direct|relay --offerer native|browser --cleanup close|navigate.
 // --restart both exercises both APIs at every negotiation step; adds configured STUN.
+// Restart append mode checkpoints each case. --resume latest continues a run
+// only with identical source, native binary, lock, server/interface and browsers.
 // --bind selects the Windows interface explicitly. Default is the default-route
 // IPv4 interface; the UDP fixture front end accepts only local-machine clients.
 // Firefox BiDi grants local-network access only to this fixture origin and
@@ -26,6 +28,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import { runRestartChecks } from './webrtc_restart.mjs';
+import { RestartJournal } from './webrtc_receipts.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const execFileAsync = promisify(execFile);
@@ -35,6 +38,7 @@ const restart=args.get('--restart');
 if(restart && restart!=='both')throw Error('--restart requires both');
 const receiptMode=args.get('--receipt-mode')||'append';
 if(!['append','stdout'].includes(receiptMode))throw Error('invalid receipt mode');
+if(args.has('--resume')&&(!restart||receiptMode!=='append'))throw Error('--resume requires --restart both and append mode');
 const routes=restart?['direct','stun','relay']:['direct','relay'];
 const dimensions=[['--browser',['chrome','firefox']],['--engine',['boa','nova']],['--route',routes],['--offerer',['native','browser']],['--cleanup',['close','navigate']]];
 for(const [flag,values] of dimensions)if(args.has(flag) && !values.includes(args.get(flag)))throw Error('invalid matrix selector '+flag);
@@ -47,7 +51,7 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
-const sourceFiles=['components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
+const sourceFiles=['components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
 const receipt = path.join(repo, 'design_docs/archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -325,6 +329,15 @@ const http=createServer((request,response)=>{response.writeHead(200,{'Content-Ty
 await new Promise(resolve=>http.listen(0,'127.0.0.1',resolve));
 const url=`http://127.0.0.1:${http.address().port}/`;
 const bind=await bindIP();
+const sourceStableNow=async()=>{
+  const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
+  return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
+};
+const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
+  sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,
+  choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
+},execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
+if(journal)cases.push(...journal.cases());
 const udpFixture=new UdpFixture();
 const frontend=await udpFixture.start(bind);
 try {
@@ -332,9 +345,12 @@ try {
     const browser=new Browser();
     try {
       phase='browser startup';await browser.start(browserName,url);
+      if(journal)await journal.browser(versions.at(-1));
       for(const engine of choose('--engine',['boa','nova']))for(const route of choose('--route',routes))
       for(const offerer of choose('--offerer',['native','browser']))for(const cleanup of choose('--cleanup',['close','navigate'])) {
-        current={browser:browserName,engine,route,offerer,cleanup}; const native=new Native();const start=Date.now();let a,b;
+        current={browser:browserName,engine,route,offerer,cleanup};
+        if(journal?.has(current))continue;
+        const native=new Native();const start=Date.now();let a,b;
         try {
           phase='peer startup';await browser.reset(url+'?case='+cases.length);native.start(engine,bind);await timeout(native.ready,45000,'native initialization deadline');
           const config={iceTransportPolicy:route==='relay'?'relay':'all',iceServers:route==='relay'?
@@ -385,12 +401,15 @@ try {
             pair:stats.pair,localFingerprint:stats.localFingerprint,remoteFingerprint:stats.remoteFingerprint,remoteDER_SHA256:stats.remoteDER_SHA256,statsRemoteFingerprint:stats.statsRemoteFingerprint,
             remoteAddressesRedacted:stats.remoteAddressesRedacted,peerReflexiveInRemoteList:stats.peerReflexiveInRemoteList});
           cases.push({...current,status:'pass',seconds:Math.round((Date.now()-start)/10)/100,native:summary(a,aStats),browserPeer:summary(b,bStats),restarts,interruptedRestart:restart?true:undefined,socketPreserved:restart?true:undefined,cleanupVerified:true,socketRebound:true});
+          if(journal)await journal.case(cases.at(-1),await sourceStableNow());
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
         } catch(error) {
           try { await native.evaluate('__interop.inspect()'); await browser.evaluate('__interop.inspect()'); await delay(100); } catch {}
           let observedStats; try {observedStats={native:await native.value('__interop.stats'),browser:await browser.value('__interop.stats')};} catch {}
           for(const stats of Object.values(observedStats||{}))if(stats){stats.remoteDER_SHA256=(stats.remoteCertificates||[]).map(bytes=>hash(Buffer.from(bytes)));delete stats.remoteCertificates;}
-          cases.push({...current,status:'fail',phase,error:error.message.slice(0,180),observed:{native:a,browser:b},observedStats,restartDiagnostics:error.restartDiagnostics,trace:native.stderr.split('\n').filter(s=>s.startsWith('RTC poll variant:')).slice(-8)});throw error;
+          cases.push({...current,status:'fail',phase,error:error.message.slice(0,180),observed:{native:a,browser:b},observedStats,restartDiagnostics:error.restartDiagnostics,trace:native.stderr.split('\n').filter(s=>s.startsWith('RTC poll variant:')).slice(-8)});
+          if(journal)await journal.case(cases.at(-1),await sourceStableNow());
+          throw error;
         } finally {
           try {await browser.evaluate('globalThis.__interop?.close()');}catch{}
           await native.close();await delay(100);await udpFixture.clear();
@@ -407,7 +426,10 @@ finally {
   if(!sourceStable){failure={phase:'source identity',error:'source or fixture binary changed during qualification'};process.exitCode=1;}
   const gate=restart?'E2r':'E2h';
   const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'automatic approval review blocked recursive deletion; marked profiles retained for reuse',scope:restart?'native Windows headed data-channel restart on fixed direct/STUN/UDP-TURN routes; DNS/mDNS, server replacement, TCP/TLS, interface rebinding, media and carrier acceptance remain open':'native Windows headed data channels, controlled WSL UDP server'};
-  if(receiptMode==='stdout') {
+  if(journal) {
+    await journal.finish(failure,sourceStable);
+    console.log(`${gate} ${journal.passed.size}/${expectedCases} durable cases passed; run ${journal.run}`);
+  } else if(receiptMode==='stdout') {
     console.log(`${gate} ${cases.filter(c=>c.status==='pass').length}/${cases.length} passed; receipt emitted`);
     console.log('RTC_RECEIPT '+JSON.stringify(record));
   } else {

@@ -1,11 +1,11 @@
 # WebRTC conformance and shared transport evaluation
 
-**Status (2026-11-02): E0/E1a qualified; native Genet data-channel intake and
-E2h headed interoperability qualified; broader E2, carrier cutover and E3 remain open.**
+**Status (2026-11-03): E0/E1a and E2h qualified; E2r ICE restart receiving
+qualification is in progress; broader E2, carrier cutover and E3 remain open.**
 The native receiving path is checked on both engines against selected unmodified
 WPT and encrypted direct/UDP-relay transfer. Ortet's scripted host compiles with
-the capability. IP-literal UDP STUN/TURN is implemented; DNS, TCP/TLS, restart,
-browser-guest and media acceptance remain separate gates. Installed headed
+the capability. IP-literal UDP STUN/TURN and fixed-server ICE restart are
+implemented; DNS, TCP/TLS, browser-guest and media acceptance remain separate gates. Installed headed
 Chrome and Firefox qualify the bounded direct/forced-UDP-TURN data-channel
 matrix; this is distinct from Genet running inside a browser guest.
 
@@ -214,8 +214,34 @@ receipts. Build artifacts reuse the stable Genet target. Automatic approval
 review rejected recursive deletion of a verified, exited test profile; retain
 the two bounded marker-owned profile caches for reuse, with their browser
 owners stopped. Failure remains recorded even when a later fix
-passes. DNS, mDNS resolution, restart/server replacement, TURN TCP/TLS, public
+passes. DNS, mDNS resolution, server replacement, TURN TCP/TLS, public
 deployment and media remain open unless separately qualified.
+
+### E2r. ICE restart on established data channels
+
+**Status (2026-11-03): provider/native/WPT qualified; full headed matrix in progress.** Freeze a fresh native
+runner and unchanged WPT case map before implementation. Exercise
+`RTCDataChannel-iceRestart.html`, both `RTCPeerConnection-restartIce` files and
+the existing constructor/channel/ICE-error controls on Boa and Vano. Retain
+media-dependent failures with their actual case identities.
+
+Done: `restartIce()` and `createOffer({iceRestart:true})` rotate credentials
+without closing existing channels; requests survive rollback and schedule
+`negotiationneeded` after the operations chain returns to stable. Restart after
+close has no effect. Candidate generations reject stale signaling while a
+previously authenticated data path remains usable during negotiation. Test
+direct UDP, configured STUN and forced TURN against installed headed Chrome
+and Firefox, both engines and both initiator roles, including close/navigation.
+The provider owns gathering, bounded timers and reuse/release of existing TURN
+allocations; Genet owns web semantics and generation-tagged observations.
+
+Append compact baseline/final WPT maps, provider/native gates, headed restart
+results and exact source/lock/binary identities to the existing receipt. The
+additional E2r retained cap is **220 KB**, within the existing **1 MB** total;
+use a delta from the archived full lock. Reuse the approved stable targets.
+Core defects are repaired in the supplier rather than duplicating protocol
+processing in Genet. DNS/mDNS, server replacement, TCP/TLS, media and carrier
+cutover remain separate gates.
 
 ## Findings (2026-11-01)
 
@@ -255,8 +281,9 @@ deployment and media remain open unless separately qualified.
   Gathering waits for server results or a caller-selected deadline, with typed,
   sanitized `icecandidateerror` events and a final null candidate. Local server
   URL/relay protocol metadata stays out of candidate signaling JSON. Route-policy
-  changes, ICE-server replacement and configured-server restarts refuse with
-  `NotSupportedError`. DNS, TCP/TLS and mDNS are still open. Custom certificates,
+  changes and ICE-server replacement refuse with `NotSupportedError`.
+  Fixed-server restart refreshes STUN transactions and retains TURN allocations.
+  DNS, TCP/TLS and mDNS are still open. Custom certificates,
   complete media/IDL, and full stats and transport event qualification remain
   open. `bufferedAmount` currently reflects the core's outstanding send bytes;
   exact web-visible timing and send-buffer saturation need their own coverage.
@@ -341,6 +368,44 @@ deployment and media remain open unless separately qualified.
   coturn fixture. Scoped browser network permission is recorded separately
   from ICE gathering errors; permission alone did not establish that WSL path.
 
+## ICE restart findings (2026-11-03)
+
+The runtime remembers restart requests across rollback and pending offers,
+coalesces `negotiationneeded` after the operations chain, and treats restart
+after close as a no-op. Native observations and candidates carry generation
+tags; stale signaled candidates refuse before entering the protocol core.
+The same fixed UDP socket regathers STUN with new transactions and retains
+TURN allocation/permission/refresh state. Server replacement and interface
+rebinding remain separate work.
+
+Two core defects required a maintained `merely-made/rtc` fork based on upstream
+`70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38`: losing the nominated data route
+during restart and choosing a new DTLS answer role when the offerer changes.
+The continuing role is retained only for the same remote fingerprint/TLS ID,
+as required by [JSEP](https://www.rfc-editor.org/rfc/rfc9429.html#section-5.11).
+The old nominated route and its authenticated consent responder are separate
+from fresh candidate/check tables, expire under a fixed bounded deadline and
+are cleared on replacement, failure or close. Repeated restarts and old consent
+cannot extend that deadline. See [ICE restart](https://www.rfc-editor.org/rfc/rfc8445.html#section-9)
+and [consent freshness](https://www.rfc-editor.org/rfc/rfc7675.html#section-5.1).
+
+A configured-STUN probe stalled with no fresh checks observed at the native
+core after its previously learned numeric address was discarded. Once fresh
+remote credentials arrive, the core now checks that known nominated address
+as an unchecked candidate. Prior nomination and transactions are discarded;
+stale-key responses cannot validate the fresh pair. The passing STUN and
+forced-TURN probes qualify this continuing-route behavior. Broader initial
+checks before remote credentials arrive still need their own RFC 8445 section
+7.3 gate, alongside DNS/mDNS and interface/server replacement.
+
+`support/ci/webrtc_interop.mjs --restart both` exercises both APIs, both
+offerers, every SDP step and an interrupted restart before teardown. Use
+`--receipt-mode stdout` to retain a compact result after shared Git hooks;
+default mode appends within the lane cap. The WPT comparison keeps exact
+assertion identities and media failures. Its baseline ERROR completed only the
+first data-channel restart assertion; the unchanged source names the second
+pending assertion explicitly, so recovery does not silently change the inventory.
+
 ## Progress
 
 - 2026-11-01: E0 selected rtc and established the independent provider boundary.
@@ -367,6 +432,13 @@ deployment and media remain open unless separately qualified.
   fixes an undriven mDNS query path, candidate stats references and remote
   observation privacy. Targeted privacy checks and native regression gates
   accompany the full matrix in the existing receipt; broader E2 and E3 remain open.
+- 2026-11-03: E2r implements sticky restart requests, generation filtering,
+  continued data/DTLS identity, fixed-server STUN/TURN gathering and teardown
+  during a pending restart. Provider checks pass on working Rust and MSRV;
+  native Boa/Vano, strict Clippy, Ortet compilation and the unchanged selected
+  WPT comparison pass. Both restart WPT assertions and the closed-peer no-op
+  pass on both engines; media failures and preliminary ERROR rows remain in
+  the receipt. The full 48-case headed restart matrix is in progress.
 
 ## UDP STUN and TURN receiving gate
 
@@ -374,8 +446,9 @@ Receive Murm E1c with IP-literal UDP servers, bounded gathering and allocation
 refresh. Start discovery on local-description gathering, preserve candidate
 server metadata, and surface sanitized gathering errors. Relay-only construction
 must retain its no-direct-route guarantee, including refusal and timeout paths.
-Changed server configuration must refuse until replacement/restart is supported.
-Host name resolution, TCP/TLS, mDNS, restart and carrier cutover remain open.
+Changed server configuration must refuse until replacement is supported.
+Fixed-server restart uses the same physical socket and relay allocation.
+Host name resolution, TCP/TLS, mDNS and carrier cutover remain open.
 Headed direct/relay interop is qualified separately by E2h. Done: both engines
 exchange encrypted messages using forced relay
 against coturn; failure/close paths release their sockets; existing native and
@@ -385,6 +458,11 @@ and root-lock deltas rather than duplicating the full lock.
 
 ## Decisions
 
+- **webrtc_conformance D2 (2026-11-03, Mark):** "Ok, go ahead with that ICE
+  restart slice, including STUN/TURN and the automated tests." Qualify
+  established channels on unchanged UDP sockets and fixed configured servers;
+  retain the separate DNS/mDNS, interface/server replacement, TCP/TLS, media
+  and application-carrier gates.
 - **webrtc_conformance D1 (2026-11-01, Mark):** "Okay. So, shall we continue
   with RTC?" Continue with rtc as the selected implementation direction after
   the E0 comparison. This authorizes the provider/Genet work; existing carrier

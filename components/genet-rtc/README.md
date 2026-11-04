@@ -144,3 +144,26 @@ native checks, the unchanged selected WPT maps and 48 headed restart cases.
 The native side uses explicit-port hostnames; headed browser peers use equivalent
 numeric endpoints through the controlled IPv4 fixture. This adds no SRV/NAPTR,
 mDNS, TURN TCP/TLS, public-network, browser-guest, media or carrier qualification.
+
+E2s provider `ef2d18fadbbdca3847ad99040af14f2bc7693a47` passes 29 ordinary
+checks on working Rust/MSRV and the three controlled coturn checks on each,
+strict all-target Clippy, and the host-only DNS compile/graph gate without Tokio.
+Nine added resolver checks cover lazy endpoint batches, S-NAPTR delegation and
+backtracking, initial default fallback, explicit unavailability, SRV ports and
+weighted ordering, alias refusal, IPv6, quotas/cancellation and fragmented SRV
+DNS TCP fallback. Genet owns the separate portless-URL native, WPT and headed
+receiving results in its current plan and external Nov 4 receipt.
+
+E2s receiving product `ff958976f2a904d250d00ee10335696c62f749b1` passes 38
+native checks. Recorder `7abebdda633bac2d91bd05b4976f2bf65ea525cb` passes all
+48 headed Chrome/Firefox cases across Boa/Vano, direct/STUN/forced TURN,
+offerers and close/navigation. This covers 96 completed restarts, 48 interrupted
+cleanups and 16 pending-SRV cancellations with 64 RTC/DNS socket rebinds.
+Selected WPT identities/statuses are unchanged at 93/127 assertions per engine,
+including the same 34 media-dependent failures. Native portless URLs discover
+nondefault ports through controlled DNS; browser peers use equivalent numeric
+endpoints. This fixed-interface IPv4 gate does not qualify public NAT, multicast
+mDNS, TURN TCP/TLS, interface/server replacement, media or application carriers.
+The fixture is stopped and network grants are restored. The external Genet Nov 4
+packet is closed; prior failed recorder evidence remains separate from the final
+48-case matrix. Provider source stays pinned independently of these doc updates.

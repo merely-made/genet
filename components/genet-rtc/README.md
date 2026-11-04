@@ -106,14 +106,14 @@ builds do not acquire RTC. Run this package explicitly:
 $env:CARGO_TARGET_DIR = 'C:\t\cargo-targets\retinue'
 $env:CARGO_BUILD_BUILD_DIR = 'C:\t\cargo-targets\retinue\build'
 $env:CARGO_PROFILE_DEV_DEBUG = '0'
-cargo test --manifest-path wire/Cargo.toml -p murm-rtc --features udp --locked -j 1
-cargo +1.97.1 test --manifest-path wire/Cargo.toml -p murm-rtc --features udp --locked -j 1
+cargo test --manifest-path wire/Cargo.toml -p murm-rtc --features dns,udp --locked -j 1
+cargo +1.97.1 test --manifest-path wire/Cargo.toml -p murm-rtc --features dns,udp --locked -j 1
 ```
 
 Controlled coturn qualification: run `tests/coturn.sh` in WSL, then set its
 printed numeric endpoint as `MURM_RTC_TEST_SERVER`. The fixture contains only
 local test credentials and must be stopped after the run. Execute
-`cargo test -p murm-rtc --features udp --test turn -- --ignored --test-threads=1`
+`cargo test -p murm-rtc --features dns,udp --test turn -- --ignored --test-threads=1`
 from `wire/`. These checks cover STUN, relay-only encrypted fragmentation after
 allocation refresh, authentication failure and socket release. They do not
 qualify public deployment, headed interop, cross-machine routing or packet loss.
@@ -126,3 +126,14 @@ core's 58 ICE tests pass on 1.97.1, including authenticated old consent confined
 to the retained route and deadline, and a fresh check after an authenticated
 restart request revives an exhausted controlling pair. Genet owns the established
 data-channel native/WPT/headed restart receiving results in its conformance receipt.
+
+E2d provider `c018fee13f417867cd3bbfe3ebca167257e34dc0` passes 20 ordinary
+checks on working Rust/MSRV, three coturn checks, strict Clippy and host-only
+compile. Tests cover real A/AAAA wire lookup, spoofed/malformed responses,
+aliases, DNS TCP truncation fallback, quotas, bounded address attempts and
+cancellation. Immediate resolver refusal reports 701 before gathering completes.
+Genet receiving source `d9f402446c7651ddad37014799fdb13c65c9f243` passes 30
+native checks, the unchanged selected WPT maps and 48 headed restart cases.
+The native side uses explicit-port hostnames; headed browser peers use equivalent
+numeric endpoints through the controlled IPv4 fixture. This adds no SRV/NAPTR,
+mDNS, TURN TCP/TLS, public-network, browser-guest, media or carrier qualification.

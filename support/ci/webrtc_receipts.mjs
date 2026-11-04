@@ -112,7 +112,7 @@ export class RestartJournal {
     // fresh block; only complete, parsed records can count as passed cases.
     const lastFence=[...old.matchAll(/(?:^|\n)```[^\n]*(?:\n|$)/g)].at(-1)?.[0].trim();
     const repair=lastFence&&lastFence!=='```'?'\n```\n\nInterrupted checkpoint retained; incomplete JSON is not counted.\n':'';
-    const row={schema:2,gate:this.gate+'-'+kind,run:this.run,utc:new Date().toISOString(),...data};
+    const row={...data,schema:2,gate:this.gate+'-'+kind,run:this.run,utc:new Date().toISOString()};
     const entry=repair+'\n\n### '+this.gate+' headed '+kind+'\n\n```json\n'+JSON.stringify(row)+'\n```\n';
     assert(Buffer.byteLength(old+entry)<=220000,'E2d receipt byte cap exceeded');
     await appendFile(this.file,entry);

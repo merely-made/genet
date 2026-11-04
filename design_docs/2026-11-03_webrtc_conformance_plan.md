@@ -1,6 +1,6 @@
 # WebRTC conformance continuation
 
-**Status (2026-11-03): hostname ICE-server resolution in progress.** The
+**Status (2026-11-04): E2d qualified for explicit-port STUN and UDP TURN hostnames in the controlled native/headed environment.** The
 [previous plan](archive_docs/2026-11-03/2026-11-01_webrtc_conformance_plan.md)
 is archived whole. This successor retains its open work and qualification limits.
 
@@ -27,7 +27,7 @@ The old packet is frozen; fresh results use the external packet below.
 
 ## E2d. Nonblocking hostname ICE-server resolution
 
-Implement address resolution for `stun:` and UDP `turn:` server URLs with an
+E2d provides address resolution for `stun:` and UDP `turn:` server URLs with an
 explicit port. Numeric addresses retain their current path and default ports.
 RFC 5928 section 3 distinguishes A/AAAA address lookup with an explicit port
 from SRV/NAPTR discovery for portless hostname URLs; the latter remains a named
@@ -88,6 +88,15 @@ their existing `build` directories, debug=0/jobs=1. No new isolated target/home
 or worktree is planned. Prior marked caches remain subject to their recorded
 automatic-approval deletion rejection; this slice does not retry that cleanup.
 
+The qualified headed command was
+`node support/ci/webrtc_interop.mjs --server 172.28.40.199:34790 --restart both --dns controlled`
+from Genet, with `CARGO_TARGET_DIR=C:\t\cargo-targets\genet` and
+`CARGO_BUILD_BUILD_DIR=C:\t\cargo-targets\genet\build` explicitly set.
+The endpoint belongs to that stopped fixture. A later run must use its own
+controlled endpoint and a fresh `--receipt` packet; the completed E2d packet
+and predecessor stay frozen. `node --test support/ci/webrtc_receipts.test.mjs`
+checks journal resumption independently of browsers.
+
 ## Remaining phases and acceptance boundaries
 
 - **E2 data-channel surface:** extend named WPT groups only against frozen case
@@ -129,24 +138,41 @@ The independent host path must retain its runtime-free boundary.
 
 ## Progress
 
-- 2026-11-03: the new immediate resolver-refusal case failed on both engines:
-  completion overtook queued 701 events. Provider
-  `c018fee13f417867cd3bbfe3ebca167257e34dc0` defers completion until terminal
-  server errors are drained; its 20 ordinary working/MSRV checks, three coturn
-  checks and strict wire Clippy pass. Genet's actual-DNS/immediate-refusal
-  ordering test now passes on both engines. Final receiving reruns follow.
-- 2026-11-03: provider `c59b530ff8da2703d58657c6339c8d5eb4e873d5`
-  implements bounded owned DNS and address fallback. Its 19 ordinary checks
-  pass on Rust 1.99.1 and MSRV 1.97.1; strict all-target wire Clippy and three
-  controlled coturn regressions pass. Its production DNS graph contains no
-  Tokio. Genet is pinned to that published supplier, with 24 ordinary Boa/Vano
-  checks passing. All six controlled coturn cases also pass, including
-  hostname STUN and forced-TURN restart on both engines. Strict adapter/example
-  Clippy passes with `--no-deps`; unrelated paint-type lints prevent a broad
-  `-D warnings` run. Headed receiving and after-WPT gates remain in progress;
-  the selected before WPT maps are frozen in the current packet.
-- 2026-11-03: cut the completed baseline history into its dated archive;
-  begin E2d with a new external receipt packet and preserved earlier gates.
+- 2026-11-04: E2d receiving source
+  `d9f402446c7651ddad37014799fdb13c65c9f243`, provider
+  `c018fee13f417867cd3bbfe3ebca167257e34dc0`, core
+  `479995928668d0db1f8cfb2aa26f818b9f03919f` qualify the bounded slice.
+  Provider: 20 ordinary checks on Rust 1.99.1 and MSRV 1.97.1, three controlled
+  coturn checks, strict all-target Clippy and host-only compile pass; its
+  production DNS graph has no Tokio. Genet: 24 ordinary and six coturn checks,
+  strict adapter/example Clippy with `--no-deps`, required commit checks and
+  Ortet scripted-Vano all-target compile pass. Broad strict Clippy retains the
+  unrelated paint-type findings recorded in the packet.
+- The unchanged seven-file WPT comparison retains every case/status on both
+  engines: 93/127 selected assertions pass per engine, including both data-channel
+  restart assertions and the closed-peer restart no-op. All 34 existing failures
+  per engine require the unbound media surface. This is no full-suite WPT claim.
+- Headed run `22490c35-5645-4240-976b-b02980ab5d3e` passes all 48 cases on
+  Windows Chrome 156.0.8078.80 and Firefox 159.0.1, against Boa/Vano, both
+  offerers and close/navigation: 96 completed restarts and 48 interrupted
+  cleanups. All 16 STUN interruptions cancel pending DNS; all 64 observed
+  RTC/DNS sockets are released and rebound. Hostname URL/signaling privacy and
+  retained TURN allocations pass. Controlled DNS answered 64 A queries; the
+  native resolver's separate wire tests cover AAAA. Headed routing is IPv4 on
+  the fixed interface, with equivalent numeric endpoints in the browsers.
+- Immediate resolver refusal initially let completion overtake queued 701
+  events. The provider repair and both-engine regression now pass, preserving
+  the failed checks in the packet. A journal envelope field-shadowing bug was
+  found during the run; its start record is corrected append-only afterward,
+  and the new resume/identity regression passes. Acceptance assertions and the
+  native binary stayed unchanged throughout the headed run.
+- Owned browsers, native peers, DNS/front-end sockets and foreground coturn
+  are stopped. Firefox's fixture network grants are absent. Earlier approval
+  review still prevents deleting the marked browser profiles and old RTC MSRV
+  Cargo home; no new home, worktree or isolated target was created. The current
+  packet retains exact pins, lock deltas, binaries, failures and shutdown audit.
+- 2026-11-03: archived the completed predecessor whole and opened E2d under
+  decision D3. The previous packet remains frozen at its original path.
 
 ## Decisions
 

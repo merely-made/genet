@@ -1,6 +1,6 @@
 # genet Documentation Index
 
-- [WebRTC conformance continuation](2026-11-03_webrtc_conformance_plan.md): nonblocking hostname ICE-server resolution in progress; prior native/WPT and 48-case headed restart qualification retained. SRV/NAPTR, mDNS, TCP/TLS, server/interface replacement, browser-guest, media and carrier adoption remain separate gates.
+- [WebRTC conformance continuation](2026-11-03_webrtc_conformance_plan.md): explicit-port STUN/UDP-TURN hostname resolution qualified: 30 native checks, unchanged selected WPT maps and 48 headed restart cases on both engines. SRV/NAPTR, mDNS, TCP/TLS, server/interface replacement, browser-guest, media and carrier adoption remain separate gates.
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 

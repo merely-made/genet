@@ -244,15 +244,15 @@ Operational validation retains at most **12 KB** in the fresh external
 `Code/testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_unattended_receipt.json`.
 The closed E2m/E2s/E2d packets remain byte-for-byte unchanged. The prepared native
 binary is reusable build output owned by `genet-rtc-native-tests`, retained to
-keep its firewall path stable. This setup gate does not claim a new headed or
-native network qualification until the missing rule is installed and tests run.
+keep its firewall path stable. Preparation alone did not claim a new headed or
+native network qualification; the installed-rule execution gate is recorded below.
 
-Validation: six runner boundary checks and six existing Node helper checks pass.
-The exact copied Cargo artifact enumerates all 44 native tests. Headed
-application rules are present; the new stable native path has no rule yet.
-The actual native wrapper exits 2 before tests, and `-Install -WhatIf` leaves
-firewall rules unchanged. Administrative installation and a network run from
-that path remain pending the one-time Windows setup. Prior conformance results
+Preparation validation: six runner boundary checks and six existing Node helper
+checks passed. The exact copied Cargo artifact enumerated all 44 native tests.
+Headed application rules were present; the new stable native path initially had
+no rule. The actual native wrapper exited 2 before tests, and `-Install -WhatIf`
+left firewall rules unchanged. Administrative installation and a network run
+were pending at that checkpoint. Prior conformance results
 keep their exact original source identities.
 
 Compatibility correction: the setup script supports Windows PowerShell 5.1 and
@@ -271,14 +271,31 @@ actual installation scope validated on an unattached Windows `INetFwRule`,
 plus a simulated nonterminating rejection against the real installation
 pipeline, each under Windows PowerShell 5.1 and PowerShell 7. Neither check
 adds a firewall rule. The fresh firewall-scope receipt shares the same 12 KB
-operational cap. Administrative installation still needs a successful rerun;
-address validation and preview alone do not establish effective rule coverage.
+operational cap. At that correction, administrative installation still needed
+a successful rerun; address validation and preview alone do not establish
+effective rule coverage.
+
+**Installed-rule execution gate qualified, 2026-11-04.** The user installed
+`Genet-RTC-native-Public-UDP`; fresh ordinary-shell preflights confirm effective
+application-rule coverage. The stable-path wrapper passed all 36 ordinary
+native checks, then all eight controlled coturn checks across Boa and Vano.
+Both batches used the same verified Cargo artifact and retained the prerequisite
+guard. A fresh, bounded, caller-owned UDP fixture had verified process identity
+and explicit shutdown. Do not reuse an exited fixture's recorded endpoint as
+live evidence. The fresh external
+`2026-11-04_webrtc_native_execution_receipt.json` records exact binary/source
+identity, preflight acceptance, counts and shutdown under the same total 12 KB
+operational cap. The fixture and native test processes are gone, its listener is
+released, and the system coturn service remains inactive and disabled. The
+application rule remains installed. This does not rerun or extend the closed
+headed/WPT packets or qualify local advertising.
 
 ## E2a. Local advertisement
 
 This is the next bounded slice under the user's continued RTC authorization.
-It can advance without opening sockets while the Native application firewall
-rule is installed separately. E2m receiving evidence stays closed and unchanged.
+Its protocol primitive advanced without opening sockets before the separate
+Native application firewall installation. E2m receiving evidence stays closed
+and unchanged.
 
 ### Protocol primitive
 
@@ -335,6 +352,6 @@ No isolated Cargo home, target, worktree or running fixture is required.
   and legacy queries. Strict all-target Clippy passes on both versions after
   small existing example/test style fixes. No example executables ran and no
   sockets were opened; the existing socket-builder tests only inspect settings.
-- 2026-11-04: the fresh Native read-only preflight still reports no covering
-  rule on the current Public profile. Host registration and browser receiving
+- 2026-11-04, before installation: the Native read-only preflight reported no
+  covering rule on the Public profile. Host registration and browser receiving
   remain open; the earlier supplier pins and closed E2m packet are unchanged.

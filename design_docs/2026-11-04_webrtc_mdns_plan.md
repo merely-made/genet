@@ -1,6 +1,6 @@
 # WebRTC remote mDNS candidates
 
-**Status (2026-11-04): E2m in progress.** The completed E2s plan is
+**Status (2026-11-04): bounded IPv4 remote receiving qualified.** The completed E2s plan is
 [archived whole](archive_docs/2026-11-04/2026-11-04_webrtc_conformance_plan.md).
 Earlier rulings and qualification boundaries remain in that archive chain.
 
@@ -115,106 +115,84 @@ in force; do not retry or bypass it.
 - Application carriers still need real admission, binding, backpressure, refusal
   and reconnect receiving tests. Registry publication waits for maintained fixes.
 
-## Findings (2026-11-04)
+## Findings and corrections
 
-- The core already distinguishes `Candidate::address()` from `addr()` and
-  `set_ip()` preserves the signaled address. A small host-resolved insertion
-  seam can reuse this rather than rewrite candidates at the web boundary.
-- `rtc-mdns` includes a continuous client/responder, but its current ICE route
-  assumes a dedicated port-5353 socket and has no host-owned request quota.
-  Genet currently disables it and explicitly refuses all `.local` candidates.
-  The existing native DNS codec and leases fit the bounded one-shot profile.
+- The core already separates the signaled candidate address from its numeric
+  endpoint. The trusted insertion API retains names and IDs, and central pair
+  and STUN-send guards exclude local TURN routes for remote mDNS candidates,
+  including triggered requests and either candidate insertion order.
+- Browser responders use multicast as well as legacy unicast. Validate actual
+  multicast destination/interface metadata with `socket-pktinfo` 0.4.1 and
+  `network-interface` 2.0.5. The provider retains `forbid(unsafe_code)` and does
+  not add local platform FFI. Unicast keeps its additional source-subnet check.
+  A real socket regression covers multicast sources on overlay subnets.
+- Chromium uses zero-ID questionless/cache-flush responses; Firefox can echo
+  the pending query ID without a question. Permit those multicast forms while
+  retaining strict legacy unicast ID/question validation and bounded parsing.
+- Restart preparation must retain an already resolved route without reapplying
+  unresolved-name policy or inheriting old validity. Early nomination also
+  stranded SCTP acknowledgments on a new Firefox socket while incoming data
+  still used the old one. The controlling agent now waits for a full peer's
+  current-password authenticated check before nominating away from the retained
+  route. ICE-lite peers bypass that wait because they do not initiate checks.
+  Old consent authority and the retained route keep their bounded deadlines.
+- Windows' UDP owner table can omit shared port-5353 binds, independently
+  reproduced with a live socket. Headed checks prove pending-ticket cancellation
+  and observable endpoint rebinds; provider tests prove actual multicast
+  membership/socket release. Do not count unobserved shared binds as exclusive
+  endpoint rebinds.
+- Firefox's own responder remains unresolved on this receiving profile. The
+  latest independent packet-info sampler saw outgoing selected-interface
+  questions and no replies; two earlier observer probes did see replies.
+  Existing UDP firewall rules were only read. No firewall, hosts, DNS or browser
+  WebRTC preferences were changed, and no firewall cause is asserted.
+- The explicit Firefox fixture aliases only ports observed on IPv4 sockets in
+  its marked process tree, refreshed per ICE generation. IPv6/unknown sockets
+  and Chrome's browser names stay untouched. Controlled and original names are
+  counted separately. This cannot qualify Firefox's own name advertisements.
 
-## Progress
+## Qualification (2026-11-04)
 
-- 2026-11-04: rechecked clean Genet/Murm/core source and archived E2s whole;
-  opened remote-resolution scope and fresh evidence before product edits.
+Receiving source `993fb879f3139bcd70048e277989f698c41caffc` pins provider
+`bd8b6659a29c5e52ebe09b028ec3ef5a455d7e7f`, which pins core
+`896ae75de1c2673e98a7ebbf7058b2733786276e`. Earlier failed and incomplete
+cohorts remain in the append-only packet; their Chrome passes are not promoted
+into this cohort.
 
-- 2026-11-04: the first full 44-test native run passed. A subsequent relay audit
-  found triggered-check/reply paths outside normal pair creation; added central
-  pairing and STUN-send guards and requalified core ICE on working Rust/MSRV.
-- Chrome diagnostic preflight connected through peer-reflexive checks but had
-  zero successful mDNS resolutions, correctly failing acceptance. Chromium's
-  responder sends multicast responses. Added request-owned receive-only group
-  membership, standard zero-ID/questionless/cache-flush parsing and a real
-  multicast response regression. No local advertisement or cache is introduced.
+- Core: 63 ICE checks pass on working Rust 1.99.1 and MSRV 1.97.1. The nomination
+  regression fails with its readiness guard disabled and passes restored.
+  Remote-lite transport and public resolved-candidate API checks pass on MSRV;
+  strict core/ICE library Clippy passes.
+- Supplier: 34 ordinary and three controlled coturn checks pass per toolchain,
+  with strict all-target Clippy and host-only DNS compile/normal-build graph
+  checks excluding Tokio.
+- Genet: all 44 native browser checks pass across Boa/Vano, including eight
+  controlled coturn checks. Six Node helper checks, strict adapter Clippy,
+  Ortet's scripted Vano all-target check and required repository hooks pass.
+- WPT: the same seven files/helpers and all fourteen engine/file assertion maps
+  are unchanged. Both engines retain 93/127 passing assertions and the same
+  34 media-dependent failures; imported tests were not edited.
+- Headed: all 48 Chrome/Firefox cases pass across both engines, routes,
+  offerers and close/navigation cleanup: 96 complete restarts, 384 live restart
+  probes and 48 interrupted cleanups. Chrome names stay untouched; Firefox uses
+  controlled aliases for observed owned IPv4 sockets. Each browser cohort has
+  48 successful resolutions; Firefox's own native responder remains unqualified.
+- Cleanup: 32 pending mDNS contexts and 16 pending server-DNS contexts cancel.
+  All 96 observable exclusive RTC/DNS endpoints rebind, plus three observed
+  shared port-5353 endpoints. Other shared binds omitted by the Windows owner
+  table are covered by provider socket/drop tests, not invented endpoint counts.
+- Restoration: owned native/browser/controller processes and coturn are gone;
+  the service is inactive/disabled and Firefox network-permission rows are zero.
+  Earlier automatic approval review rejected profile/home deletion as blocked
+  by policy. Retained marked profile caches belong to `genet-rtc-interop`; the
+  old `C:/t/cargo-homes/rtc-restart` cache belongs to `genet-rtc-ice-restart`.
+  Exact paths and bytes are in the receipt. No isolated target/home/worktree was
+  created for this slice.
 
-- 2026-11-04: final provider `b76891ed04ac96cfc4789e01697d94044adec8f8`
-  pins core `ab0f9d1d531299c30986e415bdcf6c69ee94510f`. Thirty-three ordinary
-  and three controlled coturn checks pass per supplier toolchain, strict Clippy
-  and host-only graph pass, and Genet's final 44-test native suite passes. The
-  multicast Chrome diagnostic resolves untouched browser names and passes.
-  The full committed-source headed matrix and WPT comparison remain to run.
-
-- 2026-11-04: provider `1e44d5957b6f4873ba7e645670a1d1a5c31a7f76`
-  accepts Firefox's questionless multicast replies with the exact pending query
-  ID as well as Chromium's zero-ID replies; legacy unicast stays strict. Both
-  supplier toolchains pass 33 ordinary and three coturn checks. Genet
-  `48000356a4a95d0c6f21599817e09d1678803ce3` passes all 44 native checks,
-  strict adapter Clippy, Ortet's scripted Vano check and repository hooks. The
-  same seven WPT identity/status maps remain unchanged at 93/127 per engine.
-- Windows' UDP owner table omits some shared port-5353 binds, reproduced with an
-  independent live socket. The headed recorder now distinguishes observable
-  endpoint rebinds from pending multicast-ticket cancellation; provider tests
-  also exercise actual multicast reception and socket/lease release at timeout.
-  Failed diagnostics and the deliberately interrupted old-cohort matrix remain
-  in the new packet. The fresh final-cohort 48-case matrix is still running.
-
-- 2026-11-04: actual multicast destination/interface metadata is now required
-  before bypassing the unicast subnet check, as RFC 6762 section 11 specifies.
-  Reuse `socket-pktinfo` 0.4.1 and `network-interface` 2.0.5; preserve the provider's
-  unsafe-code prohibition instead of adding local platform FFI. A controlled
-  overlay-subnet regression rejects the off-subnet unicast, rejects unsolicited
-  unicast at shared 5353, and accepts the same source's actual multicast reply.
-- The core also discarded a previously resolved mDNS route while preparing fresh
-  restart checks, by reapplying unresolved-name policy. Core
-  `c0e8e02dbbc0a4f0a9982842b351f244fae3a01f` preserves its resolved endpoint
-  without inheriting validity; 61 ICE checks pass on working Rust and MSRV.
-- Evidence allocation is now 244 KB Genet and 6 KB new supplier entries, retaining
-  the same 250 KB total. This preserves failed runs and permits one final full
-  matrix; later diagnostic probes retain only compact counters, without full
-  source-identity maps or raw captures. Earlier packet headers retain the
-  original allocation as historical evidence.
-
-- 2026-11-04: later Firefox probes still time out with no successful native name
-  resolution, including independent packet-info observation. Selected-interface
-  outgoing queries are observed; the latest sampler sees no response packets.
-  Two earlier passive-observer probes did receive Firefox replies. Cause remains
-  unresolved, and firewall rules/configuration were only read. Both standards
-  corrections above retain their own deterministic regressions.
-- The final 48-case receiving profile explicitly selects
-  `--mdns-alias-browser firefox`: controlled UUID aliases map the local Firefox
-  test sockets to the selected IPv4 host, while Chrome names stay untouched.
-  Record controlled and native names separately and require controlled answers
-  on every Firefox direct/STUN case. Default recorder behavior still preserves
-  all native browser names for future advertisement diagnostics.
-
-- Controlled Firefox aliasing now verifies selected IPv4 socket ownership in
-  the marked browser process tree per ICE generation. It leaves IPv6/unknown
-  sockets unchanged, so the fixture cannot invent an IPv4 route for an
-  obfuscated IPv6-only candidate. This profile reproduces the reliable/binary
-  restart gap with three successful controlled resolutions.
-- Core `23d65c92bbde587f921fe189061f177fcde6ed92` separates old consent
-  authority from the retired data path after early nomination. The old exact
-  route/password can answer consent until its existing deadline or a request
-  authenticated with the new local password proves mutual credentials. It
-  cannot revive the old data route, populate fresh checks or extend the grant.
-  Sixty-two ICE tests pass on working Rust/MSRV; receiving qualification follows.
-  This continues the restart-consent requirements of RFC 7675 section 5.1.
-
-- Core `896ae75de1c2673e98a7ebbf7058b2733786276e` also delays full-peer
-  restart nomination until a new-password authenticated peer check proves
-  mutual credentials. The headed diagnostic observed old inbound and new
-  outbound data routes before answer delivery, with SCTP acknowledgments
-  stranded on the new socket. Signaled ICE-lite peers bypass this wait; they
-  do not initiate checks. The retained route keeps its existing deadline.
-  The readiness regression fails with the guard disabled and passes restored;
-  63 ICE checks pass on working Rust/MSRV, plus the remote-lite transport test.
-
-- Provider `bd8b6659a29c5e52ebe09b028ec3ef5a455d7e7f` receives that core.
-  All 34 ordinary and three controlled coturn checks pass on each supplier
-  toolchain; strict Clippy and host-only graph checks pass. Both controlled
-  Firefox direct preflights now pass, with opposite offerers and close/navigation
-  cleanup, three resolutions each and all eight live restart probes. The fresh
-  full matrix follows a committed-source freeze; Firefox native advertisements
-  remain open independently of these receiving checks.
+The [external E2m packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md)
+is closed at 232,544 bytes, SHA-256
+`80cdf925ad10132aea951c5e50a26b53ad095cd74b38d042c237be45fa12662f`.
+It retains exact pins, source/lock/binary hashes, failed diagnostics and the
+durable headed case journal. The closed E2s and E2d packets retain their original
+hashes. New E2m supplier entries stay below 6 KB and total new evidence below
+250 KB; the larger historical family packet is accounted separately.

@@ -199,3 +199,12 @@ untouched; Firefox uses controlled aliases for observed IPv4 sockets. Firefox's
 own responder, local registration/advertisement and IPv6 multicast remain open.
 The external Genet E2m packet is closed after fixture and permission restoration;
 its plan owns the exact receipt identity and remaining receiving boundaries.
+
+Local IPv4 registration is available through `registration` with `dns` enabled.
+Generate a private name with `candidate_name`, create an owned `Registration`
+with the selected interface and prefix, and poll it from the caller's loop.
+Limit concurrent registrations with the host peer quota. Drop withdraws the
+record and releases its sockets; conflicts and I/O failures must not trigger a
+numeric address fallback. This adapter accepts multicast queries only; direct
+unicast queries and IPv6 registration remain separate work. Genet's E2a plan
+owns browser-facing privacy policy and the receiving tests.

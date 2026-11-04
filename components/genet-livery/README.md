@@ -72,7 +72,7 @@ slower than the original layout pipeline. A 129 KB long-edit process peaked at
 and serialization work. Small and edit cases met the specified empirical noise
 band, but 30 samples and different process counts in the independent control
 leave p95 uncertainty. The long edit used no pool jobs. These CPU measurements
-are not GPU or headed runtime evidence. See the [qualification receipt](../../design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md).
+are not GPU or headed runtime evidence. See the [qualification receipt](../../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md).
 
 The subsequent cost-reduction work shares retained inputs and precomputes a
 per-context key fingerprint while still checking the complete key and current
@@ -104,7 +104,7 @@ for a validated single prepared result. Three bounded CPU 0,2 cold cohorts
 showed small and article serial layout improvements against both original
 processes, while mixed and single-long comparisons varied. A retained Parley
 layout allocation remains on the long path. The whole-workload cold goal is
-still open; see the [qualification receipt](../../design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md)
+still open; see the [qualification receipt](../../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md)
 for paired results, allocation limits and current test boundaries.
 
 A separate shared-buffer diagnostic at `463deba6b9a` removed the long fixture's

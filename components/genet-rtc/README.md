@@ -18,10 +18,12 @@ timer driver. Dropping the peer releases the socket; it spawns no tasks.
 timers and media while leaving data-channel reads under SCTP backpressure.
 
 The engine is pinned to `merely-made/rtc` commit
-`479995928668d0db1f8cfb2aa26f818b9f03919f`, based on upstream
+`896ae75de1c2673e98a7ebbf7058b2733786276e`, based on upstream
 `70901c3df6ad92dcb87d97af3d1e2fa8a2e2ae38`. It retains the upstream DCEP fix
 (#280) and fixes the bounded restart data path, continuing DTLS answer role
 and recovery of exhausted controlling checks after a fresh authenticated request.
+It also accepts host-resolved mDNS candidates while retaining names/IDs and
+refuses local TURN pairs with remote mDNS names.
 The published 0.21.1 release failed our
 real-packet partial-reliability check; the frozen E0 comparison still describes
 that release. This is an immutable maintained source dependency, not a local
@@ -35,7 +37,7 @@ direct peer packets. TURN authentication, permissions and refresh use the pinned
 protocol client. One retained protocol datagram and one socket datagram bound
 pending sends, including permission waits. Close/drop attempts authenticated
 allocation release without waiting. Server errors are observations, not invented
-peer-close events. Interface discovery, mDNS, TCP/TLS, server replacement
+peer-close events. Interface discovery, local mDNS advertisement, TCP/TLS, server replacement
 and multiple-interface routing remain open host work. A remote
 candidate is not authorization to ignore the consumer's network policy.
 
@@ -58,7 +60,7 @@ Service discovery yields one endpoint batch, pauses for the protocol attempt,
 and backtracks only on failure. Success/drop releases the cursor. Configurable
 query, target and delegation limits share one gathering deadline. Restart cancels
 pending names, rechecks STUN and retains existing TURN clients; close/drop cancels
-resolution. Multicast mDNS, TURN TCP/TLS and broader allocation-error cooldown
+resolution. Local mDNS advertisement, IPv6 multicast, TURN TCP/TLS and broader allocation-error cooldown
 and redirect policy remain separate capabilities. Genet's E2s receiving
 qualification is tracked in its plan, independently of provider tests.
 
@@ -69,6 +71,10 @@ core retains only the previous nominated data route during negotiation, outside
 the fresh candidate/check tables, until replacement, failure or a bounded
 deadline. Old consent requests are authenticated and answered only on that
 retained route; they cannot populate fresh checks or extend its deadline.
+A controlling agent retains the data route until a full peer authenticates a
+check with the new local password, before nominating a replacement. Signaled
+ICE-lite peers bypass that wait because they do not initiate checks. Old
+consent authority is bounded independently of the replaced data route.
 After new peer credentials arrive, the known nominated address is also checked
 as a fresh candidate. Its prior validity and transactions are discarded.
 This supports fixed-server ICE restart; it does not rebind interfaces
@@ -77,8 +83,9 @@ candidate generation validation at its web boundary.
 
 The core defaults to querying mDNS, which needs a separate multicast route.
 For this single-socket adapter, build its SettingEngine with
-`with_multicast_dns_mode(MulticastDnsMode::Disabled)` until the host supplies that
-route, and explicitly handle unresolved `.local` remote candidates. Route
+`with_multicast_dns_mode(MulticastDnsMode::Disabled)` and explicitly handle
+unresolved `.local` remote candidates through the optional resolver and the
+core host-resolved insertion API. Route
 refusals retain their `TransportContext` for host diagnostics, without packet
 contents or credentials. Genet applies this policy in its native factory.
 
@@ -89,7 +96,8 @@ profile. It does not depend on Genet, Personae, Notochord, Luggage, storage,
 `mere-transport` or the conversation service.
 
 Canonical receiving and validation plan:
-`genet/design_docs/2026-11-04_webrtc_mdns_plan.md`, qualified baseline and E2s.
+`genet/design_docs/2026-11-04_webrtc_mdns_plan.md`, qualified baseline, E2s and
+bounded E2m remote receiving.
 Supplier integration: `murm/design_docs/2026-11-02_murm_family_move_plan.md`,
 RTC ICE restart section. Native UDP tests are not headed-browser or WPT
 qualification.
@@ -167,3 +175,27 @@ mDNS, TURN TCP/TLS, interface/server replacement, media or application carriers.
 The fixture is stopped and network grants are restored. The external Genet Nov 4
 packet is closed; prior failed recorder evidence remains separate from the final
 48-case matrix. Provider source stays pinned independently of these doc updates.
+
+E2m provider `bd8b6659a29c5e52ebe09b028ec3ef5a455d7e7f` adds optional
+`MdnsConfig` to `DnsResolver`. `start_mdns` is separate from recursive/server
+DNS, restricted to UUID-v4 peer names and an explicitly selected IPv4 interface.
+The RFC 6762 one-shot profile uses an ephemeral query port and request-owned,
+receive-only port-5353 membership. Legacy unicast replies require the echoed
+ID/question and an on-link source. Multicast replies require the actual group
+destination and selected interface; questionless replies accept zero or the exact
+pending query ID. Both paths validate source port, name/class and bounded
+records, refuse aliases/ambiguous answers, and release sockets/quota on finish
+or drop. No cache, background worker or local-name advertisement is created. Genet owns signaling,
+statistics privacy and lifetime/generation cancellation. Its current mDNS plan
+owns native/headed qualification. IPv6 multicast and local advertisement remain
+separate from the core's existing continuous mDNS client/responder.
+
+The E2m supplier passes 34 ordinary and three controlled coturn checks on each
+working/MSRV toolchain, strict all-target Clippy and the host-only DNS compile
+and normal/build graph without Tokio. Genet source
+`993fb879f3139bcd70048e277989f698c41caffc` passes 44 native checks and 48
+controlled headed cases with unchanged selected WPT maps. Chrome names stay
+untouched; Firefox uses controlled aliases for observed IPv4 sockets. Firefox's
+own responder, local registration/advertisement and IPv6 multicast remain open.
+The external Genet E2m packet is closed after fixture and permission restoration;
+its plan owns the exact receipt identity and remaining receiving boundaries.

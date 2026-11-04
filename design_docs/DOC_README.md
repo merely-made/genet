@@ -672,7 +672,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
 
 - [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md) — implemented and reviewed locally; bounded qualification shows reuse and pooled gains alongside cold and memory regressions; source-specific evidence and runtime limits remain explicit.
 - [Shaping cost reduction](2026-11-01_shaping_cost_reduction_plan.md) — source-specific follow-up, preserved controls, vector-storage budget and bounded qualification.
-- [Borrowed shaping validation](2026-11-02_borrowed_shaping_validation_plan.md) — qualified local borrowed-input validation and isolated shared-buffer diagnosis; reconciled through main 82bef96; renderer-cohort shaping/consumer gates pass, with final RTC/documentation qualification in progress before authorized main publication. Three timing cohorts remain bound to d17e53b; whole-workload cold equivalence and broader runtime remain open.
+- [Borrowed shaping validation](2026-11-02_borrowed_shaping_validation_plan.md) — qualified local borrowed-input validation and isolated shared-buffer diagnosis; reconciled through main 2d492f0, with fresh renderer-cohort shaping/consumer/wasm gates, final RTC compile and declared repository hooks passing for authorized main publication. Three timing cohorts remain bound to d17e53b; whole-workload cold equivalence and broader runtime remain open.
   (**qualification, 2026-11-01**): retained exact-input shaping and optional
   caller-supplied native pooling have separate measured gates; process
   orchestration remains outside this plan.

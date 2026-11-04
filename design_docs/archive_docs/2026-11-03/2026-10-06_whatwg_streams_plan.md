@@ -897,3 +897,14 @@ owner/scope boundaries. Forms Phase A is next: read-only ownership/paint
 findings are saved under `Code/testing/genet/forms/phase-a-ownership-assessment.md`.
 Its input-text rendering scope question remains pending without a response
 timer; no Forms implementation or acceptance is claimed.
+
+## Encoding and census ownership carry (2026-11-03)
+
+The archived Encoding lane does not implement TextDecoderStream or
+TextEncoderStream. Keep their standards, lifetime and consumer gates in the
+Streams frontier, alongside transferable streams, incremental network response
+delivery and remaining conformance work. The archived R1/R2 census repair
+also leaves its two stream-getter records to this owner for current-source
+reconciliation. Preserve named case identities and refusal/exception semantics;
+old maps, revalidated labels and approved losses are historical evidence,
+not permission for a new baseline repin or a broad Streams acceptance claim.

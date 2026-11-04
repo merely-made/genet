@@ -11,7 +11,7 @@ Mere-side context: the port law in the
 **2026-08-26 follow-through:** F0's one-release compatibility allowance was not
 retired after Fleece 0.2; `genet-extract` survived through 0.3.0. It is now
 retired under the
-[Fleece follow-through plan](../design_docs/2026-08-26_fleece_followthrough_plan.md):
+[Fleece follow-through plan](../design_docs/archive_docs/2026-11-03/2026-08-26_fleece_followthrough_plan.md):
 Mere imports through Fleece directly, and the Genet shim and its workspace/CI
 requirements are gone. Published historical versions remain available.
 The lowering-home and scripted-sequencing questions below were resolved by the

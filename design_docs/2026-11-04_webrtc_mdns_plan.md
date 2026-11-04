@@ -394,3 +394,8 @@ Retain compact host/privacy evidence alongside the core packet, with the same
   Genet/Retinue targets were reused, with no new isolated target/home/worktree.
   Headed browser advertisement, IPv6 and direct-unicast registration queries
   remain open. Earlier receiving/WPT packets stay frozen; none were rerun here.
+
+Receiving scope: the new registration/privacy exchange checks use IPv4 loopback
+inside the native runtime. The controlled STUN/TURN regressions retain the
+existing exposed-address policy. Nonloopback LAN/headed advertisement remains
+an acceptance gate before any change to the default exposure policy.

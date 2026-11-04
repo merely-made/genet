@@ -9,7 +9,8 @@
 //!
 //! Web APIs, application framing, invitations, identities and admission belong
 //! to consumers. The optional UDP driver supports host-resolved STUN/TURN
-//! endpoints; DNS, interface discovery and network policy remain host work.
+//! endpoints and caller-owned lookups. `dns` adds a nonblocking native resolver;
+//! name-server placement, interface discovery and network policy remain host work.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -19,3 +20,7 @@ pub use rtc;
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 pub mod udp;
+
+/// Caller-owned, cancellable hostname address resolution for native hosts.
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+pub mod resolve;

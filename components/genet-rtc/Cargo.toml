@@ -15,6 +15,7 @@ default = ["crypto-ring"]
 crypto-ring = ["rtc/crypto-ring"]
 crypto-aws-lc-rs = ["rtc/crypto-aws-lc-rs"]
 host = ["dep:bytes", "dep:thiserror"]
+dns = ["host", "dep:hickory-proto", "dep:getrandom", "dep:socket2", "dep:ipconfig", "dep:libc"]
 udp = ["host", "dep:tokio"]
 
 [dependencies]
@@ -24,6 +25,15 @@ udp = ["host", "dep:tokio"]
 rtc = { git = "https://github.com/merely-made/rtc", rev = "479995928668d0db1f8cfb2aa26f818b9f03919f", default-features = false }
 bytes = { version = "1", optional = true }
 thiserror = { version = "2", optional = true }
+hickory-proto = { version = "0.26.3", default-features = false, features = ["std"], optional = true }
+getrandom = { version = "0.4", optional = true }
+socket2 = { version = "0.6", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+ipconfig = { version = "0.3.4", optional = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { version = "0.2", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", optional = true, features = ["rt", "net", "time", "macros"] }

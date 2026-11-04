@@ -25,50 +25,8 @@ mod discovery;
 use discovery::Discovery;
 pub use discovery::{DiscoveryConfig, Server};
 
-enum Socket {
-    Host(std::net::UdpSocket),
-    #[cfg(feature = "udp")]
-    Async(UdpSocket),
-}
-
-impl Socket {
-    fn local_addr(&self) -> std::io::Result<SocketAddr> {
-        match self {
-            Self::Host(socket) => socket.local_addr(),
-            #[cfg(feature = "udp")]
-            Self::Async(socket) => socket.local_addr(),
-        }
-    }
-    fn send(&self, bytes: &[u8], peer: SocketAddr) -> std::io::Result<usize> {
-        match self {
-            Self::Host(socket) => socket.send_to(bytes, peer),
-            #[cfg(feature = "udp")]
-            Self::Async(socket) => socket.try_send_to(bytes, peer),
-        }
-    }
-    fn receive(&self, bytes: &mut [u8]) -> std::io::Result<(usize, SocketAddr)> {
-        match self {
-            Self::Host(socket) => socket.recv_from(bytes),
-            #[cfg(feature = "udp")]
-            Self::Async(socket) => socket.try_recv_from(bytes),
-        }
-    }
-    #[cfg(feature = "udp")]
-    async fn wait(&self, wake: Instant, pending: bool, floor: Duration) -> std::io::Result<()> {
-        match self {
-            Self::Async(socket) => tokio::select! {
-                ready = socket.readable() => ready,
-                ready = socket.writable(), if pending => ready,
-                _ = tokio::time::sleep_until(wake.into()) => Ok(()),
-            },
-            Self::Host(_) => {
-                let wake = wake.min(Instant::now().checked_add(floor).unwrap_or(wake));
-                tokio::time::sleep_until(wake.into()).await;
-                Ok(())
-            }
-        }
-    }
-}
+mod socket;
+use socket::Socket;
 
 /// Host-selected I/O budgets. These do not change data-channel message limits.
 #[derive(Clone, Copy, Debug)]
@@ -313,7 +271,7 @@ impl UdpPeer {
     /// Returns a discovery-client or candidate-registration error.
     pub fn finish_host_candidates(&mut self) -> Result<(), Error> {
         if let Some(discovery) = &mut self.discovery {
-            discovery.start(Instant::now())?;
+            discovery.start(self.local_addr, Instant::now())?;
             discovery.advance(&mut self.core, self.local_addr)?;
         } else {
             self.core.add_local_candidate(Default::default())?;
@@ -351,6 +309,9 @@ impl UdpPeer {
     pub fn close(&mut self) -> Result<(), Error> {
         self.core.close()?;
         self.closed = true;
+        if let Some(discovery) = &mut self.discovery {
+            discovery.cancel_resolution();
+        }
         Ok(())
     }
 
@@ -422,7 +383,18 @@ impl UdpPeer {
                     .into());
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(sent),
-                Err(error) => return Err(error.into()),
+                Err(error) => {
+                    if self
+                        .discovery
+                        .as_mut()
+                        .is_some_and(|d| d.send_failed(packet.transport.peer_addr, Instant::now()))
+                    {
+                        self.pending_socket = None;
+                        sent = true;
+                        continue;
+                    }
+                    return Err(error.into());
+                }
             }
         }
         Ok(sent)
@@ -530,6 +502,19 @@ impl UdpPeer {
                 progress = true;
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::ConnectionRefused
+                ) && self
+                    .discovery
+                    .as_ref()
+                    .is_some_and(Discovery::gathering_pending) =>
+            {
+                // Unconnected UDP supplies no source address for an ICMP
+                // refusal. Let per-address deadlines advance the correct URL.
+                progress = true;
+            }
             Err(error) => return Err(error.into()),
         }
         Ok(progress.then_some(Output::Progress))

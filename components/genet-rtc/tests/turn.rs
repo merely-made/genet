@@ -48,6 +48,8 @@ fn peer_at(server: SocketAddr, turn: bool, password: &str, timeout: Duration) ->
             timer_floor: Duration::from_millis(1),
         },
         DiscoveryConfig {
+            named_servers: Vec::new(),
+            resolver: None,
             servers: vec![Server {
                 url,
                 address: server,

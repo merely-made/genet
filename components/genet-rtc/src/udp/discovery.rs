@@ -20,6 +20,12 @@ use rtc::turn::client::{Client, ClientConfig, Event};
 use rtc::turn::proto::chandata::ChannelData;
 
 use super::Error;
+use crate::resolve::{Family, Lookup, Resolver};
+use std::task::Poll;
+
+#[cfg(test)]
+mod dns_tests;
+mod managed;
 
 /// An ICE server resolved by the host. Credentials are deliberately not Debug.
 #[derive(Clone)]
@@ -35,6 +41,11 @@ pub struct Server {
 pub struct DiscoveryConfig {
     /// At most 32 resolved UDP servers. Duplicate TURN endpoints are refused.
     pub servers: Vec<Server>,
+    /// UDP server URLs whose host names need address resolution. Their ports
+    /// are concrete; service-record discovery belongs to the caller.
+    pub named_servers: Vec<Url>,
+    /// Caller-owned nonblocking resolver, used only when gathering starts.
+    pub resolver: Option<Arc<dyn Resolver>>,
     /// Suppress all host/reflexive candidates and all direct peer traffic.
     pub relay_only: bool,
     /// Maximum gathering duration, including authentication and retransmission.
@@ -48,15 +59,21 @@ pub struct DiscoveryConfig {
 struct Managed {
     client: Option<Client>,
     url: String,
-    address: SocketAddr,
+    address: Option<SocketAddr>,
     relay: Option<SocketAddr>,
     reflexive: Option<SocketAddr>,
     done: bool,
     turn: bool,
     started: bool,
+    spec: Url,
+    addresses: VecDeque<SocketAddr>,
+    lookup: Option<Box<dyn Lookup>>,
+    attempt_deadline: Option<Instant>,
+    failed: bool,
 }
 
 pub(super) struct Discovery {
+    local: SocketAddr,
     config: DiscoveryConfig,
     clients: Vec<Managed>,
     relay_only: bool,
@@ -69,66 +86,32 @@ pub(super) struct Discovery {
 
 impl Discovery {
     pub fn new(local: SocketAddr, config: DiscoveryConfig) -> Result<Self, Error> {
-        if config.servers.len() > 32
+        if config.servers.len() + config.named_servers.len() > 32
             || config.timeout.is_zero()
             || Instant::now().checked_add(config.timeout).is_none()
         {
             return Err(Error::Configuration("invalid discovery budgets"));
         }
         let mut clients: Vec<Managed> = Vec::new();
-        for server in config.servers.iter().cloned() {
-            let turn = server.url.scheme == SchemeType::Turn;
-            if server.url.proto != ProtoType::Udp
-                || !matches!(server.url.scheme, SchemeType::Stun | SchemeType::Turn)
-                || server.address.ip().is_unspecified()
-                || server.address.port() == 0
-                || server.address.is_ipv4() != local.is_ipv4()
-            {
-                return Err(Error::Configuration("resolved UDP ICE server required"));
+        for (url, address) in config
+            .servers
+            .iter()
+            .map(|s| (s.url.clone(), Some(s.address)))
+            .chain(config.named_servers.iter().cloned().map(|u| (u, None)))
+        {
+            if config.relay_only && url.scheme != SchemeType::Turn {
+                continue;
             }
-            if turn
-                && clients
-                    .iter()
-                    .any(|c| c.turn && c.address == server.address)
+            if address.is_some()
+                && url.scheme == SchemeType::Turn
+                && clients.iter().any(|c| c.turn && c.address == address)
             {
                 return Err(Error::Configuration("duplicate TURN endpoint"));
             }
-            if config.relay_only && !turn {
-                continue;
-            }
-            let client = Client::new(
-                ClientConfig {
-                    stun_serv_addr: if turn {
-                        String::new()
-                    } else {
-                        server.address.to_string()
-                    },
-                    turn_serv_addr: if turn {
-                        server.address.to_string()
-                    } else {
-                        String::new()
-                    },
-                    local_addr: local,
-                    transport_protocol: TransportProtocol::UDP,
-                    username: server.url.username.clone(),
-                    password: server.url.password.clone(),
-                    allocation_refresh_interval_cap: config.allocation_refresh_interval_cap,
-                    ..Default::default()
-                },
-                config.crypto_provider.clone(),
-            )?;
-            clients.push(Managed {
-                client: Some(client),
-                url: server.url.to_string(),
-                address: server.address,
-                relay: None,
-                reflexive: None,
-                done: false,
-                turn,
-                started: false,
-            });
+            clients.push(Managed::new(url, address, local, &config)?);
         }
         Ok(Self {
+            local,
             clients,
             relay_only: config.relay_only,
             timeout: config.timeout,
@@ -144,24 +127,15 @@ impl Discovery {
         self.relay_only
     }
 
-    pub fn start(&mut self, now: Instant) -> Result<(), Error> {
+    pub fn start(&mut self, local: SocketAddr, now: Instant) -> Result<(), Error> {
         if self.started {
             return Ok(());
         }
         self.started = true;
         self.deadline = now.checked_add(self.timeout);
+        let deadline = self.deadline.expect("validated gathering deadline");
         for managed in &mut self.clients {
-            if managed.started {
-                continue;
-            }
-            managed.started = true;
-            if let Some(client) = &mut managed.client {
-                if managed.turn {
-                    client.allocate(now)?;
-                } else {
-                    client.send_binding_request(now)?;
-                }
-            }
+            managed.begin(local, &self.config, now, deadline)?;
         }
         Ok(())
     }
@@ -177,16 +151,32 @@ impl Discovery {
         }
         self.close();
         *self = next;
-        self.start(now)
+        self.start(local, now)
     }
 
     pub fn next_deadline(&mut self) -> Option<Instant> {
         if !self.started {
             return None;
         }
-        self.clients
+        let protocol = self
+            .clients
             .iter_mut()
             .filter_map(|m| m.client.as_mut()?.poll_timeout())
+            .min();
+        protocol
+            .into_iter()
+            .chain(
+                self.clients
+                    .iter()
+                    .filter(|m| !m.done)
+                    .filter_map(|m| m.lookup.as_ref().map(|q| q.next_deadline())),
+            )
+            .chain(
+                self.clients
+                    .iter()
+                    .filter(|m| !m.done)
+                    .filter_map(|m| m.attempt_deadline),
+            )
             .chain(self.deadline)
             .min()
     }
@@ -195,18 +185,90 @@ impl Discovery {
         if !self.started {
             return Ok(());
         }
-        for managed in &mut self.clients {
-            if !managed.done && self.deadline.is_some_and(|d| now >= d) {
-                managed.done = true;
-                managed.client = None;
-                self.errors.push_back(managed.url.clone());
-            } else if let Some(client) = &mut managed.client
+        self.progress(now);
+        for index in 0..self.clients.len() {
+            let blocked = self.blocked(index);
+            let managed = &mut self.clients[index];
+            if let Some(client) = &mut managed.client
                 && client.poll_timeout().is_some_and(|d| now >= d)
+                && let Err(error) = client.handle_timeout(now)
             {
-                client.handle_timeout(now)?;
+                if managed.done {
+                    return Err(error.into());
+                }
+                managed.next_address(
+                    self.local,
+                    &self.config,
+                    now,
+                    self.deadline.unwrap_or(now),
+                    &blocked,
+                );
             }
         }
+        self.collect_errors();
         Ok(())
+    }
+
+    fn blocked(&self, except: usize) -> Vec<SocketAddr> {
+        self.clients
+            .iter()
+            .enumerate()
+            .filter(|(i, m)| *i != except && m.turn && m.client.is_some())
+            .filter_map(|(_, m)| m.address)
+            .collect()
+    }
+    fn collect_errors(&mut self) {
+        for managed in &mut self.clients {
+            if std::mem::take(&mut managed.failed) {
+                self.errors.push_back(managed.url.clone());
+            }
+        }
+    }
+    fn progress(&mut self, now: Instant) {
+        if let Some(deadline) = self.deadline {
+            for index in 0..self.clients.len() {
+                let blocked = self.blocked(index);
+                let managed = &mut self.clients[index];
+                if managed.done {
+                    continue;
+                }
+                if now >= deadline {
+                    managed.fail();
+                } else {
+                    managed.progress(self.local, &self.config, now, deadline, &blocked);
+                }
+            }
+        }
+        self.collect_errors();
+    }
+    pub fn cancel_resolution(&mut self) {
+        for managed in &mut self.clients {
+            if managed.lookup.take().is_some() {
+                managed.done = true;
+            }
+        }
+    }
+    pub fn gathering_pending(&self) -> bool {
+        self.started && !self.finished
+    }
+    pub fn send_failed(&mut self, address: SocketAddr, now: Instant) -> bool {
+        let Some(index) = self
+            .clients
+            .iter()
+            .position(|m| !m.done && m.address == Some(address))
+        else {
+            return false;
+        };
+        let blocked = self.blocked(index);
+        self.clients[index].next_address(
+            self.local,
+            &self.config,
+            now,
+            self.deadline.unwrap_or(now),
+            &blocked,
+        );
+        self.collect_errors();
+        true
     }
 
     pub fn advance(
@@ -217,7 +279,11 @@ impl Discovery {
         if !self.started {
             return Ok(());
         }
-        for managed in &mut self.clients {
+        let now = Instant::now();
+        self.progress(now);
+        for index in 0..self.clients.len() {
+            let blocked = self.blocked(index);
+            let managed = &mut self.clients[index];
             while let Some(event) = managed.client.as_mut().and_then(Protocol::poll_event) {
                 let base = |addr: SocketAddr| CandidateConfig {
                     network: "udp".into(),
@@ -268,9 +334,14 @@ impl Discovery {
                     | Event::TransactionTimeout(_)
                         if !managed.done =>
                     {
-                        managed.done = true;
-                        managed.client = None;
-                        self.errors.push_back(managed.url.clone());
+                        managed.next_address(
+                            local,
+                            &self.config,
+                            now,
+                            self.deadline.unwrap_or(now),
+                            &blocked,
+                        );
+                        break;
                     }
                     Event::DataIndicationOrChannelData(_, peer_addr, message) => {
                         if let Some(relay) = managed.relay {
@@ -293,6 +364,7 @@ impl Discovery {
                 }
             }
         }
+        self.collect_errors();
         if !self.finished && self.clients.iter().all(|m| m.done) {
             self.finished = true;
             self.deadline = None;
@@ -329,7 +401,7 @@ impl Discovery {
             }
         }
         if let Some(managed) = self.clients.iter_mut().find(|m| {
-            m.address == packet.transport.peer_addr
+            m.address == Some(packet.transport.peer_addr)
                 && m.client.as_ref().is_some_and(|c| {
                     response.as_ref().is_some_and(|tid| c.has_transaction(tid))
                         || (indication && m.relay.is_some())
@@ -386,6 +458,7 @@ impl Discovery {
     }
 
     pub fn close(&mut self) {
+        self.cancel_resolution();
         self.deadline = None;
         self.started = false;
         for managed in &mut self.clients {
@@ -403,137 +476,4 @@ impl Discovery {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use rtc::stun::message::BINDING_SUCCESS;
-
-    #[test]
-    fn restarted_stun_discards_the_old_transaction_but_preserves_ice_demux() {
-        let local = "127.0.0.1:10000".parse().unwrap();
-        let server = "127.0.0.1:3478".parse().unwrap();
-        let mut discovery = Discovery::new(
-            local,
-            DiscoveryConfig {
-                servers: vec![Server {
-                    url: Url::parse_url("stun:127.0.0.1:3478").unwrap(),
-                    address: server,
-                }],
-                relay_only: false,
-                timeout: Duration::from_secs(1),
-                allocation_refresh_interval_cap: None,
-                crypto_provider: rtc::crypto::default_provider().unwrap(),
-            },
-        )
-        .unwrap();
-        discovery.start(Instant::now()).unwrap();
-        let transaction = |packet: TaggedBytesMut| {
-            let mut message = Message::new();
-            message.raw = packet.message.to_vec();
-            message.decode().unwrap();
-            message.transaction_id
-        };
-        let old = transaction(discovery.poll_write().unwrap());
-        discovery.restart(local, Instant::now()).unwrap();
-        let fresh = transaction(discovery.poll_write().unwrap());
-        assert_ne!(old, fresh);
-        let response = |tid| {
-            let mut message = Message::new();
-            message
-                .build(&[Box::new(tid), Box::new(BINDING_SUCCESS)])
-                .unwrap();
-            TaggedBytesMut {
-                now: Instant::now(),
-                message: bytes::BytesMut::from(message.raw.as_slice()),
-                transport: TransportContext {
-                    local_addr: local,
-                    peer_addr: server,
-                    transport_protocol: TransportProtocol::UDP,
-                    ecn: None,
-                },
-            }
-        };
-        assert!(discovery.read(response(old)).unwrap().is_some());
-        assert!(
-            discovery.clients[0]
-                .client
-                .as_ref()
-                .unwrap()
-                .has_transaction(&fresh)
-        );
-        assert!(discovery.read(response(fresh)).unwrap().is_none());
-    }
-
-    #[test]
-    fn shared_server_response_demux_checks_transaction_and_source_but_preserves_ice_requests() {
-        let local: SocketAddr = "127.0.0.1:10000".parse().unwrap();
-        let server: SocketAddr = "127.0.0.1:3478".parse().unwrap();
-        let mut discovery = Discovery::new(
-            local,
-            DiscoveryConfig {
-                servers: vec![Server {
-                    url: Url::parse_url("stun:127.0.0.1:3478").unwrap(),
-                    address: server,
-                }],
-                relay_only: false,
-                timeout: Duration::from_secs(1),
-                allocation_refresh_interval_cap: None,
-                crypto_provider: rtc::crypto::default_provider().unwrap(),
-            },
-        )
-        .unwrap();
-        discovery.start(Instant::now()).unwrap();
-        let request = discovery.poll_write().unwrap();
-        let mut message = Message::new();
-        message.raw = request.message.to_vec();
-        message.decode().unwrap();
-        let tid = message.transaction_id;
-        let packet = |raw: Vec<u8>, peer_addr| TaggedBytesMut {
-            now: Instant::now(),
-            message: bytes::BytesMut::from(raw.as_slice()),
-            transport: TransportContext {
-                local_addr: local,
-                peer_addr,
-                transport_protocol: TransportProtocol::UDP,
-                ecn: None,
-            },
-        };
-        // Even a Binding request with the same ID belongs to ICE, not discovery.
-        assert!(
-            discovery
-                .read(packet(message.raw.clone(), server))
-                .unwrap()
-                .is_some()
-        );
-        let mut response = Message::new();
-        response
-            .build(&[Box::new(tid), Box::new(BINDING_SUCCESS)])
-            .unwrap();
-        let wrong_source: SocketAddr = "127.0.0.1:3479".parse().unwrap();
-        assert!(
-            discovery
-                .read(packet(response.raw.clone(), wrong_source))
-                .unwrap()
-                .is_some()
-        );
-        assert!(
-            discovery.clients[0]
-                .client
-                .as_ref()
-                .unwrap()
-                .has_transaction(&tid)
-        );
-        assert!(
-            discovery
-                .read(packet(response.raw, server))
-                .unwrap()
-                .is_none()
-        );
-        assert!(
-            !discovery.clients[0]
-                .client
-                .as_ref()
-                .unwrap()
-                .has_transaction(&tid)
-        );
-    }
-}
+mod tests;

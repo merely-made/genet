@@ -26,7 +26,7 @@ pub(super) fn exchange<E: ScriptEngine>() {
       function reset(p){hosts.set(p,[]);completions.set(p,new Promise(r=>finish.set(p,r)));}
       async function gathered(p){await completions.get(p);}
       function description(p){return {type:p.localDescription.type,sdp:p.localDescription.sdp.replace(/^a=candidate:.*\r?\n/gm,'')+hosts.get(p).map(c=>'a='+c+'\r\n').join('')};}
-      function check(c){if(c.type==='host'&&!/\.local$/.test(c.address))throw Error('numeric host');seen.push(c.address);}
+      function check(c){if(c.type==='host'&&!/\.local$/.test(c.address))throw Error('numeric host');if(c.type==='host'&&c.foundation!==c.address.slice(0,36).replace(/-/g,''))throw Error('foundation leak');seen.push(c.address);}
       function forward(p,from,e){if(!e.candidate){finish.get(from)();return;}try{check(e.candidate);}catch(x){problem=String(x);}
         hosts.get(from).push(e.candidate.candidate);if(embedded)return;
         if(p.remoteDescription)p.addIceCandidate(e.candidate).catch(e=>problem=String(e));else pending.push([p,e.candidate]);}

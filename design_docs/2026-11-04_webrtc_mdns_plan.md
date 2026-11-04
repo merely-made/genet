@@ -1,6 +1,6 @@
 # WebRTC mDNS candidates
 
-**Status (2026-11-04): remote receiving and the socket-free local responder qualified; native registration and browser privacy adoption open.** The completed E2s plan is
+**Status (2026-11-04): remote receiving, core responder and opt-in native IPv4 registration/privacy qualified; headed advertisement acceptance open.** The completed E2s plan is
 [archived whole](archive_docs/2026-11-04/2026-11-04_webrtc_conformance_plan.md).
 Earlier rulings and qualification boundaries remain in that archive chain.
 
@@ -319,13 +319,14 @@ repin the browser's supplier chain before a consumer exists.
 
 ### Native registration and browser privacy
 
-Next, Murm's independent provider will own selected-interface, source-port-5353
-I/O, registration quotas and cancellable tickets. Genet will own configurable
-local-address exposure, SDP/event/statistics projections and document lifetime.
+Murm's independent provider owns selected-interface, source-port-5353 I/O and
+owned registrations, bounded by the consuming host peer quota. Genet owns
+configurable local-address exposure, SDP/event/statistics projections and
+document lifetime.
 Keep the core's numeric ICE route separate from the exposed name. Registration
 failure or conflict must not reveal a numeric address as a fallback. Close,
-navigation, restart and drop require explicit receiving tests. These host and
-browser phases remain open until implemented and qualified; neither the pure
+navigation, restart and drop require explicit receiving tests. The native opt-in profile is implemented and tested below; headed browser
+advertisement acceptance remains open; neither the pure
 responder nor the earlier remote receiving matrix establishes them. Native
 Firefox responder acceptance remains a distinct open gate.
 
@@ -358,7 +359,7 @@ No isolated Cargo home, target, worktree or running fixture is required.
 
 ### Registration and privacy implementation checkpoint
 
-In progress: opt-in `LocalAddressPolicy::Mdns` on the selected IPv4 interface;
+Qualified native profile: opt-in `LocalAddressPolicy::Mdns` on the selected IPv4 interface;
 `Expose` retains the existing configured behavior. One private UUID per peer
 is retained across fixed-interface ICE restarts and released on close/drop.
 The provider owns bounded multicast-query registration sockets; direct-unicast
@@ -370,3 +371,26 @@ is real name resolution, encrypted peer exchange, all exposure surfaces,
 restart/name stability, close/navigation cleanup and failure-path privacy.
 Retain compact host/privacy evidence alongside the core packet, with the same
 20,000-byte total E2a cap; do not alter the closed core packet.
+
+
+- 2026-11-04: provider c894bde0b757d3a6a79ba8aadee97f86a541676e uses core
+  ba8e3c46888fad49a3a6b0b6a46aaa5e711fafbb. Genet enables privacy through
+  `Settings.local_address_policy`; default `Expose` retains prior host behavior.
+  Name and public foundation remain stable within a peer across fixed-interface
+  restart. Public foundations use the UUID, avoiding the core's address-derived
+  CRC; numeric address/foundation routes are restored only inside local SDP.
+- 2026-11-04: the implementation checkpoint c22f643e0f0 passed all 46 native
+  checks, including eight controlled STUN/TURN cases. The final foundation
+  refinement then passed both Boa/Vano checks again (trickled and embedded
+  candidates, encrypted transfer, restart stability, close and navigation).
+  Four pure privacy tests pass, including unavailable-interface privacy,
+  related-address/statistics handling and local SDP roundtrip. Strict adapter
+  all-target Clippy and working/MSRV compiler checks pass. Provider name and
+  validation tests pass on both Rust versions; host-only normal/build graph
+  remains Tokio-free. The external registration JSONL retains failed fixture
+  attempts and exact source/binary identities for these separate checkpoints.
+- 2026-11-04: the fresh controlled fixture was identity-checked and stopped;
+  its listener is gone and coturn remains inactive/disabled. Stable marked
+  Genet/Retinue targets were reused, with no new isolated target/home/worktree.
+  Headed browser advertisement, IPv6 and direct-unicast registration queries
+  remain open. Earlier receiving/WPT packets stay frozen; none were rerun here.

@@ -15,6 +15,7 @@ pub(super) struct Local {
     name: String,
     address: String,
     registration: Option<Registration>,
+    foundation: RefCell<Option<String>>,
 }
 impl Local {
     pub fn new(settings: Settings, relay: bool) -> Result<Option<Self>, WebRtcError> {
@@ -35,6 +36,7 @@ impl Local {
             name,
             address: ip.to_string(),
             registration,
+            foundation: RefCell::new(None),
         }))
     }
     pub fn poll(&mut self, now: Instant, budget: usize) {
@@ -59,6 +61,22 @@ impl Local {
                 (&self.address, &self.name)
             };
             if fields[4] == *from {
+                let prefixed = fields[0].starts_with("candidate:");
+                let prefix = if prefixed { "candidate:" } else { "" };
+                if internal {
+                    if let Some(original) = self.foundation.borrow().as_ref() {
+                        fields[0] = format!("{prefix}{original}");
+                    }
+                } else {
+                    let original = fields[0]
+                        .strip_prefix("candidate:")
+                        .unwrap_or(&fields[0])
+                        .to_owned();
+                    if original.len() <= 32 {
+                        self.foundation.borrow_mut().get_or_insert(original);
+                    }
+                    fields[0] = format!("{prefix}{}", self.name[..36].replace('-', ""));
+                }
                 fields[4] = to.clone();
             }
         }
@@ -101,6 +119,9 @@ impl Local {
                     o.insert("relatedPort".into(), json!(9));
                 }
                 let host = o.get("candidateType").is_none_or(|v| v == "host");
+                if host && o.contains_key("foundation") {
+                    o.insert("foundation".into(), json!(self.name[..36].replace('-', "")));
+                }
                 for (key, v) in o {
                     if let Some(s) = v.as_str() {
                         let replacement = match key.as_str() {
@@ -133,6 +154,7 @@ mod tests {
             name: "53caef04-4218-4fb0-815d-f91a511bb8d2.local".into(),
             address: "192.0.2.10".into(),
             registration: None,
+            foundation: RefCell::new(None),
         }
     }
     #[test]
@@ -158,6 +180,7 @@ mod tests {
         let private = "candidate:1 1 udp 100 192.0.2.10 3333 typ host";
         let public = l.candidate(private, false);
         assert!(!public.contains("192.0.2.10"));
+        assert!(!public.contains("candidate:1 "));
         assert_eq!(l.candidate(&public, true), private);
         assert_eq!(
             l.candidate("candidate:1 1 udp 100 foreign.local 3333 typ host", true),
@@ -190,10 +213,12 @@ mod description_tests {
             name: "53caef04-4218-4fb0-815d-f91a511bb8d2.local".into(),
             address: "192.0.2.10".into(),
             registration: None,
+            foundation: RefCell::new(None),
         };
         let private = "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 192.0.2.10\r\na=candidate:1 1 udp 100 192.0.2.10 3333 typ host\r\n";
         let public = l.sdp(private, false);
         assert!(!public.contains("192.0.2.10"));
+        assert!(!public.contains("candidate:1 "));
         assert!(l.sdp(&public, true).contains("192.0.2.10 3333 typ host"));
         let mut stats = json!({"candidateType":"srflx","address":"192.0.2.10","relatedAddress":"192.0.2.10","relatedPort":3333});
         l.project(&mut stats);

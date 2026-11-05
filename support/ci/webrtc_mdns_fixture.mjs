@@ -1,4 +1,5 @@
 // Controlled IPv4 one-shot responder. Other browser mDNS names stay untouched.
+import { observeNames } from './webrtc_mdns_observer.mjs';
 import { createSocket } from 'node:dgram';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -6,7 +7,7 @@ import { promisify } from 'node:util';
 const execFileAsync=promisify(execFile);
 
 export class MdnsFixture {
-  constructor(){this.names=new Map();this.endpoints=new Map();this.browserNames=new Set();this.aliasedBrowserNames=new Set();this.ipv4Ports=new Set();this.seenPorts=new Set();this.queries=0;this.answers=0;this.held=0;this.error=null;this.pending=0;}
+  constructor(){this.nativeNames=new Set();this.nativeQueries=0;this.nativeAnswers=0;this.names=new Map();this.endpoints=new Map();this.browserNames=new Set();this.aliasedBrowserNames=new Set();this.ipv4Ports=new Set();this.seenPorts=new Set();this.queries=0;this.answers=0;this.held=0;this.error=null;this.pending=0;}
   async prepareBrowser(signal,pids) {
     const generation=signal.generation||signal.description?.sdp.match(/a=ice-ufrag:([^\r\n]+)/)?.[1];
     if(generation&&generation!==this.browserGeneration){this.browserGeneration=generation;this.ipv4Ports.clear();this.seenPorts.clear();}
@@ -22,6 +23,8 @@ export class MdnsFixture {
     this.bind=bind;this.socket=createSocket({type:'udp4',reuseAddr:true});
     this.socket.on('error',()=>{this.error='controlled mDNS socket failed';});
     this.socket.on('message',(packet,from)=>{
+      const seen=observeNames(packet,this.nativeNames,this.bind);this.nativeQueries+=seen.queries;
+      if(from.port===5353&&from.address===this.bind)this.nativeAnswers+=seen.answers;
       if(packet.length<17||packet.length>512||packet.readUInt16BE(4)!==1||(packet.readUInt16BE(2)&0x8000))return;
       let end=12;const labels=[];
       while(end<packet.length&&packet[end]){const size=packet[end++];if(size>63||end+size>=packet.length)return;labels.push(packet.subarray(end,end+size).toString('ascii'));end+=size;}
@@ -35,6 +38,10 @@ export class MdnsFixture {
     });
     await new Promise((resolve,reject)=>{this.socket.once('error',reject);this.socket.bind(5353,'0.0.0.0',resolve);});
     this.socket.addMembership('224.0.0.251',bind);
+  }
+  watchNative(signal){
+    const values=signal.candidate?[signal.candidate.candidate]:[...(signal.description?.sdp||'').matchAll(/^a=(candidate:[^\r\n]+)/gm)].map(m=>m[1]);
+    for(const value of values){const f=value.split(/\s+/);if(f[7]==='host'&&f[4].endsWith('.local')){if(this.nativeNames.size>=128&&!this.nativeNames.has(f[4]))throw Error('native observation budget');this.nativeNames.add(f[4]);}}
   }
   heldName(){const name=randomUUID()+'.local';this.names.set(name,{ip:this.bind,hold:true});return name;}
   candidate(value,aliasBrowserNames=false) {
@@ -55,7 +62,7 @@ export class MdnsFixture {
     if(signal.description)return {...signal,description:{...signal.description,sdp:signal.description.sdp.replace(/^a=(candidate:[^\r\n]+)/gm,(_,value)=>'a='+this.candidate(value,aliasBrowserNames))}};
     return signal;
   }
-  snapshot(){return {queries:this.queries,answers:this.answers,held:this.held,controlledNames:this.endpoints.size,browserNames:this.browserNames.size,aliasedBrowserNames:this.aliasedBrowserNames.size};}
-  clear(){this.names.clear();this.endpoints.clear();this.browserNames.clear();this.aliasedBrowserNames.clear();this.ipv4Ports.clear();this.seenPorts.clear();this.browserGeneration=null;}
+  snapshot(){return {nativeQueries:this.nativeQueries,nativeAnswers:this.nativeAnswers,queries:this.queries,answers:this.answers,held:this.held,controlledNames:this.endpoints.size,browserNames:this.browserNames.size,aliasedBrowserNames:this.aliasedBrowserNames.size};}
+  clear(){this.nativeNames.clear();this.nativeQueries=0;this.nativeAnswers=0;this.names.clear();this.endpoints.clear();this.browserNames.clear();this.aliasedBrowserNames.clear();this.ipv4Ports.clear();this.seenPorts.clear();this.browserGeneration=null;}
   async close(){await new Promise(resolve=>this.socket.close(resolve));}
 }

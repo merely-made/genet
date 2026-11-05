@@ -2,6 +2,17 @@ use super::*;
 use genet_webrtc::LocalAddressPolicy;
 
 pub(super) fn exchange<E: ScriptEngine>() {
+    exercise::<E>("127.0.0.1".parse().unwrap());
+}
+pub(super) fn lan<E: ScriptEngine>() {
+    let bind: std::net::IpAddr = std::env::var("GENET_RTC_LAN_BIND")
+        .expect("explicit selected LAN interface")
+        .parse()
+        .unwrap();
+    assert!(bind.is_ipv4() && !bind.is_loopback() && !bind.is_unspecified());
+    exercise::<E>(bind);
+}
+fn exercise<E: ScriptEngine>(bind: std::net::IpAddr) {
     struct Page;
     impl script_runtime_api::ScriptResourceLoader for Page {
         fn load(&self, _: &str) -> Option<String> {
@@ -10,6 +21,7 @@ pub(super) fn exchange<E: ScriptEngine>() {
     }
     for embedded in [false, true] {
         let mut rt = wired_with::<E>(Settings {
+            bind,
             gathering_timeout: Duration::from_millis(250),
             local_address_policy: LocalAddressPolicy::Mdns,
             ..Settings::default()
@@ -17,7 +29,13 @@ pub(super) fn exchange<E: ScriptEngine>() {
         rt.set_base_url("https://rtc.test/one.html").unwrap();
         rt.set_script_resource_loader(Box::new(Page));
         rt.parse_document_interleaved("<body>first</body>", &script_runtime_api::NoScriptLoader);
-        run(&mut rt, &format!("var embedded={embedded};"));
+        run(
+            &mut rt,
+            &format!(
+                "var embedded={embedded},privateAddress={:?};",
+                bind.to_string()
+            ),
+        );
         run(
             &mut rt,
             r#"
@@ -34,9 +52,9 @@ pub(super) fn exchange<E: ScriptEngine>() {
       b.ondatachannel=e=>e.channel.onmessage=m=>e.channel.send(m.data);
       var ch=a.createDataChannel('private');ch.onmessage=e=>echo++;
       async function negotiate(){restartStage='offer';reset(a);reset(b);var offer=await a.createOffer();
-        if(offer.sdp.includes('127.0.0.1'))throw Error('offer leak');
+        if(offer.sdp.includes(privateAddress))throw Error('offer leak');
         await a.setLocalDescription(offer);if(embedded){restartStage='gather-a';await gathered(a);}await b.setRemoteDescription(embedded?description(a):a.localDescription);
-        var answer=await b.createAnswer();if(answer.sdp.includes('127.0.0.1'))throw Error('answer leak');
+        var answer=await b.createAnswer();if(answer.sdp.includes(privateAddress))throw Error('answer leak');
         await b.setLocalDescription(answer);if(embedded){restartStage='gather-b';await gathered(b);}await a.setRemoteDescription(embedded?description(b):b.localDescription);
         restartStage='negotiated '+embedded+' '+a.iceConnectionState+' '+b.iceConnectionState+' '+hosts.get(a).length+' '+hosts.get(b).length;
         for(const [p,c]of pending.splice(0))await p.addIceCandidate(c);restartStage='negotiated';}
@@ -51,7 +69,7 @@ pub(super) fn exchange<E: ScriptEngine>() {
             &mut rt,
             r#"
       (async()=>{for(const p of [a,b]){
-        if(p.localDescription.sdp.includes('127.0.0.1'))throw Error('local SDP leak');
+        if(p.localDescription.sdp.includes(privateAddress))throw Error('local SDP leak');
         var local=p.sctp.transport.iceTransport.getLocalCandidates();
         if(!local.length||local.some(c=>!c.address.endsWith('.local')))throw Error('transport leak');
         var stats=Array.from((await p.getStats()).values()).filter(s=>s.type==='local-candidate');

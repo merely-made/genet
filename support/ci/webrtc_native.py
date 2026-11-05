@@ -121,6 +121,7 @@ def main():
     mode.add_argument("--prepare", action="store_true", help="build/copy only; opens no listeners")
     mode.add_argument("--list", action="store_true", help="enumerate tests only; opens no listeners")
     parser.add_argument("--server", help="controlled numeric IPv4 coturn endpoint; includes ignored tests")
+    parser.add_argument("--lan-bind", help="selected nonloopback IPv4; requires --filter local_mdns_lan")
     parser.add_argument("--filter", help="Rust test-name filter")
     parser.add_argument("--timeout-seconds", type=int, default=600, help="positive execution deadline after compilation (default:600)")
     args = parser.parse_args()
@@ -132,6 +133,12 @@ def main():
     env.update(CARGO_TARGET_DIR=str(TARGET), CARGO_BUILD_BUILD_DIR=str(TARGET / "build"),
                CARGO_PROFILE_DEV_DEBUG="0", CARGO_BUILD_JOBS="1", CARGO_CACHE_AUTO_CLEAN_FREQUENCY="never")
     env.pop("MURM_RTC_TEST_SERVER", None)
+    env.pop("GENET_RTC_LAN_BIND", None)
+    if args.lan_bind:
+        ip = ipaddress.IPv4Address(args.lan_bind)
+        if ip.is_loopback or ip.is_unspecified or ip.is_multicast or args.filter != "local_mdns_lan":
+            parser.error("--lan-bind requires a selected LAN IPv4 and --filter local_mdns_lan")
+        env["GENET_RTC_LAN_BIND"] = str(ip)
     if args.server:
         address, port = args.server.rsplit(":", 1)
         ipaddress.IPv4Address(address)
@@ -153,7 +160,7 @@ def main():
             command.append("--list")
         else:
             command += ["--test-threads=1"]
-            if args.server:
+            if args.server or args.lan_bind:
                 command.append("--include-ignored")
             if args.filter:
                 command.append(args.filter)

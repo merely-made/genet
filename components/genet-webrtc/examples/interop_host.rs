@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use genet_webrtc::{NativeWebRtcFactory, Settings};
+use genet_webrtc::{LocalAddressPolicy, NativeWebRtcFactory, Settings};
 use script_engine_api::ScriptEngine;
 use script_runtime_api::Runtime;
 use serde_json::{Value, json};
@@ -54,6 +54,12 @@ fn runtime<E: ScriptEngine>(
         NativeWebRtcFactory::with_resolver(
             Settings {
                 bind,
+                local_address_policy: if std::env::var("GENET_RTC_LOCAL_MDNS").as_deref() == Ok("1")
+                {
+                    LocalAddressPolicy::Mdns
+                } else {
+                    LocalAddressPolicy::Expose
+                },
                 gathering_timeout: Duration::from_secs(5),
                 allocation_refresh_interval_cap: Some(Duration::from_secs(1)),
                 mdns_timeout: Duration::from_secs(5),

@@ -399,3 +399,48 @@ Receiving scope: the new registration/privacy exchange checks use IPv4 loopback
 inside the native runtime. The controlled STUN/TURN regressions retain the
 existing exposed-address policy. Nonloopback LAN/headed advertisement remains
 an acceptance gate before any change to the default exposure policy.
+
+
+## E2ah. LAN-interface and headed advertisement acceptance
+
+In progress under the user's explicit continuation. Qualify the selected
+nonloopback IPv4 LAN interface with both native engines, then headed installed
+Chrome and Firefox across both engines, direct/STUN/relay, both offerers and
+close/navigation (48 cases). Each headed case retains both completed restarts
+and an interrupted restart. Native names must remain untouched in signaling;
+direct browser routes must select the named host candidate, not a peer-reflexive
+fallback. Check candidates, descriptions, statistics, UUID-derived foundations,
+name stability and observable socket release. Relay-only must advertise nothing.
+Receiving a browser's own mDNS name is a distinct direction and must not be
+silently counted as native advertisement acceptance.
+
+This is same-machine acceptance using an actual selected LAN interface, not a
+cross-machine or physical-network receipt. Keep the default exposure policy.
+Use the existing marked browser profiles and stable Genet target, audit the
+actual executable paths before sockets/browser launch, and restore browser
+origin permissions and all owned native/controller/fixture processes. Preserve
+older packets and caches. No new isolated target/home/worktree is needed.
+
+Retain one fresh external
+`testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_headed_advertisement_receipts.md`,
+including failed diagnostic runs, with a total retained cap of 350,000 bytes.
+Keep source/binary/lock identities and case receipts compact; no full captures.
+Earlier E2a and operational packet budgets remain independent and unchanged.
+
+- E2ah diagnostic: the first unrestricted Chrome case selected a peer-reflexive
+  fallback. Delaying browser candidates until initial connection now proves
+  named-host selection. Chrome then passed both restarts. Firefox proved the
+  initial name-based exchange but stalled after restart, with no fresh ICE
+  requests. Investigate shared-port QU unicast delivery: add an explicit core
+  multicast-QU policy for the native shared-5353 adapter, preserving pacing and
+  legacy unicast behavior. Earlier failures remain in the fresh E2ah packet.
+
+- E2ah diagnostic follow-up: the shared-port profile did not close Firefox's
+  restart gap. Controlled incoming Firefox aliases allow that separate receiving
+  direction to resolve. Initial browser named-host selection still succeeds,
+  but Firefox fresh ICE/channel continuity fails during restart. A bounded
+  passive observer sees native announcements and no IPv4 A/ANY question for
+  the watched native name in this failure; IPv6 questions are not observed.
+  Preserve initial-advertisement proof separately from full-case acceptance.
+  Execute all matrix cases with failure continuation, retaining unsuccessful
+  restarts as failures. No exposure/default or name-lifetime policy is changed.

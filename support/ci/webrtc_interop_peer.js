@@ -123,7 +123,7 @@
         const remoteCandidate = pair && report.get(pair.remoteCandidateId);
         const fingerprint = description => description?.sdp.match(/a=fingerprint:sha-256 ([^\r\n]+)/i)?.[1].replace(/:/g,'').toLowerCase();
         const certificate = values.find(s=>s.type==='certificate' && s.id===transport?.remoteCertificateId);
-        state.stats = {localEndpoint:localCandidate ? localCandidate.address+':'+localCandidate.port : null,pair:pair ? {state:pair.state,nominated:pair.nominated,
+        state.stats = {localHostViews:values.filter(s=>s.type==='local-candidate'&&s.candidateType==='host').map(s=>({address:s.address})),localEndpoint:localCandidate ? localCandidate.address+':'+localCandidate.port : null,pair:pair ? {state:pair.state,nominated:pair.nominated,
           local:localCandidate?.candidateType,remote:remoteCandidate?.candidateType,
           localProtocol:localCandidate?.protocol,remoteProtocol:remoteCandidate?.protocol}:null,
           localFingerprint:fingerprint(pc.localDescription),remoteFingerprint:fingerprint(pc.remoteDescription),

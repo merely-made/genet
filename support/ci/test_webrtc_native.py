@@ -87,17 +87,27 @@ class NativeRunnerTests(unittest.TestCase):
         events = []
         with contextlib.ExitStack() as stack:
             self.enter_runner(stack, ["--filter", "boa::constructors"])
-            stack.enter_context(patch.dict(runner.os.environ, {"MURM_RTC_TEST_SERVER": "stale-fixture"}))
+            stack.enter_context(patch.dict(runner.os.environ, {"MURM_RTC_TEST_SERVER": "stale-fixture", "GENET_RTC_LAN_BIND": "stale-interface"}))
             stack.enter_context(patch.object(runner, "preflight", side_effect=lambda: events.append("preflight")))
             def execute(command, **kwargs):
                 events.append("execute")
                 self.assertNotIn("MURM_RTC_TEST_SERVER", kwargs["env"])
+                self.assertNotIn("GENET_RTC_LAN_BIND", kwargs["env"])
                 self.assertNotIn("--include-ignored", command)
                 self.assertIn("boa::constructors", command)
                 return types.SimpleNamespace(returncode=0)
             stack.enter_context(patch.object(runner.subprocess, "run", side_effect=execute))
             self.assertEqual(runner.main(), 0)
             self.assertEqual(events, ["preflight", "execute"])
+
+    def test_lan_selection_is_explicit_and_clears_ambient_binding(self):
+        with contextlib.ExitStack() as stack:
+            self.enter_runner(stack, ["--lan-bind", "192.0.2.10", "--filter", "local_mdns_lan"])
+            stack.enter_context(patch.object(runner, "preflight"))
+            execute = stack.enter_context(patch.object(runner.subprocess, "run", return_value=types.SimpleNamespace(returncode=0)))
+            self.assertEqual(runner.main(), 0)
+            self.assertEqual(execute.call_args.kwargs["env"]["GENET_RTC_LAN_BIND"], "192.0.2.10")
+            self.assertIn("--include-ignored", execute.call_args.args[0])
 
     def test_executable_changes_after_a_run_are_refused(self):
         with contextlib.ExitStack() as stack:

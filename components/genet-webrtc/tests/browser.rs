@@ -386,6 +386,11 @@ macro_rules! both {
         mod $module {
             use super::*;
             #[test]
+            #[ignore = "requires explicit selected LAN interface via native runner"]
+            fn local_mdns_lan() {
+                super::local_mdns::lan::<$engine>();
+            }
+            #[test]
             fn local_mdns_registration() {
                 super::local_mdns::exchange::<$engine>();
             }

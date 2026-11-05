@@ -19,8 +19,8 @@ function records(text) {
 function compact(c) {
   if(c.status!=='pass') {
     const d=c.restartDiagnostics;
-    return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'fail',phase:c.phase,error:c.error,resolution:c.resolution,initialStats:c.initialStatsDiagnostics,
-      diagnostics:d?{step:d.step,method:d.method,initiator:d.initiator,iceBefore:d.iceBefore,iceAfter:d.iceAfter,statsObserved:d.statsObserved,
+    return {...Object.fromEntries(fields.map(f=>[f,c[f]])),status:'fail',phase:c.phase,error:c.error,initialAdvertisement:c.advertisement,resolution:c.resolution,initialStats:c.initialStatsDiagnostics,
+      diagnostics:d?{completedRestarts:d.completedRestarts,step:d.step,method:d.method,initiator:d.initiator,iceBefore:d.iceBefore,iceAfter:d.iceAfter,statsObserved:d.statsObserved,
         peers:Object.fromEntries(Object.entries(d.snapshots||{}).map(([name,s])=>[name,{
           connection:s.connectionState,ice:s.iceState,signaling:s.signaling,gathering:s.gathering,
           receivedMessages:s.received.length,channelStates:s.channelStates,
@@ -41,8 +41,8 @@ function compact(c) {
     nominated:[a.pair.nominated,b.pair.nominated],certificatePairSHA256:digest([a.localFingerprint,b.localFingerprint]),
     refusals:a.refused.length||b.refused.length?{native:counts(a.refused),browser:counts(b.refused)}:undefined,
     gatheringErrorCodes:codes.native.length||codes.browser.length?codes:undefined,
-    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,mdnsResolved:r.mdnsResolved,nativeNegotiationEvents:r.nativeNegotiationEvents||undefined,statsSettling:r.statsSettling})),
-    dns:c.dns,mdns:c.mdns,initialStatsSettling:c.initialStatsSettling,commonAssertionsVerified:true};
+    restarts:c.restarts.map(r=>({method:r.method,initiator:r.initiator,mdnsResolved:r.mdnsResolved,nativeNegotiationEvents:r.nativeNegotiationEvents||undefined,statsSettling:r.statsSettling,advertisement:r.advertisement})),
+    dns:c.dns,mdns:c.mdns,advertisement:c.advertisement,initialStatsSettling:c.initialStatsSettling,commonAssertionsVerified:true};
 }
 
 export class RestartJournal {
@@ -75,11 +75,17 @@ export class RestartJournal {
         caseVerifiedMeans:'all common assertions passed and source/native binary unchanged at checkpoint',
         pendingRestartInterruptedBeforeCleanup:true,observableNativeRtcAndDnsEndpointsReleasedAndRebound:true,
         sharedMdnsEvidence:identity.mdns?'Windows owner table may omit shared 5353 binds; pending tickets cancel in headed checks, actual multicast socket/drop behavior has provider tests.':undefined},
-      scope:identity.mdns?`Windows native remote UUID mDNS resolution on a fixed IPv4 interface; ${identity.mdnsAliasBrowser ? identity.mdnsAliasBrowser+' host names replaced by controlled selected-IPv4 fixture aliases; its own advertisements remain unqualified. Other browser names stay untouched.' : 'controlled numeric-host aliases and untouched browser names.'} UDP STUN/TURN regressions, relay suppression and pending-query cancellation. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.`:identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
+      scope:identity.localMdns?'Same-machine selected LAN-interface IPv4 native advertisement, untouched native names, browser named-host selection, privacy and lifecycle. Cross-machine, IPv6 and browser-native responder acceptance remain separate.':identity.mdns?`Windows native remote UUID mDNS resolution on a fixed IPv4 interface; ${identity.mdnsAliasBrowser ? identity.mdnsAliasBrowser+' host names replaced by controlled selected-IPv4 fixture aliases; its own advertisements remain unqualified. Other browser names stay untouched.' : 'controlled numeric-host aliases and untouched browser names.'} UDP STUN/TURN regressions, relay suppression and pending-query cancellation. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.`:identity.dnsMode==='service'?'Windows native data channels, portless STUN/UDP-TURN through controlled SRV/S-NAPTR at nondefault ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':identity.dns?'Windows native data channels, explicit-port hostname STUN/UDP-TURN through controlled A lookup; browser peers use the equivalent numeric endpoint. Fixed interface; SRV/NAPTR, mDNS, TURN TCP/TLS, media and carriers remain open.':'Windows native data channels with fixed numeric UDP servers'});
     return journal;
   }
   validateCase(c) {
     assert(fields.every(f=>this.identity.choices[f].includes(c[f])),'case outside declared matrix');
+    if(this.identity.localMdns&&c.status==='pass'){
+      assert(c.advertisement?.private===true,'native advertisement privacy evidence missing');
+      assert(c.route==='relay'?c.advertisement.hostCount===0:c.advertisement.hostCount===1,'unexpected advertisement count');
+      if(c.route==='direct')assert(c.advertisement.browserNamedHostSelected===true,'named native host was not selected by browser');
+      assert(c.restarts.length===2&&c.restarts.every(r=>r.advertisement?.private&&(c.route==='relay'||r.advertisement.nameStable)),'restart advertisement evidence missing');
+    }
     if(this.identity.dns&&c.status==='pass'){
       const pending=Number(c.route==='stun')+Number(this.identity.mdns&&c.route!=='relay');
       const shared=c.dns?.sharedMdnsEndpointsObserved||0;
@@ -132,7 +138,7 @@ export class RestartJournal {
     const repair=lastFence&&lastFence!=='```'?'\n```\n\nInterrupted checkpoint retained; incomplete JSON is not counted.\n':'';
     const row={...data,schema:2,gate:this.gate+'-'+kind,run:this.run,utc:new Date().toISOString()};
     const entry=repair+'\n\n### '+this.gate+' headed '+kind+'\n\n```json\n'+JSON.stringify(row)+'\n```\n';
-    assert(Buffer.byteLength(old+entry)<=(this.gate==='E2m'?244000:220000),this.gate+' receipt byte cap exceeded');
+    assert(Buffer.byteLength(old+entry)<=(this.gate==='E2ah'?340000:this.gate==='E2m'?244000:220000),this.gate+' receipt byte cap exceeded');
     await appendFile(this.file,entry);
   }
 }

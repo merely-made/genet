@@ -5,6 +5,18 @@ import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { RestartJournal } from './webrtc_receipts.mjs';
 
+test('advertisement checkpoints require named-host selection and restart proof',()=>{
+  const journal=new RestartJournal();
+  journal.identity={localMdns:true,choices:{browser:['chrome'],engine:['boa'],route:['direct'],offerer:['native'],cleanup:['close']}};
+  const row={browser:'chrome',engine:'boa',route:'direct',offerer:'native',cleanup:'close',status:'pass',
+    advertisement:{private:true,hostCount:1,browserNamedHostSelected:true},
+    restarts:[{advertisement:{private:true,nameStable:true}},{advertisement:{private:true,nameStable:true}}]};
+  journal.validateCase(row);
+  assert.throws(()=>journal.validateCase({...row,advertisement:undefined}),/privacy evidence/);
+  assert.throws(()=>journal.validateCase({...row,advertisement:{...row.advertisement,browserNamedHostSelected:false}}),/not selected/);
+  assert.throws(()=>journal.validateCase({...row,restarts:[]}),/restart advertisement/);
+});
+
 test('run metadata preserves its record type and can resume', async()=>{
   const directory=path.resolve('C:/t/cargo-targets/genet/rtc-interop');
   const file=path.join(directory,'journal-fixture.md');

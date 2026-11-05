@@ -22,7 +22,7 @@ const patterns={
 const labels=new Set('ice candidate candidates remote local stream failed failure fail error empty no checks checklist trickle component parse invalid mdns query resolve resolving resolved timeout waiting pending consent address socket dns resolver cache cached hit miss positive negative unknown host trr complete completed getaddrinfo bypass success cancel canceled offline unavailable flags ipv4 ipv6'.split(' '));
 export class FirefoxTrace {
   constructor(){this.partial='';this.stdoutPartial='';this.clear();}
-  clear(){this.stdoutPartial='';this.timecards=[];this.timecardEvents=[];this.timecardOmitted=0;this.transportEvents=[];this.transportOmitted=0;this.names=new Set();this.dns=[];this.errors=[];this.counts={lines:0,oversized:0,nativeDnsLines:0,...Object.fromEntries(Object.keys(patterns).map(k=>[k,0]))};}
+  clear(){this.partial='';this.stdoutPartial='';this.timecards=[];this.timecardEvents=[];this.timecardOmitted=0;this.transportEvents=[];this.transportOmitted=0;this.names=new Set();this.dns=[];this.errors=[];this.counts={lines:0,oversized:0,nativeDnsLines:0,...Object.fromEntries(Object.keys(patterns).map(k=>[k,0]))};}
   watch(names){for(const name of names){if(this.names.size>=128&&!this.names.has(name))throw Error('Firefox name-observation budget');this.names.add(name);}}
   push(chunk){
     const text=this.partial+chunk.toString();this.partial='';

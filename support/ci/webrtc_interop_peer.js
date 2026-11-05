@@ -1,11 +1,19 @@
 // Shared application fixture, executed by real Genet and browser WebRTC APIs.
 // Test state is deliberately bounded and never reports SDP/ICE credentials.
 (function () {
+  globalThis.rtcRemoteHostEvidence = function (values, name, address, port) {
+    const hosts=values.filter(s=>s.type==='remote-candidate'&&s.candidateType==='host');
+    const atPort=hosts.filter(s=>s.port===port);
+    return {hosts:hosts.length,samePort:atPort.length,
+      named:atPort.filter(s=>s.address===name).length,
+      numericEndpoint:atPort.filter(s=>s.address===address).length};
+  };
   globalThis.makeInteropPeer = function (config, name, offerer) {
     const pc = new RTCPeerConnection(config), channels = [], signals = [], waiting = [];
     const received = [], sent = [], modes = [], errors = [], refused = [], remoteProtocols=[], gatheringErrors=[];
     const state = { pc, channels, connected: false, remoteSet: false, stats: null, round: 0, pauseAnswer: false, waitingToAnswer: false, negotiations: 0 };
     const knownRemoteGenerations = new Set();
+    let observedRemoteHosts=[];
     const credentials = d => [d?.sdp.match(/a=ice-ufrag:([^\r\n]+)/)?.[1],d?.sdp.match(/a=ice-pwd:([^\r\n]+)/)?.[1]];
     const changed = (d,before) => before!==null&&credentials(d).every((value,i)=>value!==before[i]);
     const generation = d => d?.sdp.match(/a=ice-ufrag:([^\r\n]+)/)?.[1];
@@ -116,6 +124,7 @@
       state.stats=null;
       pc.getStats().then(report => {
         const values = Array.from(report.values());
+        observedRemoteHosts=values.filter(s=>s.type==='remote-candidate');
         const transport = values.find(s=>s.type==='transport' && s.selectedCandidatePairId);
         const pair = transport ? report.get(transport.selectedCandidatePairId) :
           values.find(s=>s.type==='candidate-pair' && s.state==='succeeded' && (s.selected || s.nominated));
@@ -137,6 +146,7 @@
           candidateKeys:values.filter(s=>s.type==='local-candidate'||s.type==='remote-candidate').map(s=>({id:s.id,type:s.type,candidateType:s.candidateType,protocol:s.protocol}))};
       }).catch(e => fail('stats', e));
     };
+    state.hostEvidence = (name,address,port) => rtcRemoteHostEvidence(observedRemoteHosts,name,address,port);
     state.close = function () {
       pc.close(); return {state:pc.signalingState,channels:channels.map(c=>c.readyState)};
     };

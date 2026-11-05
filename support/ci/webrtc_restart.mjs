@@ -1,7 +1,7 @@
 // ICE-restart checks shared by the installed-browser receiving runner.
 // Signaling descriptions stay in memory; receipts contain only assertions.
 import {RestartSignals} from './webrtc_restart_signals.mjs';
-export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0,mapBrowserSignal=signal=>signal,requireMdns=false,verifyAdvertisement=null,restartDiagnostic=null}) {
+export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0,mapBrowserSignal=signal=>signal,requireMdns=false,verifyAdvertisement=null,restartDiagnostic=null,localBind=null}) {
   const peers={native,browser}, opposite=name=>name==='native'?'browser':'native';
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -10,6 +10,12 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
     await peer.evaluate('__interop.inspect()');
     for(let i=0;i<200;i++){const value=await peer.value('__interop.stats');if(value)return value;await delay(10);}
     throw Error('restart stats deadline');
+  }
+  async function hostEvidence() {
+    if(!signalEvidence)return;
+    await stats(browser);
+    const host=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().find(c=>c.type==="host")');
+    if(host)signalEvidence.record({type:'remote-hosts',view:await browser.value(`__interop.hostEvidence(${JSON.stringify(host.address)},${JSON.stringify(localBind)},${host.port})`)});
   }
   try {
     for([method,initiator] of [['method',offerer],['offer',opposite(offerer)]]) {
@@ -80,6 +86,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
         await delay(25);
       }
       verifyStats(a,b,route);
+      await hostEvidence();
       const advertisement=verifyAdvertisement?await verifyAdvertisement(a,b):undefined;
       let mdnsResolved;
       if(requireMdns&&route!=='relay'){
@@ -97,6 +104,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
     }
     return results;
   } catch(error) {
+    try{await hostEvidence();}catch{}
     error.restartDiagnostics={signalDiagnostics:signalEvidence?{...signalEvidence.summary(),firefox:browser.firefoxTrace?.snapshot()}:undefined,completedRestarts:results.length,step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
   }
 }

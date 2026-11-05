@@ -524,3 +524,19 @@ The fresh packet is closed at 228,992 bytes of its 350,000-byte cap, SHA-256
 `41c03339fb389fbccb671b00399676d9b4db332f351256810f7b1ec975ecab27`.
 Cross-machine/physical LAN, IPv6 multicast, server/interface replacement,
 browser-guest, TURN TCP/TLS, media and carrier acceptance remain separate.
+
+
+### Firefox direct restart investigation, 2026-11-05
+
+The [investigation](2026-11-05_webrtc_firefox_mdns_restart.md) preserves 17 runs
+and 25 failed diagnostic cases. Firefox exposes the initial named host but no
+remote host candidate after the first restart. Trickle/end-marker controls and
+a discarded direct-unicast responder prototype do not restore acceptance.
+Independent post-failure queries demonstrate a provider unicast query gap;
+that is not established as the cause of these eight failures. Counter and
+endpoint-probe errata are retained in the fresh packet. Supplier code, Genet
+code and Cargo.lock are restored; only bounded test diagnostics remain.
+All 25 helper checks pass. The earlier 40/48 acceptance result is unchanged.
+The next boundary to observe is Firefox name-resolution completion and its
+attachment to the restarted ICE generation. See the investigation for exact
+artifact identities, restoration and the closed diagnostic packet.

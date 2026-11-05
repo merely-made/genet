@@ -43,7 +43,7 @@ import { settledStats } from './webrtc_stats.mjs';
 import { inspectAdvertisement } from './webrtc_advertisement.mjs';
 import { MdnsFixture } from './webrtc_mdns_fixture.mjs';
 import { FirefoxTrace } from './webrtc_firefox_trace.mjs';
-import { probeRegistration } from './webrtc_registration_probe.mjs';
+import { probeRegistration, observedBoundQueryKinds } from './webrtc_registration_probe.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const execFileAsync = promisify(execFile);
@@ -458,6 +458,7 @@ try {
           const initialStats=await settledStats(native,browser);
           let aStats=initialStats.a,bStats=initialStats.b;verifyStats(aStats,bStats,route);
           advertisement=localMdns?await inspectAdvertisement(native,bStats,route,bind):undefined;
+          if(advertisement){advertisement.boundSocketQueryLines=(native.stderr.match(/RTC mdns selected socket query/g)||[]).length;advertisement.boundSocketQueryKinds=observedBoundQueryKinds(native.stderr);}
           if(restartDiagnostic){const host=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type==="host").map(c=>({address:c.address,port:c.port}))[0]');if(host)advertisement.initialBrowserHosts=await browser.value(`__interop.hostEvidence(${JSON.stringify(host.address)},${JSON.stringify(bind)},${host.port})`);}
           if(dnsEnabled&&route!=='direct'){
             const local=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type!=="host").map(c=>({type:c.type,url:c.url,relayProtocol:c.relayProtocol,relatedAddress:c.relatedAddress,relatedPort:c.relatedPort,signalingKeys:Object.keys(c.toJSON())}))');
@@ -530,7 +531,9 @@ try {
           console.log(JSON.stringify({...current,status:'pass',seconds:cases.at(-1).seconds}));
         } catch(error) {
           let resolution;try{const m=await native.request('metrics');resolution={started:m.mdnsStarted,resolved:m.mdnsResolved,pending:m.dnsPending,diagnostics:m.mdnsDiagnostics,fixture:mdnsFixture?.snapshot()};}catch{}
+          if(resolution){resolution.boundSocketQueryLines=(native.stderr.match(/RTC mdns selected socket query/g)||[]).length;resolution.boundSocketQueryKinds=observedBoundQueryKinds(native.stderr);}
           if(registrationProbes&&resolution){try{const host=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type==="host").map(c=>({address:c.address,port:c.port}))[0]');if(host)resolution.postFailureProbes=await probeRegistration(host.address,bind,mdnsFixture.socket);}catch{resolution.postFailureProbeError=true;}}
+          if(registrationProbes&&resolution)resolution.afterProbeBoundSocketQueryKinds=observedBoundQueryKinds(native.stderr);
           try { await native.evaluate('__interop.inspect()'); await browser.evaluate('__interop.inspect()'); await delay(100); } catch {}
           let observedStats; try {observedStats={native:await native.value('__interop.stats'),browser:await browser.value('__interop.stats')};} catch {}
           for(const stats of Object.values(observedStats||{}))if(stats){stats.remoteDER_SHA256=(stats.remoteCertificates||[]).map(bytes=>hash(Buffer.from(bytes)));delete stats.remoteCertificates;}

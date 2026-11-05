@@ -27,3 +27,5 @@ export async function probeRegistration(name,bind,sharedSocket){
   }
   return result;
 }
+
+export function observedBoundQueryKinds(text){return Object.fromEntries(['a','aaaa','any','other'].map(kind=>[kind,(text.match(new RegExp('RTC mdns selected socket query: owned (?:shared|legacy) '+kind+'\\b','g'))||[]).length]));}

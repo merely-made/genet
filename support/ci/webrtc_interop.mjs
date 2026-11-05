@@ -62,6 +62,8 @@ if(args.has('--mdns')&&!mdnsEnabled)throw Error('--mdns requires controlled');
 if(localMdns&&(mdnsEnabled||dnsEnabled))throw Error('advertisement gate uses numeric server URLs and untouched browser names');
 if(mdnsEnabled&&restart!=='both')throw Error('--mdns requires --restart both');
 if(dnsEnabled&&!['controlled','service'].includes(dnsMode))throw Error('--dns requires controlled or service');
+const restartDiagnostic=args.get('--restart-diagnostic')||null;
+if(restartDiagnostic&&(!localMdns||args.get('--route')!=='direct'||!['observe','defer-end','trickle'].includes(restartDiagnostic)))throw Error('restart diagnostic requires local mDNS, direct route and a supported control');
 const gate=localMdns?'E2ah':mdnsEnabled?'E2m':dnsMode==='service'?'E2s':dnsEnabled?'E2d':restart?'E2r':'E2h';
 if(restart && restart!=='both')throw Error('--restart requires both');
 // Diagnostic signaling delay, bounded below the retained-route deadline.
@@ -82,7 +84,7 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
-const sourceFiles=['components/genet-webrtc/src/local_descriptions.rs','support/ci/webrtc_mdns_observer.test.mjs','support/ci/webrtc_mdns_observer.mjs','support/ci/webrtc_advertisement.mjs','support/ci/webrtc_advertisement.test.mjs','components/genet-webrtc/src/local_mdns.rs','support/ci/webrtc_permissions.ps1','support/ci/webrtc_mdns_fixture.test.mjs','components/genet-webrtc/src/mdns.rs','support/ci/webrtc_mdns_fixture.mjs','support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
+const sourceFiles=['support/ci/webrtc_restart_signals.mjs','support/ci/webrtc_restart_signals.test.mjs','components/genet-webrtc/src/local_descriptions.rs','support/ci/webrtc_mdns_observer.test.mjs','support/ci/webrtc_mdns_observer.mjs','support/ci/webrtc_advertisement.mjs','support/ci/webrtc_advertisement.test.mjs','components/genet-webrtc/src/local_mdns.rs','support/ci/webrtc_permissions.ps1','support/ci/webrtc_mdns_fixture.test.mjs','components/genet-webrtc/src/mdns.rs','support/ci/webrtc_mdns_fixture.mjs','support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
 const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md'));
 if(['2026-11-01','2026-11-03'].some(date=>receipt.endsWith(date+'_webrtc_conformance_plan_receipts.md')))throw Error('baseline receipt is frozen');
 if(receiptMode==='append')assertWritablePacket(await readFile(receipt,'utf8'));
@@ -383,7 +385,7 @@ const sourceStableNow=async()=>{
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
   advertisementRouting:localMdns?'Initial direct browser candidates delayed and SDP candidates omitted until connection, preventing native-initiated numeric fallback; native names untouched. Optional Firefox incoming aliases are limited to observed owned IPv4 sockets and do not qualify its responder.':undefined,
-  gate,localMdns,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,mdnsAliasBrowser,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
+  gate,localMdns,restartDiagnostic,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,mdnsAliasBrowser,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
@@ -459,7 +461,7 @@ try {
           const initialSockets=restart?await ownedUdp(native.process.pid):null;
           let restarts;
           if(restart) {
-            phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs,mapBrowserSignal,requireMdns:mdnsEnabled,verifyAdvertisement:localMdns?(_a,b)=>inspectAdvertisement(native,b,route,bind,advertisement):null});
+            phase='ICE restart';restarts=await runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs,mapBrowserSignal,restartDiagnostic,requireMdns:mdnsEnabled,verifyAdvertisement:localMdns?(_a,b)=>inspectAdvertisement(native,b,route,bind,advertisement):null});
             a=await native.value('__interop.snapshot()');b=await browser.value('__interop.snapshot()');
             aStats=await native.value('__interop.stats');bStats=await browser.value('__interop.stats');verifyStats(aStats,bStats,route);
             phase='restart interruption';

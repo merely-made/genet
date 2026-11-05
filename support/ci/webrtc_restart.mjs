@@ -1,10 +1,11 @@
 // ICE-restart checks shared by the installed-browser receiving runner.
 // Signaling descriptions stay in memory; receipts contain only assertions.
-export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0,mapBrowserSignal=signal=>signal,requireMdns=false,verifyAdvertisement=null}) {
+import {RestartSignals} from './webrtc_restart_signals.mjs';
+export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0,mapBrowserSignal=signal=>signal,requireMdns=false,verifyAdvertisement=null,restartDiagnostic=null}) {
   const peers={native,browser}, opposite=name=>name==='native'?'browser':'native';
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  const results=[];let probeRound=0,step='capture',snapshots,method,initiator,iceBefore,statsObserved;
+  const results=[];let probeRound=0,step='capture',snapshots,method,initiator,iceBefore,statsObserved,signalEvidence;
   async function stats(peer) {
     await peer.evaluate('__interop.inspect()');
     for(let i=0;i<200;i++){const value=await peer.value('__interop.stats');if(value)return value;await delay(10);}
@@ -12,12 +13,15 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
   }
   try {
     for([method,initiator] of [['method',offerer],['offer',opposite(offerer)]]) {
+      signalEvidence=restartDiagnostic?new RestartSignals(restartDiagnostic):null;
       const metricsBefore=await native.request('metrics');
       iceBefore=metricsBefore.ice;
       const descriptions=[];
       async function pump() {
         for(const name of ['native','browser'])for(let signal of await peers[name].value('__interop.takeSignals()')) {
           if(name==='browser')signal=await mapBrowserSignal(signal);
+          if(signalEvidence)signal=signalEvidence.map(name,signal,step);
+          if(!signal)continue;
           if(signal.description)descriptions.push({from:name,signal});
           else await peers[opposite(name)].evaluate(`__interop.receive(${JSON.stringify(signal)})`);
         }
@@ -61,6 +65,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       if(answerDelayMs)await delay(answerDelayMs);
       await peers[initiator].evaluate(`__interop.receive(${JSON.stringify(answer.signal)})`);
       await wait(()=>Object.values(snapshots).every(s=>s.signaling==='stable'&&s.localCredentialsChanged&&s.remoteCredentialsChanged&&['connected','completed'].includes(s.iceState)&&s.gathering==='complete'),'fresh ICE connected');
+      if(signalEvidence)for(const signal of signalEvidence.flush())await browser.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
       await probe('after remote answer',true);
       await native.evaluate('__interop.rejectStale()');
       await wait(()=>snapshots.native.staleRefused,'stale candidate refusal');
@@ -87,11 +92,11 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       assert(snapshots.native.restartNegotiations===expectedEvents,'restart negotiationneeded count mismatch');
       const relayAllocationReused=route!=='relay'||(a.localEndpoint!==null&&a.localEndpoint===before.localEndpoint);
       assert(relayAllocationReused,'native TURN allocation replaced during restart');
-      results.push({method,initiator,mdnsResolved,advertisement,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
+      results.push({method,initiator,mdnsResolved,advertisement,signalDiagnostics:signalEvidence?.summary(),credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
       assert(!descriptions.length,'unexpected duplicate negotiation');
     }
     return results;
   } catch(error) {
-    error.restartDiagnostics={completedRestarts:results.length,step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
+    error.restartDiagnostics={signalDiagnostics:signalEvidence?.summary(),completedRestarts:results.length,step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
   }
 }

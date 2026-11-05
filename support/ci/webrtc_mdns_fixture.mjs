@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 const execFileAsync=promisify(execFile);
 
 export class MdnsFixture {
-  constructor(){this.nativeNames=new Set();this.nativeQueries=0;this.nativeAnswers=0;this.names=new Map();this.endpoints=new Map();this.browserNames=new Set();this.aliasedBrowserNames=new Set();this.ipv4Ports=new Set();this.seenPorts=new Set();this.queries=0;this.answers=0;this.held=0;this.error=null;this.pending=0;}
+  constructor(){this.nativeQuerySources={selected:0,additional:0,other:0};this.sharedQueries={selected:0,additional:0,other:0};this.nativeNames=new Set();this.nativeQueries=0;this.nativeAnswers=0;this.names=new Map();this.endpoints=new Map();this.browserNames=new Set();this.aliasedBrowserNames=new Set();this.ipv4Ports=new Set();this.seenPorts=new Set();this.queries=0;this.answers=0;this.held=0;this.error=null;this.pending=0;}
   async prepareBrowser(signal,pids) {
     const generation=signal.generation||signal.description?.sdp.match(/a=ice-ufrag:([^\r\n]+)/)?.[1];
     if(generation&&generation!==this.browserGeneration){this.browserGeneration=generation;this.ipv4Ports.clear();this.seenPorts.clear();}
@@ -19,11 +19,15 @@ export class MdnsFixture {
     const parsed=JSON.parse(stdout.trim()||'[]');
     for(const row of Array.isArray(parsed)?parsed:[parsed]){this.seenPorts.add(row.port);if(row.ipv4)this.ipv4Ports.add(row.port);}
   }
-  async start(bind) {
+  async start(bind,extraInterface=null) {
+    this.extraInterface=extraInterface;
     this.bind=bind;this.socket=createSocket({type:'udp4',reuseAddr:true});
     this.socket.on('error',()=>{this.error='controlled mDNS socket failed';});
     this.socket.on('message',(packet,from)=>{
       const seen=observeNames(packet,this.nativeNames,this.bind);this.nativeQueries+=seen.queries;
+      const source=from.address===this.bind?'selected':from.address===this.extraInterface?'additional':'other';
+      this.nativeQuerySources[source]+=seen.queries;
+      if(from.port===5353&&packet.length>=12&&!(packet.readUInt16BE(2)&0x8000))this.sharedQueries[source]++;
       if(from.port===5353&&from.address===this.bind)this.nativeAnswers+=seen.answers;
       if(packet.length<17||packet.length>512||packet.readUInt16BE(4)!==1||(packet.readUInt16BE(2)&0x8000))return;
       let end=12;const labels=[];
@@ -38,6 +42,7 @@ export class MdnsFixture {
     });
     await new Promise((resolve,reject)=>{this.socket.once('error',reject);this.socket.bind(5353,'0.0.0.0',resolve);});
     this.socket.addMembership('224.0.0.251',bind);
+    if(extraInterface&&extraInterface!==bind)this.socket.addMembership('224.0.0.251',extraInterface);
   }
   watchNative(signal){
     const values=signal.candidate?[signal.candidate.candidate]:[...(signal.description?.sdp||'').matchAll(/^a=(candidate:[^\r\n]+)/gm)].map(m=>m[1]);
@@ -62,7 +67,7 @@ export class MdnsFixture {
     if(signal.description)return {...signal,description:{...signal.description,sdp:signal.description.sdp.replace(/^a=(candidate:[^\r\n]+)/gm,(_,value)=>'a='+this.candidate(value,aliasBrowserNames))}};
     return signal;
   }
-  snapshot(){return {nativeQueries:this.nativeQueries,nativeAnswers:this.nativeAnswers,queries:this.queries,answers:this.answers,held:this.held,controlledNames:this.endpoints.size,browserNames:this.browserNames.size,aliasedBrowserNames:this.aliasedBrowserNames.size};}
-  clear(){this.nativeNames.clear();this.nativeQueries=0;this.nativeAnswers=0;this.names.clear();this.endpoints.clear();this.browserNames.clear();this.aliasedBrowserNames.clear();this.ipv4Ports.clear();this.seenPorts.clear();this.browserGeneration=null;}
+  snapshot(){return {observationInterfaces:1+Number(!!this.extraInterface&&this.extraInterface!==this.bind),nativeQuerySources:{...this.nativeQuerySources},sharedQueries:{...this.sharedQueries},nativeQueries:this.nativeQueries,nativeAnswers:this.nativeAnswers,queries:this.queries,answers:this.answers,held:this.held,controlledNames:this.endpoints.size,browserNames:this.browserNames.size,aliasedBrowserNames:this.aliasedBrowserNames.size};}
+  clear(){this.nativeQuerySources={selected:0,additional:0,other:0};this.sharedQueries={selected:0,additional:0,other:0};this.nativeNames.clear();this.nativeQueries=0;this.nativeAnswers=0;this.names.clear();this.endpoints.clear();this.browserNames.clear();this.aliasedBrowserNames.clear();this.ipv4Ports.clear();this.seenPorts.clear();this.browserGeneration=null;}
   async close(){await new Promise(resolve=>this.socket.close(resolve));}
 }

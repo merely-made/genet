@@ -30,7 +30,7 @@ import { spawn, execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { createServer as tcpServer } from 'node:net';
+import { createServer as tcpServer, isIPv4 } from 'node:net';
 import { createSocket } from 'node:dgram';
 import { readFile, writeFile, mkdir, access, appendFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -67,6 +67,8 @@ const restartDiagnostic=args.get('--restart-diagnostic')||null;
 if(restartDiagnostic&&(!localMdns||args.get('--route')!=='direct'||!['observe','defer-end','trickle','trickle-option'].includes(restartDiagnostic)))throw Error('restart diagnostic requires local mDNS, direct route and a supported control');
 const firefoxLog=args.get('--firefox-log')||null;
 if(firefoxLog&&(firefoxLog!=='counters'||!restartDiagnostic||args.get('--browser')!=='firefox'))throw Error('Firefox log counters require a Firefox restart diagnostic');
+const mdnsObserveInterface=args.get('--mdns-observe-interface')||null;
+if(mdnsObserveInterface&&(!restartDiagnostic||!isIPv4(mdnsObserveInterface)))throw Error('additional mDNS observation requires an IPv4 interface and restart diagnostic');
 const gate=localMdns?'E2ah':mdnsEnabled?'E2m':dnsMode==='service'?'E2s':dnsEnabled?'E2d':restart?'E2r':'E2h';
 if(restart && restart!=='both')throw Error('--restart requires both');
 // Diagnostic signaling delay, bounded below the retained-route deadline.
@@ -391,7 +393,7 @@ const sourceStableNow=async()=>{
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
   advertisementRouting:localMdns?'Initial direct browser candidates delayed and SDP candidates omitted until connection, preventing native-initiated numeric fallback; native names untouched. Optional Firefox incoming aliases are limited to observed owned IPv4 sockets and do not qualify its responder.':undefined,
-  gate,localMdns,restartDiagnostic,firefoxLog,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,mdnsAliasBrowser,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
+  gate,localMdns,restartDiagnostic,firefoxLog,mdnsObserveInterface,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,mdnsAliasBrowser,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
@@ -400,7 +402,7 @@ const frontend=await udpFixture.start(bind);
 const dnsFixture=dnsEnabled?new DnsFixture():null;
 const dnsServer=dnsFixture?await dnsFixture.start(bind,dnsMode==='service'?Number(frontend.split(':')[1]):null):null;
 const mdnsFixture=(mdnsEnabled||(localMdns&&mdnsAliasBrowser))?new MdnsFixture():null;
-if(mdnsFixture)await mdnsFixture.start(bind);
+if(mdnsFixture)await mdnsFixture.start(bind,mdnsObserveInterface);
 try {
   for(const browserName of choose('--browser',['chrome','firefox'])) {
     const browser=new Browser();

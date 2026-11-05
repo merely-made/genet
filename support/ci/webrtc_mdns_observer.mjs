@@ -3,7 +3,7 @@ export function observeNames(packet,watched,bind) {
   const result={queries:0,answers:0};
   if(packet.length<12||packet.length>1500)return result;
   const counts=[4,6,8,10].map(i=>packet.readUInt16BE(i));
-  if(counts[0]>4||counts.slice(1).reduce((a,b)=>a+b,0)>16)return result;
+  if(counts[0]>8||counts.slice(1).reduce((a,b)=>a+b,0)>16)return result;
   function name(start,depth=0) {
     if(depth>8)throw Error();
     const labels=[];let at=start;

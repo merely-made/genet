@@ -22,7 +22,7 @@ test('mDNS fixture maps numeric hosts, preserves browser names, and answers one-
     client.send(packet,5353,'224.0.0.251');const {data,from}=await response;
     assert.equal(from.port,5353);assert.equal(data.readUInt16BE(0),123);assert.equal(data.readUInt16BE(2),0x8400);
     assert.deepEqual(data.subarray(-4),Buffer.from([127,0,0,1]));
-    assert.deepEqual(fixture.snapshot(),{nativeQueries:0,nativeAnswers:0,queries:1,answers:1,held:0,controlledNames:1,browserNames:1,aliasedBrowserNames:0});
+    assert.deepEqual(fixture.snapshot(),{observationInterfaces:1,nativeQuerySources:{selected:0,additional:0,other:0},sharedQueries:{selected:0,additional:0,other:0},nativeQueries:0,nativeAnswers:0,queries:1,answers:1,held:0,controlledNames:1,browserNames:1,aliasedBrowserNames:0});
     assert.deepEqual(fixture.rewrite(browser,true),browser,'unknown socket family stays untouched');
     fixture.ipv4Ports.add(40000);
     const controlled=fixture.rewrite(browser,true);

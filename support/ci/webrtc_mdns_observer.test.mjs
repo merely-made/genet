@@ -23,3 +23,10 @@ test('malformed, looping and oversized DNS input is ignored within bounds',()=>{
     assert.deepEqual(observeNames(p,new Set([name]),'192.0.2.1'),{queries:0,answers:0});
   }
 });
+test('Firefox-sized five-question batches are observed within an eight-question cap',()=>{
+  const header=Buffer.alloc(12);header.writeUInt16BE(5,4);
+  const packet=Buffer.concat([header,...Array.from({length:5},()=>query().subarray(12))]);
+  assert.deepEqual(observeNames(packet,new Set([name]),'192.0.2.1'),{queries:5,answers:0});
+  packet.writeUInt16BE(9,4);
+  assert.deepEqual(observeNames(packet,new Set([name]),'192.0.2.1'),{queries:0,answers:0});
+});

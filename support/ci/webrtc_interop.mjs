@@ -455,6 +455,7 @@ try {
           const initialStats=await settledStats(native,browser);
           let aStats=initialStats.a,bStats=initialStats.b;verifyStats(aStats,bStats,route);
           advertisement=localMdns?await inspectAdvertisement(native,bStats,route,bind):undefined;
+          if(restartDiagnostic){const host=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type==="host").map(c=>({address:c.address,port:c.port}))[0]');if(host)advertisement.initialBrowserHosts=await browser.value(`__interop.hostEvidence(${JSON.stringify(host.address)},${JSON.stringify(bind)},${host.port})`);}
           if(dnsEnabled&&route!=='direct'){
             const local=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type!=="host").map(c=>({type:c.type,url:c.url,relayProtocol:c.relayProtocol,relatedAddress:c.relatedAddress,relatedPort:c.relatedPort,signalingKeys:Object.keys(c.toJSON())}))');
             assert(local.length>0&&local.every(c=>c.url===nativeConfig.iceServers[0].urls[0]),'original hostname URL metadata missing');

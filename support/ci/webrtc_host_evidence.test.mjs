@@ -13,3 +13,6 @@ test('resolved named and numeric host observations yield counts without addresse
   assert.deepEqual(view,{hosts:2,samePort:2,named:1,numericEndpoint:1});
   assert(!JSON.stringify(view).includes('private'));assert(!JSON.stringify(view).includes('192.0.2.1'));
 });
+test('missing candidate fields are rejected instead of producing false endpoint counts',()=>{
+  assert.throws(()=>context.rtcRemoteHostEvidence([],undefined,'192.0.2.1',undefined),/invalid remote host evidence target/);
+});

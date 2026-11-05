@@ -14,7 +14,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
   async function hostEvidence() {
     if(!signalEvidence)return;
     await stats(browser);
-    const host=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().find(c=>c.type==="host")');
+    const host=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type==="host").map(c=>({address:c.address,port:c.port}))[0]');
     if(host)signalEvidence.record({type:'remote-hosts',view:await browser.value(`__interop.hostEvidence(${JSON.stringify(host.address)},${JSON.stringify(localBind)},${host.port})`)});
   }
   try {

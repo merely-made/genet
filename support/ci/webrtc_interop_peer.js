@@ -2,6 +2,7 @@
 // Test state is deliberately bounded and never reports SDP/ICE credentials.
 (function () {
   globalThis.rtcRemoteHostEvidence = function (values, name, address, port) {
+    if(typeof name!=='string'||!Number.isInteger(port)||port<1||port>65535)throw Error('invalid remote host evidence target');
     const hosts=values.filter(s=>s.type==='remote-candidate'&&s.candidateType==='host');
     const atPort=hosts.filter(s=>s.port===port);
     return {hosts:hosts.length,samePort:atPort.length,

@@ -41,3 +41,30 @@ A successful parse log proves generation lookup succeeded, not nomination.
 Sources:
 [resolution callback](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/jsapi/PeerConnectionImpl.cpp#l4237),
 [generation lookup and parser](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/nricemediastream.cpp#l292).
+
+## IPC observation and positive control
+
+Process-local `--firefox-ipc yes` enables Mozilla's documented
+`MOZ_REMOTE_ALLOW_SYSTEM_ACCESS=1` only on the owned test Firefox process. The
+loopback BiDi connection reads the browser chrome context and starts a bounded
+IPC-only profiler with stack sampling disabled. Full profiles are reduced inside
+Firefox; only request/completion endpoint counts and relative times leave it.
+The profiler is stopped with `discard:true`; no downloaded profile is created.
+This does not change WebRTC preferences or apply to the user's ordinary profile.
+See [Mozilla's system access documentation](https://firefox-source-docs.mozilla.org/remote/Security.html#system-access).
+
+Both initial offerers show three initial request messages and one completion,
+with named candidate parsing. At restart three more requests reach the parent,
+then one completion arrives roughly nine seconds later. No new named candidate
+parse, missing-stream error or process error appears. A completion IPC by itself
+does not expose whether its optional address was present. The interval and
+absence of parsing suggest the mDNS timeout path; they do not prove the callback
+payload. Timecards remain unavailable on this Windows stdout path.
+
+A separate `--firefox-resolution-replay yes` control runs only after the failed
+case and the 12-second completion observation. It re-adds the actual native host
+candidate for the current description and sends at most 20 fixture-owned
+multicast A answers for that observed native UUID. It never rewrites native
+signaling and cannot qualify the native responder. Its purpose is to distinguish
+an unanswered lookup from inability to attach a resolved candidate to the new
+generation. Record its IPC, parser and host-graph deltas separately.

@@ -33,7 +33,7 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
           await pump();
           snapshots={native:await native.value('__interop.snapshot()'),browser:await browser.value('__interop.snapshot()')};
           assert(!snapshots.native.errors.length&&!snapshots.browser.errors.length,'restart peer error');
-          if(predicate())return;
+          if(predicate()){if(signalEvidence)signalEvidence.record({type:'phase',step,firefox:browser.firefoxTrace?.snapshot()});return;}
           await delay(10);
         }
         throw Error('restart '+label+' deadline');
@@ -92,11 +92,11 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       assert(snapshots.native.restartNegotiations===expectedEvents,'restart negotiationneeded count mismatch');
       const relayAllocationReused=route!=='relay'||(a.localEndpoint!==null&&a.localEndpoint===before.localEndpoint);
       assert(relayAllocationReused,'native TURN allocation replaced during restart');
-      results.push({method,initiator,mdnsResolved,advertisement,signalDiagnostics:signalEvidence?.summary(),credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
+      results.push({method,initiator,mdnsResolved,advertisement,signalDiagnostics:signalEvidence?{...signalEvidence.summary(),firefox:browser.firefoxTrace?.snapshot()}:undefined,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
       assert(!descriptions.length,'unexpected duplicate negotiation');
     }
     return results;
   } catch(error) {
-    error.restartDiagnostics={signalDiagnostics:signalEvidence?.summary(),completedRestarts:results.length,step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
+    error.restartDiagnostics={signalDiagnostics:signalEvidence?{...signalEvidence.summary(),firefox:browser.firefoxTrace?.snapshot()}:undefined,completedRestarts:results.length,step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
   }
 }

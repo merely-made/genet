@@ -42,6 +42,7 @@ import { DnsFixture } from './webrtc_dns_fixture.mjs';
 import { settledStats } from './webrtc_stats.mjs';
 import { inspectAdvertisement } from './webrtc_advertisement.mjs';
 import { MdnsFixture } from './webrtc_mdns_fixture.mjs';
+import { FirefoxTrace } from './webrtc_firefox_trace.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const execFileAsync = promisify(execFile);
@@ -64,6 +65,8 @@ if(mdnsEnabled&&restart!=='both')throw Error('--mdns requires --restart both');
 if(dnsEnabled&&!['controlled','service'].includes(dnsMode))throw Error('--dns requires controlled or service');
 const restartDiagnostic=args.get('--restart-diagnostic')||null;
 if(restartDiagnostic&&(!localMdns||args.get('--route')!=='direct'||!['observe','defer-end','trickle','trickle-option'].includes(restartDiagnostic)))throw Error('restart diagnostic requires local mDNS, direct route and a supported control');
+const firefoxLog=args.get('--firefox-log')||null;
+if(firefoxLog&&(firefoxLog!=='counters'||!restartDiagnostic||args.get('--browser')!=='firefox'))throw Error('Firefox log counters require a Firefox restart diagnostic');
 const gate=localMdns?'E2ah':mdnsEnabled?'E2m':dnsMode==='service'?'E2s':dnsEnabled?'E2d':restart?'E2r':'E2h';
 if(restart && restart!=='both')throw Error('--restart requires both');
 // Diagnostic signaling delay, bounded below the retained-route deadline.
@@ -84,7 +87,7 @@ if (!server || !/^\d+\.\d+\.\d+\.\d+:\d+$/.test(server)) throw Error('--server r
 if (process.platform !== 'win32') throw Error('This receiving gate currently qualifies Windows browser/socket ownership');
 const [serverIP, serverPort] = server.split(':');
 const source = await readFile(path.join(repo, 'support/ci/webrtc_interop_peer.js'), 'utf8');
-const sourceFiles=['support/ci/webrtc_restart_signals.mjs','support/ci/webrtc_restart_signals.test.mjs','components/genet-webrtc/src/local_descriptions.rs','support/ci/webrtc_mdns_observer.test.mjs','support/ci/webrtc_mdns_observer.mjs','support/ci/webrtc_advertisement.mjs','support/ci/webrtc_advertisement.test.mjs','components/genet-webrtc/src/local_mdns.rs','support/ci/webrtc_permissions.ps1','support/ci/webrtc_mdns_fixture.test.mjs','components/genet-webrtc/src/mdns.rs','support/ci/webrtc_mdns_fixture.mjs','support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
+const sourceFiles=['support/ci/webrtc_firefox_trace.mjs','support/ci/webrtc_firefox_trace.test.mjs','support/ci/webrtc_restart_signals.mjs','support/ci/webrtc_restart_signals.test.mjs','components/genet-webrtc/src/local_descriptions.rs','support/ci/webrtc_mdns_observer.test.mjs','support/ci/webrtc_mdns_observer.mjs','support/ci/webrtc_advertisement.mjs','support/ci/webrtc_advertisement.test.mjs','components/genet-webrtc/src/local_mdns.rs','support/ci/webrtc_permissions.ps1','support/ci/webrtc_mdns_fixture.test.mjs','components/genet-webrtc/src/mdns.rs','support/ci/webrtc_mdns_fixture.mjs','support/ci/webrtc_stats.mjs','support/ci/webrtc_stats.test.mjs','support/ci/webrtc_dns_fixture.test.mjs','components/genet-webrtc/tests/browser/service.rs','components/genet-webrtc/tests/browser/dns_fixture.rs','components/genet-webrtc/examples/interop_host.rs','components/genet-webrtc/examples/interop_host/trace.rs','support/ci/webrtc_interop.mjs','support/ci/webrtc_interop_peer.js','support/ci/webrtc_restart.mjs','support/ci/webrtc_receipts.mjs','components/genet-webrtc/Cargo.toml','components/genet-webrtc/src/lib.rs','components/genet-webrtc/src/discovery.rs','support/ci/webrtc_dns_fixture.mjs','components/genet-webrtc/src/signaling.rs','components/genet-webrtc/src/channels.rs','components/genet-webrtc/src/stats.rs','components/script-runtime-api/webrtc/bootstrap.js'];
 const receipt=path.resolve(args.get('--receipt')||path.join(repo,'../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md'));
 if(['2026-11-01','2026-11-03'].some(date=>receipt.endsWith(date+'_webrtc_conformance_plan_receipts.md')))throw Error('baseline receipt is frozen');
 if(receiptMode==='append')assertWritablePacket(await readFile(receipt,'utf8'));
@@ -217,10 +220,13 @@ class Browser {
       await writeFile(path.join(this.profile,'user.js'),Object.entries(prefs).map(([k,v])=>`user_pref(${JSON.stringify(k)},${JSON.stringify(v)});`).join('\n'));
       flags=['-no-remote','-profile',this.profile,'--remote-debugging-port',String(port),'about:blank'];
     }
-    this.process=spawn(executable,flags,{stdio:['ignore','ignore','pipe'],windowsHide:true});
+    const browserEnv={...process.env};
+    if(firefoxLog){delete browserEnv.MOZ_LOG_FILE;delete browserEnv.NSPR_LOG_FILE;delete browserEnv.RUST_LOG;browserEnv.MOZ_LOG='timestamp,signaling:5,mtransport:5,mdns_service:5';this.firefoxTrace=new FirefoxTrace();}
+    this.process=spawn(executable,flags,{stdio:['ignore','ignore','pipe'],windowsHide:true,env:browserEnv});
     this.stderr='';this.networkTrace=[];this.process.stderr.on('data',chunk=>{
+      this.firefoxTrace?.push(chunk);
       this.stderr=(this.stderr+chunk.toString()).slice(-8192);
-      if(process.env.RTC_INTEROP_TRACE==='1')for(const line of chunk.toString().split(/\r?\n/))
+      if(!firefoxLog&&process.env.RTC_INTEROP_TRACE==='1')for(const line of chunk.toString().split(/\r?\n/))
         if(/mtransport|nicer/.test(line) && /error|fail|socket|STUN|TURN/i.test(line) && !/pwd|ufrag|password|username|credential|sdp/i.test(line)) {
           this.networkTrace.push(line.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g,'<ip>').slice(0,240));
           if(this.networkTrace.length>24)this.networkTrace.shift();
@@ -284,7 +290,7 @@ class Browser {
   }
   async close() {
     if(this.rpc) {
-      if(process.env.RTC_INTEROP_TRACE==='1' && this.networkTrace?.length)console.error(JSON.stringify({firefoxNetworkTrace:this.networkTrace}));
+      if(!firefoxLog&&process.env.RTC_INTEROP_TRACE==='1' && this.networkTrace?.length)console.error(JSON.stringify({firefoxNetworkTrace:this.networkTrace}));
       if(this.name==='firefox')for(const permission of this.networkPermissions||[]) {
         if(permission.error)continue;
         try {await this.rpc.call('permissions.setPermission',{descriptor:{name:permission.permission},state:'prompt',origin:this.permissionOrigin});permission.reset='prompt';}catch{permission.reset='failed';}
@@ -385,7 +391,7 @@ const sourceStableNow=async()=>{
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
   advertisementRouting:localMdns?'Initial direct browser candidates delayed and SDP candidates omitted until connection, preventing native-initiated numeric fallback; native names untouched. Optional Firefox incoming aliases are limited to observed owned IPv4 sockets and do not qualify its responder.':undefined,
-  gate,localMdns,restartDiagnostic,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,mdnsAliasBrowser,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
+  gate,localMdns,restartDiagnostic,firefoxLog,dns:dnsEnabled,dnsMode,mdns:mdnsEnabled,mdnsAliasBrowser,sourceSHA256:sourceAtStart,nativeBinarySHA256:binaryAtStart,lockSHA256:lockAtStart,node:process.version,server,bind,expectedCases,answerDelayMs,
   choices:Object.fromEntries(dimensions.map(([flag,all])=>[flag.slice(2),choose(flag,all)]))
 },execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),args.get('--resume')):null;
 if(journal)cases.push(...journal.cases());
@@ -414,6 +420,7 @@ try {
         const dnsBefore=dnsFixture?.snapshot();
         const mdnsBefore=mdnsFixture?.snapshot();
         try {
+          browser.firefoxTrace?.clear();
           phase='peer startup';await browser.reset(url+'?case='+cases.length);native.start(engine,bind,dnsServer);await timeout(native.ready,45000,'native initialization deadline');
           const config={iceTransportPolicy:route==='relay'?'relay':'all',iceServers:route==='relay'?
             [{urls:[`turn:${frontend}?transport=udp`],username:'rtc-test',credential:'rtc-test-password'}]:route==='stun'?[{urls:[`stun:${frontend}`]}]:[]};

@@ -227,7 +227,7 @@ class Browser {
     }
     const browserEnv={...process.env};
     if(firefoxLog){delete browserEnv.MOZ_LOG_FILE;delete browserEnv.NSPR_LOG_FILE;delete browserEnv.RUST_LOG;browserEnv.MOZ_LOG='timestamp,signaling:5,mtransport:5,mdns_service:5,nsHostResolver:5,nsDNSService:5';this.firefoxTrace=new FirefoxTrace();}
-    this.process=spawn(executable,flags,{stdio:['ignore','ignore','pipe'],windowsHide:true,env:browserEnv});
+    this.process=spawn(executable,flags,{stdio:['ignore',firefoxLog?'pipe':'ignore','pipe'],windowsHide:true,env:browserEnv});
     this.stderr='';this.networkTrace=[];this.process.stderr.on('data',chunk=>{
       this.firefoxTrace?.push(chunk);
       this.stderr=(this.stderr+chunk.toString()).slice(-8192);
@@ -237,6 +237,7 @@ class Browser {
           if(this.networkTrace.length>24)this.networkTrace.shift();
         }
     });
+    this.process.stdout?.on('data',chunk=>this.firefoxTrace?.pushStdout(chunk));
     this.exit=new Promise(resolve=>this.process.once('exit',resolve));
     if(name==='chrome') {
       let endpoint;
@@ -547,7 +548,7 @@ try {
           await native.close();if(dnsFixture)dnsFixture.pause=false;if(mdnsFixture)mdnsFixture.clear();await delay(100);await udpFixture.clear();
         }
       }
-    } finally {await browser.close();}
+    } finally {await browser.close();if(journal&&browser.firefoxTrace)await journal.append('firefox-trace',{trace:browser.firefoxTrace.snapshot()});}
   }
 } catch(error) {failure={phase,case:current,error:error.message.slice(0,180)};console.error(JSON.stringify(failure));process.exitCode=1;}
 finally {

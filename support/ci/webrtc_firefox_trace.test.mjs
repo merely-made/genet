@@ -18,3 +18,14 @@ test('platform DNS evidence is limited to watched names and fixed words',()=>{
   const view=trace.snapshot();assert.equal(view.nativeDnsLines,2);assert(view.dnsLabels.some(w=>w.includes('negative')));
   for(const secret of ['private-name.local','other.local'])assert(!JSON.stringify(view).includes(secret));
 });
+
+test('lookup completion and generation parser traces retain only fixed events',()=>{
+  const trace=new FirefoxTrace();trace.watch(['private-name.local']);
+  trace.pushStdout('Timecard created 1234.123456\n 0.001234 | 0.001234 | Set Remote Description | PeerConnectionImpl.cpp:1713 | SetRemoteDescription\n 0.002000 | 0.000766 | Look up mDNS name | file:1 | function\n');
+  trace.pushStdout(' 0.003000 | 0.001000 | Done looking up mDNS name | file:1 | function\n 0.004000 | 0.001000 | private-name.local secret-ufrag | file:1 | function\n');
+  trace.push('mtransport parsing trickle candidate private-name.local secret-ufrag\nmtransport Couldn\'t process ICE candidate private-name.local\nmtransport parsing trickle candidate other.local\n');
+  const view=trace.snapshot();assert.equal(view.timecards,1);assert.deepEqual(view.timecardEvents.map(x=>x.event),['remote-description','lookup','resolved-forwarded']);assert.deepEqual(view.transportEvents,['parse','process-failed']);
+  for(const secret of ['private-name','other.local','secret-ufrag','1234.123456'])assert(!JSON.stringify(view).includes(secret));
+  for(let i=0;i<200;i++)trace.pushStdout(' 0.003000 | 0.001000 | Look up mDNS name | file:1 | function\n');
+  assert.equal(trace.snapshot().timecardEvents.length,128);assert(trace.snapshot().timecardOmitted>0);
+});

@@ -119,3 +119,10 @@ with lock SHA-256
 Earlier acceptance remains 40/48, with all eight Firefox direct cases open.
 The diagnostic controls are not native advertisement, cross-machine LAN, WPT,
 IPv6, STUN/TURN, media or carrier qualification.
+
+The fresh packet is closed at 177618 bytes of its 200,000-byte cap,
+SHA-256 `31e8f7ece4f3add924eb5d9c7db7fa5b293a7915ffb2eee91b6f149c059df950`. All 31 Node helper checks, runner syntax and required commit
+checks pass. Final audit confirms zero owned test processes and fixture network
+grants, inactive/disabled coturn, and unchanged older frozen packets. No isolated
+target/home/worktree or downloaded profiler artifact remains. Existing marked
+profiles and the stable Genet target remain for reuse.

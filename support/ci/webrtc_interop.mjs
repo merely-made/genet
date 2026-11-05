@@ -379,7 +379,7 @@ const url=`http://127.0.0.1:${http.address().port}/`;
 const bind=await bindIP();
 const sourceStableNow=async()=>{
   const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
-  return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
+  return JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe))&&lockAtStart===hash(await readFile(path.join(repo,'Cargo.lock')));
 };
 const journal=restart&&receiptMode==='append'?await RestartJournal.open(receipt,{
   advertisementRouting:localMdns?'Initial direct browser candidates delayed and SDP candidates omitted until connection, preventing native-initiated numeric fallback; native names untouched. Optional Firefox incoming aliases are limited to observed owned IPv4 sockets and do not qualify its responder.':undefined,
@@ -498,6 +498,7 @@ try {
             assert((await native.request('metrics')).pending===0,'close retained a peer');
           }
           assert((await native.request('metrics')).dnsPending===0,'native cleanup retained DNS work');
+          if(advertisement&&mdnsFixture){advertisement.observedIPv4Queries=mdnsFixture.nativeQueries-mdnsBefore.nativeQueries;advertisement.observedIPv4Answers=mdnsFixture.nativeAnswers-mdnsBefore.nativeAnswers;}
           if(advertisement){advertisement.observableShared5353=sharedMdnsEndpointsObserved;advertisement.exclusiveEndpointsRebound=sockets.filter(s=>s.port!==5353).length;}
           assert((await ownedUdp(native.process.pid)).length===0,'native cleanup retained UDP ownership');await released(sockets);
           await browser.evaluate('__interop.close()');
@@ -536,7 +537,7 @@ finally {
   await udpFixture.close();
   await new Promise(resolve=>http.close(resolve));
   const hashes={};for(const file of sourceFiles)hashes[file]=hash(await readFile(path.join(repo,file)));
-  const sourceStable=JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe));
+  const sourceStable=JSON.stringify(hashes)===JSON.stringify(sourceAtStart)&&binaryAtStart===hash(await readFile(nativeExe))&&lockAtStart===hash(await readFile(path.join(repo,'Cargo.lock')));
   if(!sourceStable){failure={phase:'source identity',error:'source or fixture binary changed during qualification'};process.exitCode=1;}
   const record={schema:1,gate,sourceStable,lockSHA256:lockAtStart,utc:new Date().toISOString(),source:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),node:process.version,command:['node','support/ci/webrtc_interop.mjs',...process.argv.slice(2)],expectedCases,completeMatrix:expectedCases===(restart?48:32)&&cases.length===expectedCases&&!failure,nativeBinarySHA256:hash(await readFile(nativeExe)),sourceSHA256:hashes,versions,cases,failure,relayFixture:'bounded Windows UDP front end forwarding unchanged datagrams to WSL coturn; distinct backend socket per client; max 16 clients/256 pending datagrams/1 MiB',profileCache:scratch,profileCleanup:'earlier recursive cleanup was rejected as blocked by policy; marked profiles retained for reuse; reviewer not established',scope:localMdns?'Same-machine selected LAN-interface native IPv4 advertisement consumed by installed headed browsers; native UUID names untouched, direct browser named-host selection, privacy and lifecycle checked. Cross-machine, IPv6 and browser-native responder acceptance remain separate.':mdnsEnabled?'native Windows remote UUID mDNS resolution, controlled numeric-host aliases and untouched browser mDNS names, fixed-interface IPv4; relay policy suppression, restart and realm cleanup. Local name advertisement, IPv6 multicast, TURN TCP/TLS, public NAT, media and carriers remain open.':dnsMode==='service'?'native Windows headed restart with portless STUN/UDP-TURN and controlled SRV/S-NAPTR at nondefault discovered ports; browser peers use equivalent numeric endpoints. Fixed interface; mDNS, TURN TCP/TLS, public routing, media and carriers remain open.':dnsEnabled?'native Windows headed restart with explicit-port STUN/UDP-TURN hostnames and controlled A replies; browser peers use equivalent numeric endpoints. SRV/NAPTR, mDNS, TURN TCP/TLS, interface changes, media and carriers remain open.':restart?'native Windows headed data-channel restart on fixed numeric UDP servers':'native Windows headed data channels, controlled WSL UDP server'};
   if(journal) {

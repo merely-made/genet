@@ -223,7 +223,7 @@ class Browser {
       flags=['-no-remote','-profile',this.profile,'--remote-debugging-port',String(port),'about:blank'];
     }
     const browserEnv={...process.env};
-    if(firefoxLog){delete browserEnv.MOZ_LOG_FILE;delete browserEnv.NSPR_LOG_FILE;delete browserEnv.RUST_LOG;browserEnv.MOZ_LOG='timestamp,signaling:5,mtransport:5,mdns_service:5';this.firefoxTrace=new FirefoxTrace();}
+    if(firefoxLog){delete browserEnv.MOZ_LOG_FILE;delete browserEnv.NSPR_LOG_FILE;delete browserEnv.RUST_LOG;browserEnv.MOZ_LOG='timestamp,signaling:5,mtransport:5,mdns_service:5,nsHostResolver:5,nsDNSService:5';this.firefoxTrace=new FirefoxTrace();}
     this.process=spawn(executable,flags,{stdio:['ignore','ignore','pipe'],windowsHide:true,env:browserEnv});
     this.stderr='';this.networkTrace=[];this.process.stderr.on('data',chunk=>{
       this.firefoxTrace?.push(chunk);
@@ -434,7 +434,7 @@ try {
           phase='negotiation and transfer';const exchangeStart=Date.now();
           const heldBrowserCandidates=[];
           for(let i=0;i<600;i++) {
-            for(const signal of await native.value('__interop.takeSignals()')){if(localMdns)mdnsFixture?.watchNative(signal);await browser.evaluate(`__interop.receive(${JSON.stringify(signal)})`);}
+            for(const signal of await native.value('__interop.takeSignals()')){if(localMdns){mdnsFixture?.watchNative(signal);if(mdnsFixture)browser.firefoxTrace?.watch(mdnsFixture.nativeNames);}await browser.evaluate(`__interop.receive(${JSON.stringify(signal)})`);}
             for(const signal of await browser.value('__interop.takeSignals()')){
               if(localMdns&&route==='direct'&&'candidate' in signal){assert(heldBrowserCandidates.length<128,'held candidate budget exceeded');heldBrowserCandidates.push(signal);continue;}
               const mapped=await mapBrowserSignal(signal);

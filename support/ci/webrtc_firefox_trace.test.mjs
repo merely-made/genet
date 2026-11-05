@@ -12,3 +12,9 @@ test('oversized lines and partial buffers remain bounded',()=>{
   const trace=new FirefoxTrace();trace.push('a'.repeat(10000));assert.equal(trace.partial,'');
   trace.push('b'.repeat(10000)+'\n');assert.equal(trace.snapshot().lines,0);assert.equal(trace.snapshot().oversized,2);
 });
+test('platform DNS evidence is limited to watched names and fixed words',()=>{
+  const trace=new FirefoxTrace();trace.watch(['private-name.local']);
+  trace.push('D/nsHostResolver resolving private-name.local cache miss\nD/nsHostResolver private-name.local completed negative cache\nD/nsHostResolver other.local failed\n');
+  const view=trace.snapshot();assert.equal(view.nativeDnsLines,2);assert(view.dnsLabels.some(w=>w.includes('negative')));
+  for(const secret of ['private-name.local','other.local'])assert(!JSON.stringify(view).includes(secret));
+});

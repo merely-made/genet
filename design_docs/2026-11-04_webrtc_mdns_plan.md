@@ -1,6 +1,6 @@
 # WebRTC mDNS candidates
 
-**Status (2026-11-04): remote receiving, core responder, opt-in native IPv4 registration/privacy and same-machine LAN-interface exchange qualified; full headed advertisement acceptance open.** The completed E2s plan is
+**Status (2026-11-04): remote receiving, core responder, opt-in native IPv4 registration/privacy and same-machine LAN-interface exchange qualified. Headed advertisement passes 40/48: Chrome 24/24 and Firefox 16/24. Firefox direct-restart acceptance remains open.** The completed E2s plan is
 [archived whole](archive_docs/2026-11-04/2026-11-04_webrtc_conformance_plan.md).
 Earlier rulings and qualification boundaries remain in that archive chain.
 
@@ -292,10 +292,11 @@ headed/WPT packets or qualify local advertising.
 
 ## E2a. Local advertisement
 
-This is the next bounded slice under the user's continued RTC authorization.
-Its protocol primitive advanced without opening sockets before the separate
-Native application firewall installation. E2m receiving evidence stays closed
-and unchanged.
+This completed native slice established the protocol primitive and opt-in
+registration/privacy profile. Its protocol primitive advanced without opening
+sockets before the separate Native application firewall installation. E2m
+receiving evidence stays closed and unchanged. E2ah below records the later
+LAN-interface and partial headed qualification.
 
 ### Protocol primitive
 
@@ -395,18 +396,19 @@ Retain compact host/privacy evidence alongside the core packet, with the same
   Headed browser advertisement, IPv6 and direct-unicast registration queries
   remain open. Earlier receiving/WPT packets stay frozen; none were rerun here.
 
-Receiving scope: the new registration/privacy exchange checks use IPv4 loopback
-inside the native runtime. The controlled STUN/TURN regressions retain the
-existing exposed-address policy. Nonloopback LAN/headed advertisement remains
-an acceptance gate before any change to the default exposure policy.
+Original E2a scope: registration/privacy exchange used IPv4 loopback inside the
+native runtime. Its controlled STUN/TURN regressions retained the existing
+exposed-address policy. E2ah adds same-machine LAN-interface and partial headed
+acceptance. The default exposure policy remains unchanged.
 
 
 ## E2ah. LAN-interface and headed advertisement acceptance
 
-In progress under the user's explicit continuation. Qualify the selected
-nonloopback IPv4 LAN interface with both native engines, then headed installed
-Chrome and Firefox across both engines, direct/STUN/relay, both offerers and
-close/navigation (48 cases). Each headed case retains both completed restarts
+Executed with partial qualification under the user's explicit continuation.
+Both native engines pass on the selected nonloopback IPv4 LAN interface.
+The headed installed Chrome/Firefox matrix spans both engines, direct/STUN/relay,
+both offerers and close/navigation (48 cases; 40 pass, eight fail).
+Each passing headed case retains both completed restarts
 and an interrupted restart. Native names must remain untouched in signaling;
 direct browser routes must select the named host candidate, not a peer-reflexive
 fallback. Check candidates, descriptions, statistics, UUID-derived foundations,
@@ -431,7 +433,7 @@ Earlier E2a and operational packet budgets remain independent and unchanged.
   fallback. Delaying browser candidates until initial connection now proves
   named-host selection. Chrome then passed both restarts. Firefox proved the
   initial name-based exchange but stalled after restart, with no fresh ICE
-  requests. Investigate shared-port QU unicast delivery: add an explicit core
+  requests. The shared-port QU unicast investigation added an explicit core
   multicast-QU policy for the native shared-5353 adapter, preserving pacing and
   legacy unicast behavior. Earlier failures remain in the fresh E2ah packet.
 
@@ -463,6 +465,62 @@ Earlier E2a and operational packet budgets remain independent and unchanged.
   and leave edited SDP subject to core validation. Snapshot projection must
   not replace these canonical descriptions, and close clears them. The six
   pure adapter checks and 12 Node helper checks pass after this correction;
-  strict adapter all-target Clippy passes. Rebuild and rerun headed acceptance
-  as a separate source/binary checkpoint. Do not combine builds into a single
-  passing matrix.
+  strict adapter all-target Clippy passes. The rebuilt headed acceptance below
+  records a separate source/binary checkpoint. Builds are not combined into a
+  single passing matrix.
+
+### Final E2ah checkpoint
+
+Qualified source `e0e0cd8b0a6b403df2ccf21e323531e8df0bd77b`, provider
+`452b10fd710911b46a9658c2ef6ba7f328c368f3`, core
+`d7efb544923f300eb831d4718ea9722da55fbd2b`.
+Headed run `3750ca1e-b0b1-4bbe-b11b-ad03a9e66955` uses executable SHA-256
+`f8db64d4b082d7831af7804d2b04432de1cd28d540213cadec4a0e9508181797`
+and lock SHA-256
+`b3a0a9fb35c0a0ab4ba1ed79061ce14ec017dbbc15f78c349affe60428da5030`.
+Source, binary and lock identities remain stable and were rechecked at closure.
+Installed headed versions: Chrome 156.0.8078.80 and Firefox 159.0.1.
+
+| Browser, both engines | Direct | STUN | Relay | Total |
+| --- | --- | --- | --- | --- |
+| Chrome | 8/8 | 8/8 | 8/8 | 24/24 |
+| Firefox | 0/8 | 8/8 | 8/8 | 16/24 |
+
+All eight explicit-native-offer STUN failures from the first matrix pass after
+the SDP correction. The 40 passing cases prove 80 completed restarts and 40
+interrupted restarts, encrypted payload continuity, privacy, name/foundation
+stability, socket preservation and observable endpoint release/rebind.
+Relay-only advertises no host registration. The complete matrix remains failed,
+and the runner correctly exits 1.
+
+Firefox direct failures divide into four channel closures and four selected
+peer-reflexive fallback routes after restart. All eight retain initial named-host
+and privacy proof. This is an unresolved acceptance gate, not a diagnosis of
+the responsible implementation. The IPv4-only passive observer cannot exclude
+IPv6 questions. Do not rotate names or rewrite native signaling to hide it.
+Firefox's own incoming advertisements remain a distinct unqualified direction;
+its observed IPv4 sockets use controlled aliases in this matrix.
+
+The corrected native artifact
+`c69af73f0ace6125072d8465f279240591c8c7ec3d4b45980b596a8be8e7b602`
+passes 38 ordinary checks (10 opt-in checks excluded) and both explicit LAN
+checks. The first ordinary attempt exceeded an overly short 180-second
+supervisor deadline; its incomplete result is preserved. The normal 600-second
+retry passes in 279.53 seconds. Six pure adapter checks, 12 Node helper checks,
+10 Python runner checks, strict adapter all-target Clippy, Rust 1.97.1 library
+check and required commit checks pass. Earlier WPT/receiving packets are frozen
+and unchanged; they were not rerun here.
+
+Restoration confirms zero owned browser/native/controller processes and zero
+Firefox fixture network grants. Both full-matrix fixtures were identity-checked
+before stopping; their listeners are gone and system coturn remains
+inactive/disabled. The final fixture observes 64 successful allocations and 64
+zero-lifetime refreshes. Existing marked browser profiles and stable Genet/
+Retinue targets remain for reuse; no isolated target/home/worktree was created.
+The standalone generated cache-test executable and symbols were removed after
+marker and owner checks.
+
+The fresh packet is closed at 228,992 bytes of its 350,000-byte cap, SHA-256
+`41c03339fb389fbccb671b00399676d9b4db332f351256810f7b1ec975ecab27`.
+Cross-machine/physical LAN, IPv6 multicast, server/interface replacement,
+browser-guest, TURN TCP/TLS, media and carrier acceptance remain separate.

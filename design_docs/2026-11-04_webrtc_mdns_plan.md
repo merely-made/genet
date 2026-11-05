@@ -546,3 +546,15 @@ The diagnostic packet is closed at 331995 bytes, SHA-256
 network grants, unchanged older frozen packets, inactive/disabled coturn, and
 removal of temporary patch/backup files. Existing marked browser profiles and
 the stable Genet target remain for reuse; no isolated target/home/worktree exists.
+
+
+### Firefox resolution/attachment trace, 2026-11-05
+
+The [follow-up trace](2026-11-05_webrtc_firefox_resolution_trace.md) observes
+requests reaching Firefox's parent process for both initial offerers, followed
+by completion about nine seconds later without candidate parsing. A separate
+post-failure fixture-answer control completes in about 150 ms and reaches the
+parser with fresh credentials, which reports a redundant candidate after the
+earlier ICE outcome. This narrows the failure to the ordinary mDNS resolution path;
+it does not prove which query/answer packet is missing. Native names, product
+code and pins remain unchanged, and full advertisement acceptance stays 40/48.

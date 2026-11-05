@@ -1,6 +1,6 @@
 # Firefox restart resolution and attachment trace
 
-Status: in progress. Follow-up to the closed
+Status: traced both offerers; normal mDNS resolution path remains unresolved. Follow-up to the closed
 [restart investigation](2026-11-05_webrtc_firefox_mdns_restart.md).
 
 ## Scope and receipts
@@ -68,3 +68,54 @@ multicast A answers for that observed native UUID. It never rewrites native
 signaling and cannot qualify the native responder. Its purpose is to distinguish
 an unanswered lookup from inability to attach a resolved candidate to the new
 generation. Record its IPC, parser and host-graph deltas separately.
+
+## Observed result
+
+| Boundary | Browser initial offerer | Native initial offerer |
+| --- | --- | --- |
+| Initial control | Three requests, one completion; named candidate parser reached | Three requests, one completion; named candidate parser reached |
+| Normal first restart | Three new requests reach parent; completion after 9.019 s; no new candidate parse | Three new requests reach parent; completion after 9.036 s; no new candidate parse |
+| Post-failure replay with fixture answers | New request/completion in about 154 ms; parser reached | New request/completion in about 157 ms; parser reached |
+| Replay transport result | One parse, one redundant result, zero missing-stream/process errors | One parse, one redundant result, zero missing-stream/process errors |
+
+Normal IPC runs: `1c93bfc5-e108-4cad-ad63-0c806791087f` (browser initial offerer)
+and `42717152-4644-424e-a1ce-207d6c17ed6a` (native initial offerer).
+Corrected replay runs: `e487cc54-9004-45cd-acf7-06456f973473` and
+`4745d840-5dab-49d1-a660-5ccc605e2840`, respectively. Source, native executable
+and lock identity are stable at every checkpoint. Approximate profiler times
+are sufficient to distinguish 0.15 s from the 9 s retry/timeout interval; they
+are not a precision latency benchmark.
+
+The replay uses the fresh native username fragment. The exact installed source
+only reaches its parser after finding a stream for that fragment. This is
+positive evidence that a resolved candidate can reach the matching restarted
+generation. The parser reports it redundant after the earlier ICE outcome; both
+host graphs remain empty and these failed cases are not rescued or qualified.
+The parser log does not prove candidate insertion or nomination. The existing
+peer-reflexive route is not promoted to named-host acceptance.
+
+The normal completion IPC does not reveal its optional address payload. Its
+roughly nine-second delay and absence of parser/process errors are consistent
+with the installed resolver's three-attempt timeout, rather than a demonstrated
+successful lookup followed by rejection of the new generation. The fixture
+control supplies a successful resolution and observes forwarding. Together,
+these narrow the next investigation to the ordinary multicast query/answer
+path, including outgoing interface and receive/socket delivery. They do not
+assign the defect to Firefox or the native responder, or prove which packet
+is missing. Direct-unicast responder support remains a separate gap.
+
+Six failed strict cases are preserved across six runs, including the stdout-only
+attempt and the first replay setup failure. That setup failure occurred before
+controlled answers were sent and is explicitly corrected in the packet. The
+new single-case IPC guard keeps future profiling bounded. Profiler teardown
+always requests discard, and a failure to stop it cannot skip browser permission
+reset and process shutdown.
+
+No product Rust, supplier source, dependency pin or Cargo.lock changed. The
+normal executable remains SHA-256
+`0c3e031f2efe09d13136743d5828a3c45604cfaf322647b3816634016356d773`,
+with lock SHA-256
+`b3a0a9fb35c0a0ab4ba1ed79061ce14ec017dbbc15f78c349affe60428da5030`.
+Earlier acceptance remains 40/48, with all eight Firefox direct cases open.
+The diagnostic controls are not native advertisement, cross-machine LAN, WPT,
+IPv6, STUN/TURN, media or carrier qualification.

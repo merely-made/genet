@@ -130,3 +130,9 @@ The diagnostic packet is closed at 331995 bytes, SHA-256
 network grants, unchanged older frozen packets, inactive/disabled coturn, and
 removal of temporary patch/backup files. Existing marked browser profiles and
 the stable Genet target remain for reuse; no isolated target/home/worktree exists.
+
+
+Follow-up: the [resolution/attachment trace](2026-11-05_webrtc_firefox_resolution_trace.md)
+now observes the request/completion IPC boundary and demonstrates parser entry
+with fresh credentials under a post-failure fixture-answer control. The next
+boundary is the ordinary multicast query/answer path; acceptance is unchanged.

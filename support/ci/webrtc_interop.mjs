@@ -90,6 +90,7 @@ const routes=restart?['direct','stun','relay']:['direct','relay'];
 const dimensions=[['--browser',['chrome','firefox']],['--engine',['boa','nova']],['--route',routes],['--offerer',['native','browser']],['--cleanup',['close','navigate']]];
 for(const [flag,values] of dimensions)if(args.has(flag) && !values.includes(args.get(flag)))throw Error('invalid matrix selector '+flag);
 const expectedCases=dimensions.reduce((n,[flag,values])=>n*(args.has(flag)?1:values.length),1);
+if(firefoxIpc&&expectedCases!==1)throw Error('Firefox IPC tracing requires one explicit matrix case');
 const target = path.resolve(process.env.CARGO_TARGET_DIR || 'C:/t/cargo-targets/genet');
 const scratch = path.join(target, 'rtc-interop');
 const nativeExe = args.get('--native') || path.join(target, 'debug/examples/interop_host.exe');
@@ -304,7 +305,7 @@ class Browser {
   }
   async close() {
     if(this.rpc) {
-      if(this.ipcTrace)await this.ipcTrace.close();
+      if(this.ipcTrace)try{await this.ipcTrace.close();}catch{this.ipcStopFailed=true;}
       if(!firefoxLog&&process.env.RTC_INTEROP_TRACE==='1' && this.networkTrace?.length)console.error(JSON.stringify({firefoxNetworkTrace:this.networkTrace}));
       if(this.name==='firefox')for(const permission of this.networkPermissions||[]) {
         if(permission.error)continue;
@@ -560,7 +561,7 @@ try {
           await native.close();if(dnsFixture)dnsFixture.pause=false;if(mdnsFixture)mdnsFixture.clear();await delay(100);await udpFixture.clear();
         }
       }
-    } finally {await browser.close();if(journal&&browser.firefoxTrace)await journal.append('firefox-trace',{trace:browser.firefoxTrace.snapshot()});}
+    } finally {await browser.close();if(journal&&browser.firefoxTrace)await journal.append('firefox-trace',{trace:browser.firefoxTrace.snapshot(),ipcProfilerStopped:browser.ipcTrace?browser.ipcTrace.active===false:undefined});}
   }
 } catch(error) {failure={phase,case:current,error:error.message.slice(0,180)};console.error(JSON.stringify(failure));process.exitCode=1;}
 finally {

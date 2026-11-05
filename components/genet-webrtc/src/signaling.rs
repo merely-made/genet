@@ -63,7 +63,7 @@ pub(super) fn perform(
         WebRtcOperation::CreateOffer | WebRtcOperation::CreateAnswer
     ) && let Some(local) = &state.local
     {
-        local.project(&mut result);
+        local.generated(&mut result);
     }
     Ok(result)
 }
@@ -72,7 +72,14 @@ fn set_local(state: &mut State, mut data: Value, now: Instant) -> Result<Value, 
     if let Some(local) = &state.local
         && let Some(sdp) = data["sdp"].as_str()
     {
-        data["sdp"] = json!(local.sdp(sdp, true));
+        let kind = data["type"].as_str().unwrap_or_else(|| {
+            if state.observable["signalingState"] == "have-remote-offer" {
+                "answer"
+            } else {
+                "offer"
+            }
+        });
+        data["sdp"] = json!(local.restore(kind, sdp));
     }
     let rollback = data["type"] == "rollback";
     let description = if data["type"].is_null() {

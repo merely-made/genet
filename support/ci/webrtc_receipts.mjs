@@ -7,7 +7,7 @@ const key=c=>fields.map(f=>c[f]).join('/');
 const assert=(value,message)=>{if(!value)throw Error(message);};
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export function assertWritablePacket(text) {
-  assert(!text.includes('Packet closed after the final qualified run'),'qualification packet is closed; select a fresh receipt path');
+  assert(!/Packet closed after the final (?:qualified run|audit)/.test(text),'qualification packet is closed; select a fresh receipt path');
 }
 function records(text) {
   const result=[];
@@ -23,7 +23,7 @@ function compact(c) {
       diagnostics:d?{completedRestarts:d.completedRestarts,step:d.step,method:d.method,initiator:d.initiator,iceBefore:d.iceBefore,iceAfter:d.iceAfter,statsObserved:d.statsObserved,
         peers:Object.fromEntries(Object.entries(d.snapshots||{}).map(([name,s])=>[name,{
           connection:s.connectionState,ice:s.iceState,signaling:s.signaling,gathering:s.gathering,
-          receivedMessages:s.received.length,channelStates:s.channelStates,
+          receivedMessages:s.received.length,channelStates:s.channelStates,errors:(s.errors||[]).slice(0,4).map(e=>e.slice(0,160)),
           localCredentialsChanged:s.localCredentialsChanged,remoteCredentialsChanged:s.remoteCredentialsChanged}]))}:undefined};
   }
   assert(c.restarts.length===2,'restart result missing a round');

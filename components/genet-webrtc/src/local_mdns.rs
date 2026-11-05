@@ -16,6 +16,7 @@ pub(super) struct Local {
     address: String,
     registration: Option<Registration>,
     foundation: RefCell<Option<String>>,
+    descriptions: RefCell<local_descriptions::Descriptions>,
 }
 impl Local {
     pub fn new(settings: Settings, relay: bool) -> Result<Option<Self>, WebRtcError> {
@@ -37,6 +38,7 @@ impl Local {
             address: ip.to_string(),
             registration,
             foundation: RefCell::new(None),
+            descriptions: RefCell::default(),
         }))
     }
     pub fn poll(&mut self, now: Instant, budget: usize) {
@@ -48,6 +50,22 @@ impl Local {
     }
     pub fn close(&mut self) {
         self.registration = None;
+        *self.descriptions.borrow_mut() = Default::default();
+    }
+    pub fn generated(&self, value: &mut Value) {
+        let private = value["sdp"].as_str().unwrap_or_default().to_owned();
+        self.project(value);
+        if let (Some(kind), Some(public)) = (value["type"].as_str(), value["sdp"].as_str()) {
+            self.descriptions
+                .borrow_mut()
+                .remember(kind, public.to_owned(), private);
+        }
+    }
+    pub fn restore(&self, kind: &str, public: &str) -> String {
+        if let Some(private) = self.descriptions.borrow().restore(kind, public) {
+            return private.to_owned();
+        }
+        self.sdp(public, true)
     }
     fn candidate(&self, text: &str, internal: bool) -> String {
         let mut fields: Vec<_> = text.split_whitespace().map(str::to_owned).collect();
@@ -155,6 +173,7 @@ mod tests {
             address: "192.0.2.10".into(),
             registration: None,
             foundation: RefCell::new(None),
+            descriptions: RefCell::default(),
         }
     }
     #[test]
@@ -208,12 +227,41 @@ mod tests {
 mod description_tests {
     use super::*;
     #[test]
+    fn unchanged_generated_sdp_restores_concealed_related_routes() {
+        let l = Local {
+            name: "53caef04-4218-4fb0-815d-f91a511bb8d2.local".into(),
+            address: "192.0.2.10".into(),
+            registration: None,
+            foundation: RefCell::new(None),
+            descriptions: RefCell::default(),
+        };
+        let private = "v=0\r\nc=IN IP4 192.0.2.10\r\na=ice-ufrag:original\r\na=candidate:1 1 udp 100 192.0.2.10 3333 typ host\r\na=candidate:2 1 udp 90 198.51.100.20 4444 typ srflx raddr 192.0.2.10 rport 3333\r\na=candidate:3 1 udp 80 203.0.113.20 5555 typ relay raddr 198.51.100.20 rport 4444\r\n";
+        let mut description = json!({"type":"offer","sdp":private});
+        l.generated(&mut description);
+        let public = description["sdp"].as_str().unwrap();
+        assert!(!public.contains("192.0.2.10"));
+        assert_eq!(l.restore("offer", public), private);
+        // Snapshots may acquire candidates after generation. Their projection
+        // must not overwrite the canonical generated offer.
+        let mut snapshot =
+            json!({"type":"offer","sdp":format!("{private}a=end-of-candidates\r\n")});
+        l.project(&mut snapshot);
+        assert_eq!(l.restore("offer", public), private);
+        let edited = public.replace("ice-ufrag:original", "ice-ufrag:edited");
+        assert!(l.restore("offer", &edited).contains("ice-ufrag:edited"));
+        assert_ne!(l.restore("offer", &edited), private);
+        let mut l = l;
+        l.close();
+        assert_ne!(l.restore("offer", public), private);
+    }
+    #[test]
     fn description_roundtrip_keeps_numeric_routes_internal() {
         let l = Local {
             name: "53caef04-4218-4fb0-815d-f91a511bb8d2.local".into(),
             address: "192.0.2.10".into(),
             registration: None,
             foundation: RefCell::new(None),
+            descriptions: RefCell::default(),
         };
         let private = "m=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 192.0.2.10\r\na=candidate:1 1 udp 100 192.0.2.10 3333 typ host\r\n";
         let public = l.sdp(private, false);

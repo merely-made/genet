@@ -3,7 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile, readFile, unlink } from 'node:fs/promises';
 import path from 'node:path';
-import { RestartJournal } from './webrtc_receipts.mjs';
+import { RestartJournal, assertWritablePacket } from './webrtc_receipts.mjs';
+
+test('both acceptance and unresolved-gate audit closures freeze packets',()=>{
+  for(const marker of ['Packet closed after the final qualified run','Packet closed after the final audit'])
+    assert.throws(()=>assertWritablePacket(marker),/packet is closed/);
+  assertWritablePacket('In progress; unsuccessful cases retained.');
+});
 
 test('advertisement checkpoints require named-host selection and restart proof',()=>{
   const journal=new RestartJournal();
@@ -34,6 +40,9 @@ test('run metadata preserves its record type and can resume', async()=>{
     assert.equal(resumed.run,first.run);
     assert.equal((await rows())[1].gate,'E2d-resume');
     await assert.rejects(RestartJournal.open(file,{...identity,expectedCases:2},'fixture-source','latest'),/identical source/);
+    await resumed.case({browser:'chrome',engine:'boa',route:'direct',offerer:'native',cleanup:'close',status:'fail',phase:'restart',error:'restart peer error',
+      restartDiagnostics:{snapshots:{native:{received:[],channelStates:[],errors:['restart option:OperationError:ICE']}}}},true);
+    assert.deepEqual((await rows()).at(-1).diagnostics.peers.native.errors,['restart option:OperationError:ICE']);
     await resumed.finish('simulated interruption',true);
     const end=(await rows()).at(-1);
     assert.equal(end.gate,'E2d-run-end');assert.equal(end.completeSelectedMatrix,false);

@@ -6,6 +6,7 @@
 
 mod channels;
 mod discovery;
+mod local_descriptions;
 mod local_mdns;
 mod mdns;
 pub use local_mdns::LocalAddressPolicy;

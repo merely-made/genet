@@ -1,6 +1,6 @@
 # WebRTC mDNS candidates
 
-**Status (2026-11-04): remote receiving, core responder and opt-in native IPv4 registration/privacy qualified; headed advertisement acceptance open.** The completed E2s plan is
+**Status (2026-11-04): remote receiving, core responder, opt-in native IPv4 registration/privacy and same-machine LAN-interface exchange qualified; full headed advertisement acceptance open.** The completed E2s plan is
 [archived whole](archive_docs/2026-11-04/2026-11-04_webrtc_conformance_plan.md).
 Earlier rulings and qualification boundaries remain in that archive chain.
 
@@ -444,3 +444,25 @@ Earlier E2a and operational packet budgets remain independent and unchanged.
   Preserve initial-advertisement proof separately from full-case acceptance.
   Execute all matrix cases with failure continuation, retaining unsuccessful
   restarts as failures. No exposure/default or name-lifetime policy is changed.
+
+- First complete E2ah matrix: source `34825607c27`, native executable
+  `91cc106b64a7f47eb4e601db1cd373ee37f9b0ba1343b7a8b017db272b46afd4`,
+  run `0d9c6b4f-376d-4dfa-8e79-a6805adaff92`: 32/48 pass, source/binary/lock
+  stable. Chrome passes 20/24; Firefox passes 12/24. Eight explicit native
+  restart offers on STUN fail across both browsers/engines. Eight Firefox
+  direct restarts close channels or select a peer-reflexive fallback; their
+  initial named-host exchanges pass, but these full cases remain failures.
+  All 16 relay-only cases pass. The first fixture is identity-checked and
+  stopped, with 64 allocations and 64 zero-lifetime refreshes observed;
+  origin network grants are reset and owned browser/native/controller processes
+  are gone. Coturn remains inactive/disabled.
+- A pure regression reproduces the STUN failure: host-token reversal alone
+  does not restore concealed SDP connection and related-address/port fields,
+  so the core rejects an unchanged generated public offer. Retain only the
+  latest generated offer and answer internally, restore an exact public match,
+  and leave edited SDP subject to core validation. Snapshot projection must
+  not replace these canonical descriptions, and close clears them. The six
+  pure adapter checks and 12 Node helper checks pass after this correction;
+  strict adapter all-target Clippy passes. Rebuild and rerun headed acceptance
+  as a separate source/binary checkpoint. Do not combine builds into a single
+  passing matrix.

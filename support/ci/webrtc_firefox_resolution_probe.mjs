@@ -6,9 +6,15 @@ export function resolutionAnswer(name,address){
   const labels=Buffer.concat([...name.split('.').map(s=>Buffer.concat([Buffer.from([s.length]),Buffer.from(s)])),Buffer.from([0])]);
   return Buffer.concat([header,labels,Buffer.from([0,1,0x80,1,0,0,0,120,0,4,...address.split('.').map(Number)])]);
 }
+export function currentNativeCandidate(sdp){
+  const candidate=sdp.match(/^a=(candidate:.* typ host.*)$/m)?.[1].trim();
+  const usernameFragment=sdp.match(/a=ice-ufrag:([^\r\n]+)/)?.[1];
+  if(!candidate||!usernameFragment)throw Error('resolution probe lacks a current native host');
+  return {candidate,sdpMLineIndex:0,usernameFragment};
+}
 export async function probeFirefoxResolution({browser,native,fixture,bind}){
   const result={control:'post-failure fixture answer; not native advertisement',sent:0};
-  const candidate=await native.value(`(()=>{const sdp=__interop.pc.localDescription.sdp;return {candidate:sdp.match(/^a=(candidate:.* typ host.*)$/m)[1].trim(),sdpMLineIndex:0,usernameFragment:sdp.match(/a=ice-ufrag:([^\r\n]+)/)[1]};})()`);
+  const candidate=currentNativeCandidate(await native.value('__interop.pc.localDescription.sdp'));
   const name=candidate.candidate.split(/\s+/)[4];if(!fixture.nativeNames.has(name))throw Error('resolution replay name is not observed native ownership');
   const packet=resolutionAnswer(name,bind),before=await browser.ipcTrace.snapshot();
   const transportBefore=browser.firefoxTrace.snapshot();

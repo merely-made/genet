@@ -45,8 +45,16 @@ impl Registration {
         if !(1..=32).contains(&prefix) {
             return Err(io::Error::other("Invalid mDNS prefix"));
         }
-        let responder = Responder::new(now, name, interface, ResponderConfig::default())
-            .map_err(|_| io::Error::other("Invalid mDNS registration"))?;
+        let responder = Responder::new(
+            now,
+            name,
+            interface,
+            ResponderConfig {
+                multicast_qu: true,
+                ..Default::default()
+            },
+        )
+        .map_err(|_| io::Error::other("Invalid mDNS registration"))?;
         let index = NetworkInterface::show()
             .map_err(io::Error::other)?
             .into_iter()

@@ -337,12 +337,17 @@ fn native_batch_completion_wakes_from_worker_and_collection_is_channel_only() {
     );
     let completed_on = receiver.recv_timeout(Duration::from_secs(6)).unwrap();
     assert_ne!(completed_on, ui);
-    pending
+    let accepted = pending
         .poll()
         .expect("wake preceded completion delivery")
-        .unwrap()
-        .publish(|_| ())
         .unwrap();
+    let timing = accepted.timing();
+    assert!(timing.collected_at() <= std::time::Instant::now());
+    assert_eq!(
+        timing.queue() + timing.worker() + timing.ready_to_collect(),
+        timing.seal_to_collect()
+    );
+    accepted.publish(|_| ()).unwrap();
 }
 
 #[test]
@@ -511,12 +516,12 @@ fn worker_refuses_to_join_itself() {
 #[test]
 fn close_refuses_active_submission_and_keeps_closed_gate_closed() {
     let frames = NativeFrames::default();
-    *frames.state.lock().unwrap() = State::Submitting;
+    frames.state.lock().unwrap().phase = State::Submitting;
     assert!(frames.close().is_err());
-    *frames.state.lock().unwrap() = State::Pending;
+    frames.state.lock().unwrap().phase = State::Pending;
     frames.close().unwrap();
     frames.finish(true);
-    assert!(matches!(*frames.state.lock().unwrap(), State::Closed));
+    assert!(matches!(frames.state.lock().unwrap().phase, State::Closed));
     assert!(frames.checked().is_err());
 }
 
@@ -539,7 +544,7 @@ fn native_shutdown_drains_cancelled_frame_and_refuses_new_admission() {
 #[test]
 fn close_waits_for_publication_and_revokes_later_publication() {
     let frames = Arc::new(NativeFrames::default());
-    *frames.state.lock().unwrap() = State::Pending;
+    frames.state.lock().unwrap().phase = State::Pending;
     let publication = frames.begin_publication().unwrap();
     assert!(frames.close().is_err(), "reentrant close must refuse");
     let other = frames.clone();

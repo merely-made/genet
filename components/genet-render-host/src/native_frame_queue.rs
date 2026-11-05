@@ -3,7 +3,7 @@
 
 use std::sync::{Arc, Condvar, Mutex, mpsc};
 
-use super::{NativeFrames, RasterizeFailure, State, unavailable};
+use super::{Job, NativeFrames, RasterizeFailure, State, availability, unavailable};
 
 type Work = Box<dyn FnOnce() + Send>;
 #[derive(Default)]
@@ -89,7 +89,7 @@ impl Worker {
 
 #[derive(Clone)]
 pub(crate) struct NativeFrameShutdown {
-    pub(super) state: Arc<Mutex<State>>,
+    pub(super) state: Arc<Mutex<availability::Gate>>,
     pub(super) worker: Arc<Worker>,
     pub(super) changed: Arc<Condvar>,
 }
@@ -98,10 +98,10 @@ impl NativeFrameShutdown {
         if self.worker.is_current() {
             return Err("native completion worker cannot join itself".into());
         }
-        {
+        let waiters = {
             let mut state = self.state.lock().expect("native frames poisoned");
             loop {
-                match *state {
+                match state.phase {
                     State::Submitting | State::Legacy => {
                         return Err("native frame submission is still active".into());
                     },
@@ -109,13 +109,16 @@ impl NativeFrameShutdown {
                         return Err("native frame publisher cannot close itself".into());
                     },
                     State::Publishing(id, _) => {
-                        *state = State::Publishing(id, true);
+                        state.phase = State::Publishing(id, true);
                         state = self.changed.wait(state).expect("native frames poisoned");
                     },
                     _ => break,
                 }
             }
-            *state = State::Closed;
+            state.close()
+        };
+        for waiter in waiters {
+            waiter.notify();
         }
         self.worker.close()
     }
@@ -125,24 +128,51 @@ pub(super) struct Publication<'a>(&'a NativeFrames);
 impl Drop for Publication<'_> {
     fn drop(&mut self) {
         let mut state = self.0.state.lock().expect("native frames poisoned");
-        if let State::Publishing(_, closing) = *state {
-            *state = if closing {
-                State::Closed
+        let waiters = if let State::Publishing(_, closing) = state.phase {
+            let waiters = if closing {
+                state.close()
             } else {
-                State::Pending
+                state.phase = State::Pending;
+                Vec::new()
             };
             self.0.changed.notify_all();
+            waiters
+        } else {
+            Vec::new()
+        };
+        drop(state);
+        for waiter in waiters {
+            waiter.notify();
         }
     }
 }
 
 impl NativeFrames {
+    pub(super) fn schedule(&self, job: Job) {
+        let job = Arc::new(Mutex::new(Some(job)));
+        let worker_job = job.clone();
+        if let Err(reason) = self.worker.schedule(Box::new(move || {
+            worker_job.lock().unwrap().take().unwrap().run();
+        })) {
+            job.lock().unwrap().take().unwrap().refuse(&reason);
+        }
+    }
+    pub(super) fn close(&self) -> Result<(), String> {
+        self.shutdown_handle().close()
+    }
+    pub(super) fn shutdown_handle(&self) -> NativeFrameShutdown {
+        NativeFrameShutdown {
+            state: self.state.clone(),
+            worker: self.worker.clone(),
+            changed: self.changed.clone(),
+        }
+    }
     pub(super) fn begin_publication(&self) -> Result<Publication<'_>, RasterizeFailure> {
         let mut state = self.state.lock().expect("native frames poisoned");
-        if !matches!(*state, State::Pending) {
+        if !matches!(state.phase, State::Pending) {
             return Err(unavailable("native frame publication unavailable"));
         }
-        *state = State::Publishing(std::thread::current().id(), false);
+        state.phase = State::Publishing(std::thread::current().id(), false);
         Ok(Publication(self))
     }
 }

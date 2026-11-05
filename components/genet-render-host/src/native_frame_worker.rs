@@ -6,6 +6,9 @@ use super::*;
 impl Job {
     pub(super) fn run(mut self) {
         self.qualification.worker_started = Some(Instant::now());
+        self.timing.start_worker();
+        self.qualification
+            .start_attribution(self.timing.worker_started_at());
         let result = self.observe();
         self.qualification.progress.worker_finished = Some(Instant::now());
         self.complete(result);
@@ -61,13 +64,20 @@ impl Job {
         self.complete(Err(unavailable(reason)));
     }
 
-    fn complete(self, result: Result<(), RasterizeFailure>) {
+    fn complete(mut self, result: Result<(), RasterizeFailure>) {
         let reusable =
             self.qualification.drained() || matches!(&result, Err(RasterizeFailure::DeviceLost(_)));
+        let attribution = self.qualification.finish_attribution();
+        let batch_id = self.qualification.batch_id;
         let completion = Completion {
             qualification: Some(self.qualification),
             result,
             reusable,
+            batch_id,
+            attribution,
+            // Preserve the original worker-ready endpoint after diagnostic
+            // finalization, rather than moving it to the CPU sample boundary.
+            timing: self.timing.ready_at(Instant::now()),
         };
         if let Some(sender) = self.completed {
             let _ = sender.send(completion);

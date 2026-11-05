@@ -124,3 +124,9 @@ The canonical advertisement acceptance remains Chrome 24/24, Firefox 16/24.
 STUN/TURN, WPT, native LAN checks and earlier frozen receipts were not rerun or
 requalified by these diagnostic experiments. Cross-machine LAN and IPv6 remain
 separate gates.
+
+The diagnostic packet is closed at 331995 bytes, SHA-256
+`24a79760c767895b876296a7cda2346aab9b462eaf36040f5a44cbe3d04c939b`. Final audit confirms zero owned test processes and Firefox fixture
+network grants, unchanged older frozen packets, inactive/disabled coturn, and
+removal of temporary patch/backup files. Existing marked browser profiles and
+the stable Genet target remain for reuse; no isolated target/home/worktree exists.

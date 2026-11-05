@@ -540,3 +540,9 @@ All 25 helper checks pass. The earlier 40/48 acceptance result is unchanged.
 The next boundary to observe is Firefox name-resolution completion and its
 attachment to the restarted ICE generation. See the investigation for exact
 artifact identities, restoration and the closed diagnostic packet.
+
+The diagnostic packet is closed at 331995 bytes, SHA-256
+`24a79760c767895b876296a7cda2346aab9b462eaf36040f5a44cbe3d04c939b`. Final audit confirms zero owned test processes and Firefox fixture
+network grants, unchanged older frozen packets, inactive/disabled coturn, and
+removal of temporary patch/backup files. Existing marked browser profiles and
+the stable Genet target remain for reuse; no isolated target/home/worktree exists.

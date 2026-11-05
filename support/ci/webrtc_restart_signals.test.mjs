@@ -30,3 +30,13 @@ test('trickle control removes embedded candidates but preserves actual trickled 
   assert.equal(d.map('native',candidate,'candidate'),candidate);
   assert.equal(description.description.sdp.includes(name),true);
 });
+test('trickle option control adds only the capability declaration',()=>{
+  const d=new RestartSignals('trickle-option');
+  const plain={description:{...description.description,sdp:description.description.sdp.replace('a=ice-options:trickle\r\n','')}};
+  const mapped=d.map('native',plain,'offer');
+  assert.equal(summarizeSignal(mapped).trickle,true);
+  assert.equal(mapped.description.sdp.replace('a=ice-options:trickle\r\n',''),plain.description.sdp);
+  assert.equal(d.map('native',candidate,'candidate'),candidate);
+  assert.deepEqual(d.map('native',{candidate:null},'end'),{candidate:null});
+  assert.equal(d.map('browser',plain,'offer'),plain);
+});

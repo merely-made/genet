@@ -22,6 +22,14 @@ export class RestartSignals {
   map(from,signal,step){
     const entry={from,step,...summarizeSignal(signal)};this.record(entry);
     if(from!=='native'||this.mode==='observe')return signal;
+    if(this.mode==='trickle-option'){
+      if(!signal.description||entry.trickle)return signal;
+      const lines=signal.description.sdp.split(/\r?\n/),media=lines.findIndex(s=>s.startsWith('m='));
+      const at=lines.findIndex((s,i)=>(media<0||i<media)&&s.startsWith('a=ice-options:'));
+      if(at>=0)lines[at]+=' trickle';else lines.splice(media<0?0:media,0,'a=ice-options:trickle');
+      entry.trickleAdded=true;
+      return {...signal,description:{...signal.description,sdp:lines.join('\r\n')}};
+    }
     if(endCandidate(signal)){
       if(this.ends.length>=8)throw Error('restart diagnostic end-marker budget');
       this.ends.push(signal);entry.held=true;return null;

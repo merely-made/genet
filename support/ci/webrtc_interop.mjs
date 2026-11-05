@@ -63,7 +63,7 @@ if(localMdns&&(mdnsEnabled||dnsEnabled))throw Error('advertisement gate uses num
 if(mdnsEnabled&&restart!=='both')throw Error('--mdns requires --restart both');
 if(dnsEnabled&&!['controlled','service'].includes(dnsMode))throw Error('--dns requires controlled or service');
 const restartDiagnostic=args.get('--restart-diagnostic')||null;
-if(restartDiagnostic&&(!localMdns||args.get('--route')!=='direct'||!['observe','defer-end','trickle'].includes(restartDiagnostic)))throw Error('restart diagnostic requires local mDNS, direct route and a supported control');
+if(restartDiagnostic&&(!localMdns||args.get('--route')!=='direct'||!['observe','defer-end','trickle','trickle-option'].includes(restartDiagnostic)))throw Error('restart diagnostic requires local mDNS, direct route and a supported control');
 const gate=localMdns?'E2ah':mdnsEnabled?'E2m':dnsMode==='service'?'E2s':dnsEnabled?'E2d':restart?'E2r':'E2h';
 if(restart && restart!=='both')throw Error('--restart requires both');
 // Diagnostic signaling delay, bounded below the retained-route deadline.

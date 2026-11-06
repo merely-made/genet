@@ -1230,6 +1230,7 @@ impl TextSystem {
             commands.push(PreparedCommand {
                 source: node,
                 owners: vec![node],
+                line_y,
                 command: PaintCmd::DrawText(TextRunItem {
                     placement: CommonPlacement::new(LayoutRect::new(
                         LayoutPoint::new(origin_x, origin_y),
@@ -1740,6 +1741,7 @@ impl TextSystem {
                     visual_commands.push(PreparedCommand {
                         source,
                         owners: run.owners,
+                        line_y,
                         command,
                     });
                 },
@@ -3219,6 +3221,7 @@ where
                     visual_commands.push(PreparedCommand {
                         source: source_node,
                         owners: command_owners,
+                        line_y,
                         command: PaintCmd::DrawText(TextRunItem {
                             placement: CommonPlacement::new(super::paint::bounds(&container)),
                             font_instance: run.font_instance,
@@ -3353,6 +3356,8 @@ pub(crate) struct TextFrame<Id> {
     /// physical layout coordinates. Separate from font-content fragments.
     line_bounds: HashMap<Id, Fragment>,
     painted_decorations: HashSet<Id>,
+    deferred_decorations: Vec<DeferredDecorations<Id>>,
+    held_groups: HashSet<usize>,
     used_fonts: HashSet<FontInstanceKey>,
     text_order: Vec<Id>,
     text_values: HashMap<Id, String>,
@@ -3377,6 +3382,8 @@ impl<Id> Default for TextFrame<Id> {
             inline_line_keys: HashMap::new(),
             line_bounds: HashMap::new(),
             painted_decorations: HashSet::new(),
+            deferred_decorations: Vec::new(),
+            held_groups: HashSet::new(),
             used_fonts: HashSet::new(),
             text_order: Vec::new(),
             text_values: HashMap::new(),
@@ -3402,21 +3409,80 @@ where
     ) -> bool {
         let prepared = self.prepared_sources.contains(&source);
         if let Some(group) = self.source_groups.get(&source).copied() {
+            let limit = self.deferred_limit(group);
             let mut retained = Vec::new();
             for prepared in std::mem::take(&mut self.prepared_groups[group]) {
                 let belongs_to_owner =
                     inline_owner.is_none_or(|owner| prepared.owners.contains(&owner));
                 let belongs_to_child_context = excluded_roots
                     .is_some_and(|roots| prepared.owners.iter().any(|owner| roots.contains(owner)));
-                if belongs_to_owner && !belongs_to_child_context {
+                let held = limit.is_some_and(|limit| prepared.line_y > limit - 0.5);
+                if belongs_to_owner && !belongs_to_child_context && !held {
                     commands.push(prepared.command);
                 } else {
+                    if held && belongs_to_owner && !belongs_to_child_context {
+                        self.held_groups.insert(group);
+                    }
                     retained.push(prepared);
                 }
             }
             self.prepared_groups[group] = retained;
         }
         prepared
+    }
+
+    /// The earliest line, in `group`, of a decoration that has yet to paint at
+    /// its source-order walk. Runs on or after it wait for that walk.
+    fn deferred_limit(&self, group: usize) -> Option<f32> {
+        self.deferred_decorations
+            .iter()
+            .filter(|deferred| deferred.groups.contains(&group))
+            .flat_map(|deferred| deferred.pending.iter().map(|(_, line)| *line))
+            .min_by(|left, right| left.total_cmp(right))
+    }
+
+    /// Open a deferral scope: `elements` are decorations that begin on a later
+    /// line than the group's first, and `groups` the shaped text groups whose
+    /// runs they overlap.
+    pub(crate) fn begin_deferred_decorations(
+        &mut self,
+        sources: &[Id],
+        elements: Vec<(Id, f32)>,
+    ) -> bool {
+        if elements.is_empty() {
+            return false;
+        }
+        let groups = sources
+            .iter()
+            .filter_map(|source| self.source_groups.get(source).copied())
+            .collect();
+        self.deferred_decorations.push(DeferredDecorations {
+            groups,
+            pending: elements,
+        });
+        true
+    }
+
+    /// An element reached its source-order walk: its decoration (if any) is
+    /// about to paint, so the runs it was holding back may drain.
+    pub(crate) fn note_walked(&mut self, element: Id) {
+        for deferred in &mut self.deferred_decorations {
+            deferred.pending.retain(|(id, _)| *id != element);
+        }
+    }
+
+    /// Close the innermost deferral scope and emit every run it still holds.
+    pub(crate) fn end_deferred_decorations(&mut self, commands: &mut Vec<PaintCmd>) {
+        let Some(deferred) = self.deferred_decorations.pop() else {
+            return;
+        };
+        for group in deferred.groups {
+            if self.held_groups.remove(&group) {
+                for prepared in std::mem::take(&mut self.prepared_groups[group]) {
+                    commands.push(prepared.command);
+                }
+            }
+        }
     }
 
     fn record_prepared_group(&mut self, sources: Vec<Id>, commands: Vec<PreparedCommand<Id>>) {
@@ -3582,6 +3648,7 @@ where
         for group in &mut self.prepared_groups {
             for prepared in group {
                 if nodes.contains(&prepared.source) {
+                    prepared.line_y += offset.1;
                     translate_paint_command(&mut prepared.command, offset);
                 }
             }
@@ -4103,7 +4170,21 @@ fn position_in_segment<Id: Copy>(
 struct PreparedCommand<Id> {
     source: Id,
     owners: Vec<Id>,
+    /// The line key the run sits on, in the same coordinates as
+    /// `inline_line_keys`, so paint can hold a run back until a decoration
+    /// that begins on its line has been emitted.
+    line_y: f32,
     command: PaintCmd,
+}
+
+/// Inline decorations that begin on a later line than their group's first
+/// line, which paint at their source-order walk rather than in the prepass.
+/// Text on or after such a line must not drain before that walk, or the
+/// decoration's background would cover it.
+#[derive(Clone, Debug)]
+struct DeferredDecorations<Id> {
+    groups: HashSet<usize>,
+    pending: Vec<(Id, f32)>,
 }
 
 #[derive(Clone, Debug)]

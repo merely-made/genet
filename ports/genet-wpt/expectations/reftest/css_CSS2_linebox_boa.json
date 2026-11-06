@@ -243,7 +243,7 @@
       "reason": "non-reftest",
       "status": "skip"
     },
-    "css/CSS2/linebox/line-height-125.xht": "fail",
+    "css/CSS2/linebox/line-height-125.xht": "pass",
     "css/CSS2/linebox/line-height-126.xht": "pass",
     "css/CSS2/linebox/line-height-127.xht": "pass",
     "css/CSS2/linebox/line-height-128.xht": "pass",

@@ -1275,6 +1275,7 @@ where
     let mut clips_descendants = 0;
     let inherited = match dom.kind(id) {
         NodeKind::Element => {
+            text.frame.note_walked(id);
             let style = styles.get(id)?;
             if style.display == Display::None || style.visibility != Visibility::Visible {
                 return None;
@@ -3743,6 +3744,33 @@ fn emit_inline_group<'a, D>(
             );
         }
     }
+    // A decoration that begins on a later line paints at its source-order walk
+    // (so its border can bleed over the preceding line box). The group's text
+    // stream drains at the first text node, so it must hold back the runs on
+    // and after that line until the walk reaches the decoration; otherwise the
+    // later background would paint over its own line's text.
+    let mut deferred_scope = false;
+    if let Some(first_line) = roots
+        .iter()
+        .filter_map(|root| text.frame.first_inline_line(*root))
+        .min_by(|left, right| left.total_cmp(right))
+    {
+        let mut elements = Vec::new();
+        let mut sources = Vec::new();
+        for root in roots {
+            collect_deferred_inline_decorations(
+                dom,
+                styles,
+                *root,
+                scope.stacking_roots,
+                first_line,
+                text.frame,
+                &mut elements,
+                &mut sources,
+            );
+        }
+        deferred_scope = text.frame.begin_deferred_decorations(&sources, elements);
+    }
     for root in roots {
         emit_normal_node(
             dom,
@@ -3755,6 +3783,64 @@ fn emit_inline_group<'a, D>(
             scroll_offsets,
             deferred_collapsed.as_deref_mut(),
         );
+    }
+    if deferred_scope {
+        text.frame.end_deferred_decorations(&mut list.commands);
+    }
+}
+
+/// Collect the inline elements whose decoration the prepass skips because it
+/// begins after `first_line`, and the text nodes in the same inline run.
+/// Mirrors the traversal of [`emit_inline_descendant_decorations`].
+#[allow(clippy::too_many_arguments)]
+fn collect_deferred_inline_decorations<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    id: D::NodeId,
+    stacking_roots: Option<&HashSet<D::NodeId>>,
+    first_line: f32,
+    frame: &TextFrame<D::NodeId>,
+    elements: &mut Vec<(D::NodeId, f32)>,
+    sources: &mut Vec<D::NodeId>,
+) where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    if stacking_roots.is_some_and(|roots| roots.contains(&id)) {
+        return;
+    }
+    match dom.kind(id) {
+        NodeKind::Text => sources.push(id),
+        NodeKind::Element => {
+            let Some(style) = styles.get(id) else {
+                return;
+            };
+            if style.display == Display::None {
+                return;
+            }
+            if let Some(line) = frame.first_inline_line(id)
+                && (line - first_line).abs() > 0.5
+            {
+                elements.push((id, line));
+            }
+            if style.display == Display::Inline {
+                for child in dom.flat_children(id) {
+                    if is_inline_node(dom, styles, child) {
+                        collect_deferred_inline_decorations(
+                            dom,
+                            styles,
+                            child,
+                            stacking_roots,
+                            first_line,
+                            frame,
+                            elements,
+                            sources,
+                        );
+                    }
+                }
+            }
+        },
+        _ => {},
     }
 }
 

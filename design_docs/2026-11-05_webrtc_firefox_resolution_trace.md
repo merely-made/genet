@@ -1,6 +1,6 @@
 # Firefox restart resolution and attachment trace
 
-Status: interface mismatch reproduced with both initial offerers. A separate run also reaches the candidate parser and falls back. Follow-up to the closed
+The multicast follow-up reproduced an interface mismatch with both initial offerers. A separate run reached the candidate parser and fell back. Follow-up to the closed
 [restart investigation](2026-11-05_webrtc_firefox_mdns_restart.md).
 
 ## Scope and receipts
@@ -147,7 +147,7 @@ without setting an explicit multicast egress interface. A plain Windows UDP
 route probe selected Wi-Fi. Firefox packets themselves were observed on both
 adapters. [Installed resolver source](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/mdns_service/src/lib.rs#l441).
 
-On the Wi-Fi baseline, both initial lookups sent a query from WSL and then
+In the first two Wi-Fi captures, initial lookups sent a query from WSL and then
 consumed a Wi-Fi A record. The native-offerer restart
 `697f9f95-e257-4432-a4bc-fc6f32acfa34` sent three A questions on WSL at
 about three-second intervals. The Wi-Fi fixture read zero questions for the
@@ -209,3 +209,12 @@ restart captures. The first Wi-Fi restart trace also establishes a failure
 after delivery. The evidence leaves the Windows egress decision and the
 post-resolution nomination path as separate questions. Earlier acceptance
 remains 40/48, with all eight Firefox direct cases open.
+
+The fresh multicast packet is closed at 157,531 bytes of its 240,000-byte
+cap. Its SHA-256 is `1895d62e35d0b86e0467376d389a8401a13a79cf4dd42f2e1b1b8ea4b1f4ef62`.
+The trace used the prior RTC host and lock identities recorded in the packet.
+All 31 Node helper checks, two Python reducer checks, runner syntax and
+required commit checks on the trace base pass. The audit found zero owned
+trace processes, fixture network grants, raw packet files or profiler exports.
+The existing Genet target and marked Firefox profile remain available for
+reuse.

@@ -1,6 +1,6 @@
 # Firefox restart resolution and attachment trace
 
-Status: traced both offerers; normal mDNS resolution path remains unresolved. Follow-up to the closed
+Status: interface mismatch reproduced with both initial offerers. A separate run also reaches the candidate parser and falls back. Follow-up to the closed
 [restart investigation](2026-11-05_webrtc_firefox_mdns_restart.md).
 
 ## Scope and receipts
@@ -126,3 +126,86 @@ checks pass. Final audit confirms zero owned test processes and fixture network
 grants, inactive/disabled coturn, and unchanged older frozen packets. No isolated
 target/home/worktree or downloaded profiler artifact remains. Existing marked
 profiles and the stable Genet target remain for reuse.
+
+
+## Multicast path follow-up
+
+The installed Npcap driver supports non-promiscuous IPv4 observation on the
+Wi-Fi and WSL adapters and the loopback capture device. The test runner accepts
+`--mdns-wire-interface` with the other adapter's IPv4 address for one explicit
+Firefox IPC case. Npcap selects both adapters by address. The capture helper
+opens no UDP sockets and changes no multicast memberships. It filters to UDP
+5353 and reduces only the test UUID to bounded packet events. The adapter
+and source roles are reported separately. The loopback rows show local copies of adapter packets and are
+excluded from the transmission counts below. [Npcap loopback details](https://npcap.com/guide/npcap-devguide.html#for-software-that-uses-npcap-loopback-feature).
+
+The capture runs with the pinned Murm registration and the existing fixture
+socket. The fixture joins the selected adapter and observes the native name
+without answering for it. Firefox's installed source binds a shared wildcard
+UDP 5353 socket, joins its supplied interfaces, and sends queries on that socket
+without setting an explicit multicast egress interface. A plain Windows UDP
+route probe selected Wi-Fi. Firefox packets themselves were observed on both
+adapters. [Installed resolver source](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/mdns_service/src/lib.rs#l441).
+
+On the Wi-Fi baseline, both initial lookups sent a query from WSL and then
+consumed a Wi-Fi A record. The native-offerer restart
+`697f9f95-e257-4432-a4bc-fc6f32acfa34` sent three A questions on WSL at
+about three-second intervals. The Wi-Fi fixture read zero questions for the
+native name, and its sole positive A record was from the initial phase. The
+adapters and loopback showed no restart answer. Firefox's parent sent completion
+9.029 seconds after the restart request, and the named parser count stayed at
+three. This locates the failing lookup on the interface boundary for this run.
+Murm's registration joins Wi-Fi and checks the received interface and source
+prefix before accepting a query.
+
+The first browser-offerer run `d05632c6-8228-47dd-89fc-a5260839856e` sent two
+restart questions and received two positive multicast A records on Wi-Fi. The
+fixture read those questions and answers. Firefox's first restart completion
+followed the parent request by 11 ms, and the transport logged three additional
+named parse attempts, including a redundant result. The selected route was
+still peer-reflexive. This trace reaches the Firefox receiver and candidate
+parser, while nomination remains a separate failure. The first run had a
+shorter pcap statistics structure. The subsequent runs use the full Windows
+layout.
+
+With the registration and fixture bound to WSL, control
+`a452b045-f278-4071-a4aa-43a6a02f7265` saw the WSL query and A record on the
+adapter and at the fixture socket. Firefox completed and parsed the name. The
+case then hit the initial application exchange deadline. This control establishes
+mDNS delivery on the aligned interface through parser entry. It supplies no
+restart exchange result.
+
+Adapter capture and fixture reads observe separate boundaries. Firefox IPC
+completion paired with named parser entry establishes successful resolution.
+The trace does not intercept individual Firefox Winsock reads. A quiet
+Firefox mDNS log is expected for those trace-level calls in a release build.
+[Mozilla's Rust logging documentation](https://firefox-source-docs.mozilla.org/testing-rust-code/index.html#gecko-logging).
+
+
+The address-filtered browser-offerer repeat
+`e3c8990d-25d5-438e-8e15-5ecf4ec32608` captured the initial Wi-Fi record.
+The restart completion took about nine seconds without a new named parse.
+Its capture did not locate the restart packets. The final run removed the
+source-address predicate and added per-adapter filtered datagram counts.
+
+That final browser-offerer run `9a9506df-2f96-44ed-8606-72e484231627`
+saw a Wi-Fi question and answer at initial connection. At restart, all three
+queries left through WSL. The fixture remained at one native question and
+one native answer across both snapshots. There was no restart answer on
+either adapter or loopback, and no new named parse. Completion took 9.039 s.
+The complete statistics layout reported zero capture drops and no watched
+events omitted. This reproduces the interface mismatch with the browser as
+initial offerer too.
+
+| Case | Restart query interface | Restart delivery and outcome |
+| --- | --- | --- |
+| Wi-Fi registration, native initial offerer | WSL, three queries | No A answer or new named parse. Channel closure |
+| Wi-Fi registration, browser initial offerer, first trace | Wi-Fi, two queries | Two A answers and new parser entries. Peer-reflexive fallback |
+| Wi-Fi registration, browser initial offerer, final trace | WSL, three queries | No A answer or new named parse. Peer-reflexive fallback |
+| WSL registration control, initial exchange only | WSL | Query and A record reach the fixture. Firefox parses the name, then the application exchange stalls |
+
+The interface mismatch accounts for the unanswered lookups in these two
+restart captures. The first Wi-Fi restart trace also establishes a failure
+after delivery. The evidence leaves the Windows egress decision and the
+post-resolution nomination path as separate questions. Earlier acceptance
+remains 40/48, with all eight Firefox direct cases open.

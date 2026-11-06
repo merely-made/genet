@@ -558,3 +558,14 @@ parser with fresh credentials, which reports a redundant candidate after the
 earlier ICE outcome. This narrows the failure to the ordinary mDNS resolution path;
 it does not prove which query/answer packet is missing. Native names, product
 code and pins remain unchanged, and full advertisement acceptance stays 40/48.
+
+
+### Multicast interface and socket trace, 2026-11-05
+
+Both initial offerers reproduced an unanswered restart lookup when Firefox
+sent its three queries through WSL while the registration was on Wi-Fi.
+A separate browser-offerer trace delivered Wi-Fi answers and reached Firefox's
+parser before peer-reflexive fallback. The WSL-bound control establishes
+delivery through parser entry during initial negotiation. See the bounded
+capture method and exact run identities in the
+[multicast follow-up](2026-11-05_webrtc_firefox_resolution_trace.md#multicast-path-follow-up).

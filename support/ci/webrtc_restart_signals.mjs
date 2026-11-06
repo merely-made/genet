@@ -21,7 +21,7 @@ export class RestartSignals {
   record(value){if(this.entries.length<64)this.entries.push(value);else this.omitted++;}
   map(from,signal,step){
     const entry={from,step,...summarizeSignal(signal)};this.record(entry);
-    if(from!=='native'||this.mode==='observe')return signal;
+    if(from!=='native'||this.mode==='observe'||this.mode.startsWith('pair-order'))return signal;
     if(this.mode==='trickle-option'){
       if(!signal.description||entry.trickle)return signal;
       const lines=signal.description.sdp.split(/\r?\n/),media=lines.findIndex(s=>s.startsWith('m='));

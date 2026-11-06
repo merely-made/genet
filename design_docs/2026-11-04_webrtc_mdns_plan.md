@@ -569,3 +569,22 @@ parser before peer-reflexive fallback. The WSL-bound control establishes
 delivery through parser entry during initial negotiation. See the bounded
 capture method and exact run identities in the
 [multicast follow-up](2026-11-05_webrtc_firefox_resolution_trace.md#multicast-path-follow-up).
+
+
+### Peer-reflexive nomination trace, 2026-11-05
+
+With controlled positive mDNS answers, the Firefox browser-offerer trace
+shows a pre-answer Genet check creating a peer-reflexive pair at the native
+advertised endpoint. Once nominated, that stream can refuse later named
+candidates in its connected state. Holding browser candidates until
+nomination lets the named host win the first restart control. The following
+native-offerer round still closes a channel. See the exact runs and evidence
+in the [nomination trace](2026-11-05_webrtc_firefox_resolution_trace.md#peer-reflexive-nomination-after-resolution).
+$
+
+The native-offerer failure replays a named nomination from the previous ICE
+generation. The fresh checklist has no pair when Firefox's five-second
+grace period expires. ICE and DTLS fail, then SCTP closes both channels while
+Genet still awaits the answer. The same signaling hold completes with a
+timely mDNS answer and a live fresh nomination. See the
+[native-offerer closure trace](2026-11-05_webrtc_firefox_resolution_trace.md#native-offerer-channel-closure).$

@@ -31,6 +31,7 @@ export class FirefoxTrace {
     for(const line of lines){
       if(line.length>4096){this.counts.oversized++;continue;}
       this.counts.lines++;
+      this.pairOrder?.push(line, this.names);
       if([...this.names].some(name=>line.includes(name))){
         const event=/parsing trickle candidate/.test(line)?'parse':/Couldn't process ICE candidate/.test(line)?'process-failed':/No ICE stream for candidate/.test(line)?'missing-stream':/Trickle candidate is redundant/.test(line)?'redundant':/Trickle candidate is ignored/.test(line)?'unused-component':null;
         if(event){if(this.transportEvents.length<64)this.transportEvents.push(event);else this.transportOmitted++;}

@@ -218,3 +218,123 @@ required commit checks on the trace base pass. The audit found zero owned
 trace processes, fixture network grants, raw packet files or profiler exports.
 The existing Genet target and marked Firefox profile remain available for
 reuse.
+
+
+## Peer-reflexive nomination after resolution
+
+The browser-offerer trace runs with the installed Firefox and the existing
+native executable. The `pair-order` diagnostic supplies a bounded series of
+fixture A answers for the owned native UUID during the restart answer. This
+lets the candidate resolve independently of the multicast interface mismatch.
+The `pair-order-hold` comparison uses the same answers and temporarily holds
+browser candidates and end signals going to Genet. It strips embedded browser
+candidates and end markers from the first restart offer while keeping the
+fresh ICE credentials. The held trickle signals are released after Firefox
+logs a nomination. The second native-offerer round uses ordinary signaling.
+The reducer records stream and pair ordinals, candidate type and equality
+with the native UDP endpoint. It keeps addresses, names and credentials in
+process memory. The process-local `nicer:5` module supplies the ICE events.
+[Firefox WebRTC logging modules](https://firefox-source-docs.mozilla.org/contributing/debugging/debugging_webrtc_calls.html#standard-logging-modules).
+
+With ordinary browser candidate forwarding, Genet can send a fresh STUN
+check before Firefox receives the answer. Firefox queues that check and
+processes it when the fresh stream becomes active. Since the named candidate
+has not reached the checklist, the source address matches no pair. Firefox
+creates and triggers a peer-reflexive pair using the source IP and port.
+This is the same native endpoint advertised by the mDNS candidate. Firefox
+controls nomination in the traced browser-offerer restart.
+[Installed nICEr inbound-check path](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_component.cpp#l920).
+[ICE peer-reflexive discovery](https://www.rfc-editor.org/rfc/rfc8445.html#section-7.3.1.3).
+
+Run `22e079f9-c6ca-478c-a36e-42d99e6f9fd7` shows the queued check processed
+before the named parser entries. Some entries precede the peer-reflexive
+nomination. A later entry is refused in the connected state. The earliest
+parser entries alone do not establish that a named pair was checked.
+
+The final repeat `1d3cb14e-0130-448d-ab67-70bdd826613f` records the
+peer-reflexive insertion and nomination before every named parser entry.
+All three entries hit nICEr's connected-state gate. It returns `R_ALREADY`
+before candidate insertion, which the transport reports as redundant.
+The redundant label describes stream state in this path.
+[Installed trickle state gate](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/third_party/nICEr/src/ice/ice_peer_ctx.cpp#l295).
+
+Hold control `3ea9eb74-787b-4ef1-9299-c29eff57ea25` defers six browser
+signals. Firefox logs no queued fresh check in the first round. It parses
+the named candidate, nominates the same UDP endpoint as a host, and keeps
+that selection after the six signals are released. That browser-offerer
+round completes. The following native-offerer round closes a channel.
+The native aggregate check counters also include activity on the retained
+route. The Firefox queue events identify the fresh pre-answer check.
+Event times reflect controller receipt and serve as an ordering aid.
+
+The first two exploratory runs preserve the coverage steps. The streaming
+mtransport log showed parser entry and redundancy. Firefox's internal ring
+at default verbosity confirmed a new peer-reflexive nomination while omitting
+the debug-level queued check events. The later `nicer:5` runs provide the
+ordering evidence. The mDNS fixture answers and signaling hold are diagnostic
+controls. Acceptance remains 40/48 with the eight Firefox direct cases open.
+
+The fresh nomination packet is closed at 162,763 bytes of its 240,000-byte
+cap. Its SHA-256 is `0c1b2654275ad69de69073870a74e163fbda0cb665c5c8851518fdf80f124169`.
+Thirty-three Node checks, two Python checks, syntax and line ceiling pass.
+The dependency-bans commit hook waited on a shared Cargo package cache lock.
+The trace changes are staged locally. The test audit found zero owned browser,
+native or controller processes and zero fixture network grants. The stable
+Genet build and marked test profile remain available for reuse.
+
+
+## Native-offerer channel closure
+
+Run `d33897f7-63ec-40f1-afa8-563c5c132e59` completes the controlled
+browser-offerer round and reproduces the channel closure in the following
+native-offerer round. The ordinary second-round mDNS questions leave through
+WSL and receive no answer. The Firefox parser count stays at six throughout
+that round. Firefox applies its local answer and starts the five-second
+trickle grace period. Genet still has a local offer and has not applied the
+answer because the runner probes the retained data path before forwarding it.
+
+When the grace period expires, Firefox logs checklist exhaustion for the
+fresh generation. Its report has zero successful streams and one failed
+stream. It then dumps the ICE ring buffer. The named-host nomination in that
+dump belongs to the previous generation, identified in memory from the
+local username fragment in the stream label. The live `nicer` events and the
+`mtransport` replay are now counted separately. The reported nomination from
+the earlier failure trace therefore cannot establish that the fresh stream
+was nominated. The JavaScript selected-pair event clears the retained pair
+as ICE fails.
+[Installed failure and ring dump](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/nricectx.cpp#l407).
+
+The same ICE and DTLS objects are present throughout the failed restart.
+Firefox reports the DTLS transport failed, SCTP closed, and then both data
+channels closed. The installed ICE layer propagates stream failure to DTLS,
+and the data-channel connection closes all channels when the underlying
+transport enters error. Genet's channels are still open at this checkpoint.
+Its fresh check, fresh response and selected-pair counters have not advanced.
+The retained route still exchanges application payload during the answer hold.
+[ICE failure signal](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/transportlayerice.cpp#l139).
+[DTLS lower-layer error](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/dom/media/webrtc/transport/transportlayerdtls.cpp#l982).
+[Data-channel closure](https://hg.mozilla.org/releases/mozilla-release/file/7b34a03a910d0385299f4a9f27aa585a786862d8/netwerk/sctp/datachannel/DataChannel.cpp#l336).
+
+Run `ace9b3d2-d296-4671-ad12-8c1f60bdf32f` supplies a natural comparison.
+A named pair enters the fresh checklist immediately after Firefox's answer.
+It remains viable when the same five-second grace period expires. Genet then
+receives the answer, Firefox nominates the named pair, and the existing
+DTLS and SCTP transports and channels remain connected. Both rounds complete
+in this diagnostic case, whose first round holds browser candidates and
+supplies fixture answers.
+$
+
+Run `d3611da4-7f7e-4503-8ac5-26cd5976dcef` repeats the answer hold and
+supplies 32 fixture A answers for the native offer's name. Firefox parses
+the name about 12 ms after the answer is available and keeps the fresh
+checklist viable through grace expiry. Genet gets the answer 5.78 s after
+it is available. Firefox nominates the fresh named pair at the advertised
+native endpoint about 230 ms later. The same ICE and DTLS objects and both
+channels remain connected. Both restart rounds complete.
+
+The native-offerer packet closed at 189,223 bytes of its 240,000-byte cap.
+Its SHA-256 is `c3670b782facd475ab09c622ffd266166403420eb552db54037ca8d0e97c2023`. A shared-checkout source change invalidated one
+attempt. The failure and assisted comparison were recorded from an isolated
+checkout at `e8ebe2e06da` using the same native executable. All 36 helper
+checks passed. The advertisement acceptance matrix remains 40/48, with
+eight Firefox direct cases open.$

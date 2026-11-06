@@ -1,20 +1,26 @@
 // ICE-restart checks shared by the installed-browser receiving runner.
 // Signaling descriptions stay in memory; receipts contain only assertions.
+import {watchFirefoxClose} from './webrtc_firefox_close_trace.mjs';
 import {RestartSignals} from './webrtc_restart_signals.mjs';
-export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0,mapBrowserSignal=signal=>signal,requireMdns=false,verifyAdvertisement=null,restartDiagnostic=null,localBind=null}) {
+import {FirefoxPairOrder, fixtureAnswers, holdBrowserSignal} from './webrtc_firefox_pair_order.mjs';
+export async function runRestartChecks({native,browser,udpFixture,offerer,route,verifySnapshot,verifyStats,answerDelayMs=0,mapBrowserSignal=signal=>signal,requireMdns=false,verifyAdvertisement=null,restartDiagnostic=null,localBind=null,mdnsFixture=null}) {
   const peers={native,browser}, opposite=name=>name==='native'?'browser':'native';
   const assert=(value,message)=>{if(!value)throw Error(message);};
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   const results=[];let probeRound=0,step='capture',snapshots,method,initiator,iceBefore,statsObserved,signalEvidence;
+  const traceOrder=restartDiagnostic?.startsWith('pair-order');
+  let pairOrder, answersPending, fixtureAnswerCount, browserCloseTrace;
+  const orderSummary=()=>pairOrder?{...pairOrder.snapshot(),fixtureAnswerCount,browserCloseTrace}:undefined;
   async function stats(peer) {
     await peer.evaluate('__interop.inspect()');
     for(let i=0;i<200;i++){const value=await peer.value('__interop.stats');if(value)return value;await delay(10);}
     throw Error('restart stats deadline');
   }
+  const nativeHost=()=>native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type==="host").map(c=>({address:c.address,port:c.port}))[0]');
   async function hostEvidence() {
     if(!signalEvidence)return;
     await stats(browser);
-    const host=await native.value('__interop.pc.sctp.transport.iceTransport.getLocalCandidates().filter(c=>c.type==="host").map(c=>({address:c.address,port:c.port}))[0]');
+    const host=await nativeHost();
     if(host)signalEvidence.record({type:'remote-hosts',view:await browser.value(`__interop.hostEvidence(${JSON.stringify(host.address)},${JSON.stringify(localBind)},${host.port})`)});
   }
   try {
@@ -23,10 +29,22 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       const metricsBefore=await native.request('metrics');
       iceBefore=metricsBefore.ice;
       const descriptions=[];
+      const held=[];
+      let holding=restartDiagnostic?.startsWith('pair-order-hold')&&initiator==='browser';
+      if(traceOrder) {
+        const host=await nativeHost();
+        const previous=initiator==='native'?await browser.value(String.raw`__interop.pc.localDescription.sdp.match(/^a=ice-ufrag:([^\r\n]+)/m)?.[1]`):null;
+        pairOrder=new FirefoxPairOrder(host?{address:localBind,port:host.port}:null,previous);
+        if(previous)await browser.evaluate(`(${watchFirefoxClose.toString()})()`);
+        browserCloseTrace=undefined;
+        browser.firefoxTrace.pairOrder=pairOrder;
+        fixtureAnswerCount=0;
+      }
       async function pump() {
         for(const name of ['native','browser'])for(let signal of await peers[name].value('__interop.takeSignals()')) {
           if(name==='browser')signal=await mapBrowserSignal(signal);
           if(signalEvidence)signal=signalEvidence.map(name,signal,step);
+          if(signal&&holding&&name==='browser')signal=holdBrowserSignal(signal,held);
           if(!signal)continue;
           if(signal.description)descriptions.push({from:name,signal});
           else await peers[opposite(name)].evaluate(`__interop.receive(${JSON.stringify(signal)})`);
@@ -64,12 +82,42 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       await peers[answerer].evaluate(`__interop.receive(${JSON.stringify(offer.signal)})`);
       await wait(()=>snapshots[answerer].waitingToAnswer,'remote offer');
       await probe('after remote offer');
-      await peers[answerer].evaluate('__interop.answer()');
+      if(initiator==='native'&&restartDiagnostic==='pair-order-hold-assist-native') {
+        answersPending=fixtureAnswers(offer.signal,mdnsFixture,localBind)
+          .then(count=>{fixtureAnswerCount=count;},()=>{fixtureAnswerCount=-1;});
+      }
+      const localAnswer = pairOrder?.previousUfrag ? '__interop.closeTraceMark("answer-requested");__interop.answer()' : '__interop.answer()';
+      await peers[answerer].evaluate(localAnswer);
       await wait(()=>descriptions.some(s=>s.signal.description.type==='answer'),'local answer');
       const answer=descriptions.shift();assert(answer.from===answerer&&answer.signal.description.type==='answer','unexpected restart answer');
+      if(pairOrder?.previousUfrag) {
+        pairOrder.freshUfrag=answer.signal.description.sdp.match(/^a=ice-ufrag:([^\r\n]+)/m)?.[1];
+        pairOrder.record('browser-answer-available');
+        await browser.evaluate('__interop.closeTraceMark("answer-available")');
+      }
       await probe('after local answer');
       if(answerDelayMs)await delay(answerDelayMs);
+      if(pairOrder) {
+        const ice=(await native.request('metrics')).ice;
+        pairOrder.record('before-answer',{
+          nativeChecksSent:ice.checksSent-iceBefore.checksSent,
+          nativeNominationsSent:ice.nominationsSent-iceBefore.nominationsSent,
+          held:held.length
+        });
+        if(initiator==='browser') {
+          answersPending=fixtureAnswers(answer.signal,mdnsFixture,localBind)
+            .then(count=>{fixtureAnswerCount=count;},()=>{fixtureAnswerCount=-1;});
+        }
+      }
       await peers[initiator].evaluate(`__interop.receive(${JSON.stringify(answer.signal)})`);
+      pairOrder?.record('answer-dispatched');
+      if(holding) {
+        await wait(()=>pairOrder.nominated,'candidate nomination with browser candidates held');
+        const observed=await stats(browser);
+        pairOrder.record('release-browser-candidates',{count:held.length,remote:observed.pair?.remote});
+        holding=false;
+        for(const signal of held.splice(0))await native.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
+      }
       await wait(()=>Object.values(snapshots).every(s=>s.signaling==='stable'&&s.localCredentialsChanged&&s.remoteCredentialsChanged&&['connected','completed'].includes(s.iceState)&&s.gathering==='complete'),'fresh ICE connected');
       if(signalEvidence)for(const signal of signalEvidence.flush())await browser.evaluate(`__interop.receive(${JSON.stringify(signal)})`);
       await probe('after remote answer',true);
@@ -86,6 +134,13 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
         await delay(25);
       }
       verifyStats(a,b,route);
+      if(answersPending) {
+        await answersPending;
+        answersPending=null;
+      }
+      if(fixtureAnswerCount===-1)throw Error('fixture answer control failed');
+      pairOrder?.record('selected-route',{remote:b.pair?.remote});
+      if(pairOrder?.previousUfrag)browserCloseTrace=await browser.value('__interop.closeTrace()');
       await hostEvidence();
       const advertisement=verifyAdvertisement?await verifyAdvertisement(a,b):undefined;
       let mdnsResolved;
@@ -99,12 +154,14 @@ export async function runRestartChecks({native,browser,udpFixture,offerer,route,
       assert(snapshots.native.restartNegotiations===expectedEvents,'restart negotiationneeded count mismatch');
       const relayAllocationReused=route!=='relay'||(a.localEndpoint!==null&&a.localEndpoint===before.localEndpoint);
       assert(relayAllocationReused,'native TURN allocation replaced during restart');
-      results.push({method,initiator,mdnsResolved,advertisement,signalDiagnostics:signalEvidence?{...signalEvidence.summary(),firefox:browser.firefoxTrace?.snapshot()}:undefined,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
+      results.push({method,initiator,mdnsResolved,advertisement,pairOrder:orderSummary(),signalDiagnostics:signalEvidence?{...signalEvidence.summary(),firefox:browser.firefoxTrace?.snapshot()}:undefined,credentialsChangedOnBothPeers:true,channelIdentityPreserved:true,certificateIdentityPreserved:true,nativeNegotiationEvents:expectedEvents,liveChannelProbes:4,binaryBytesPerPeer:192000,staleCandidateRefused:true,relayAllocationReused,nativeIce:{before:iceBefore,after:(await native.request('metrics')).ice},statsSettling:attempts>1?{attempts,pairStates:statsObserved}:undefined});
       assert(!descriptions.length,'unexpected duplicate negotiation');
     }
     return results;
   } catch(error) {
+    if(answersPending)await answersPending;
+    if(pairOrder?.previousUfrag)try{browserCloseTrace=await browser.value('__interop.closeTrace()');}catch{}
     try{await hostEvidence();}catch{}
-    error.restartDiagnostics={signalDiagnostics:signalEvidence?{...signalEvidence.summary(),firefox:browser.firefoxTrace?.snapshot()}:undefined,completedRestarts:results.length,step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
+    error.restartDiagnostics={pairOrder:orderSummary(),completedPairOrders:traceOrder?results.map(r=>r.pairOrder):undefined,signalDiagnostics:signalEvidence?{...signalEvidence.summary(),firefox:browser.firefoxTrace?.snapshot()}:undefined,completedRestarts:results.length,step,method,initiator,snapshots,iceBefore,iceAfter:(await native.request('metrics')).ice,statsObserved};throw error;
   }
 }

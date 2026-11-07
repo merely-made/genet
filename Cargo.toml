@@ -212,7 +212,6 @@ indexmap = { version = "2.14.0", features = ["std"] }
 inventory = { version = "0.3.24" }
 ipc-channel = "0.23.1"
 itertools = "0.14"
-js = { package = "mozjs", version = "=0.15.14", default-features = false, features = ["libz-sys", "intl"] }
 keyboard-types = { version = "0.8.3", features = ["serde", "webdriver"] }
 kurbo = { version = "0.13", features = ["euclid"] }
 libc = "0.2"
@@ -495,11 +494,6 @@ netrender-vello-shaders = { git = "https://github.com/mark-ik/vello", rev = "dfb
 # stubs in support/patches/ restore workspace loadability while consumers
 # are migrated to netrender's surface (post-cut C2-C4 work).
 
-#
-# Or for mozjs:
-#
-# mozjs = { path = "../mozjs/mozjs" }
-# mozjs_sys = { path = "../mozjs/mozjs-sys" }
 #
 # Or for CSP crate:
 # content-security-policy = { path = "../rust-content-security-policy" }

@@ -19,6 +19,9 @@ default = ["livery", "accesskit", "image-decode"]
 livery = []
 # Forwards genet-livery's image decoding; see its `image-decode` feature.
 image-decode = ["genet-livery/image-decode"]
+# Forwards genet-livery's `without-table-layout`, for a host that never lays out
+# a table (the Mere web viewer). Off by default, so tables stay.
+without-table-layout = ["genet-livery/without-table-layout"]
 # The native bridge lowers the engine projection to AccessKit. Browser hosts
 # retain that projection without linking a platform accessibility tree.
 accesskit = ["dep:accesskit", "document-session-api/accesskit"]
@@ -26,7 +29,7 @@ accesskit = ["dep:accesskit", "document-session-api/accesskit"]
 [dependencies]
 # The genet DOM + the engine pipeline this drives.
 genet-scripted-dom = { path = "../genet-scripted-dom" }
-genet-livery = { path = "../genet-livery", default-features = false }
+genet-livery = { path = "../genet-livery", default-features = false, features = ["scripted-dom"] }
 layout_dom_api = { workspace = true }
 # Paint-list -> netrender::Scene lowering (aliased `paint`), the Scene type, and
 # the paint/query value types.

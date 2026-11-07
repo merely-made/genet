@@ -1846,8 +1846,11 @@ where
 
 /// Anonymous tables inherit inheritable values from their parent and take
 /// initial values for everything else.
-fn anonymous_table_style(inherited: Option<&ComputedValues>) -> ComputedValues {
-    let mut style = inherited.map(ComputedValues::for_child).unwrap_or_default();
+fn anonymous_table_style(
+    inherited: Option<&ComputedValues>,
+    initial: impl FnOnce() -> ComputedValues,
+) -> ComputedValues {
+    let mut style = inherited.map_or_else(initial, ComputedValues::for_child);
     style.display = CssDisplay::Table;
     style
 }

@@ -26,6 +26,9 @@ mod paint;
 pub mod phase;
 mod placement;
 mod presentational_hints;
+#[cfg(any(feature = "scripted-dom", test))]
+#[doc(hidden)]
+pub mod scripted_instance;
 mod scroll_geometry;
 mod style;
 // K4d6b: Buckram lays out live tables' block axis through the phase order it
@@ -42,6 +45,13 @@ mod text;
 mod text_fragment;
 mod transform_context;
 mod translated_geometry;
+
+/// Whether table layout is compiled in. `without-table-layout` turns it off
+/// for a consumer that never lays out a table (the Mere web viewer): `display:
+/// table*` then computes to the block or inline-block box an unknown display
+/// would get (`style::flatten_table_display`), and every table entry point
+/// returns at once, so the linker drops the table pipeline.
+pub(crate) const TABLE_LAYOUT: bool = !cfg!(feature = "without-table-layout");
 
 /// Stack the two per-DOM-level descents guarantee themselves before recursing
 /// one level further: the style cascade

@@ -60,7 +60,11 @@ where
     ) -> Result<Option<AlgorithmNodeId>, LayoutError> {
         match self.boxes[box_id].origin {
             BoxOrigin::Element(node) => {
-                let computed = self.styles.get(node).cloned().unwrap_or_default();
+                let computed = self
+                    .styles
+                    .get(node)
+                    .cloned()
+                    .unwrap_or_else(|| self.styles.initial_style());
                 // K4e1: the wrapper above this grid took the properties
                 // CSS 2.1 section 17.4 assigns to it; the grid sees them unset.
                 let (computed, table_style) =
@@ -232,7 +236,9 @@ where
                 Ok(Some(node))
             },
             BoxOrigin::Text(_) => {
-                let style = inherited.cloned().unwrap_or_default();
+                let style = inherited
+                    .cloned()
+                    .unwrap_or_else(|| self.styles.initial_style());
                 self.build_inline_group(Some(box_id), box_id, &[box_id], &style, parent_font_size)
                     .map(Some)
             },
@@ -247,8 +253,12 @@ where
                     // they are built against the parent's font size and
                     // containing block, not the wrapper's.
                     let table = match legacy_origin_node(self.boxes, grid) {
-                        Some(element) => self.styles.get(element).cloned().unwrap_or_default(),
-                        None => anonymous_table_style(inherited),
+                        Some(element) => self
+                            .styles
+                            .get(element)
+                            .cloned()
+                            .unwrap_or_else(|| self.styles.initial_style()),
+                        None => anonymous_table_style(inherited, || self.styles.initial_style()),
                     };
                     let computed = wrapper_style(&table);
                     let font_size = font_size_px(&computed.font_size, parent_font_size);
@@ -339,7 +349,9 @@ where
                         containing_size,
                     );
                 }
-                let computed = inherited.cloned().unwrap_or_default();
+                let computed = inherited
+                    .cloned()
+                    .unwrap_or_else(|| self.styles.initial_style());
                 let computed = match computed.display {
                     CssDisplay::Table | CssDisplay::InlineTable => ComputedValues {
                         display: CssDisplay::Block,
@@ -531,6 +543,9 @@ where
         &mut self,
         text: &mut TextSystem,
     ) -> Result<(), LayoutError> {
+        if !crate::TABLE_LAYOUT {
+            return Ok(());
+        }
         let mut pendings = std::mem::take(&mut self.pending_tables);
         let mut aggregate = std::mem::take(&mut self.table_shadow);
         let mut intrinsic_wrappers = HashMap::new();
@@ -659,6 +674,9 @@ where
         text: &mut TextSystem,
         pendings: &mut [PendingTable<D::NodeId>],
     ) {
+        if !crate::TABLE_LAYOUT {
+            return;
+        }
         let mut ledger = std::mem::take(&mut self.table_shadow.block);
         let Self {
             tree,
@@ -758,6 +776,9 @@ where
         &mut self,
         live_rect_of: impl Fn(BoxId) -> Option<Fragment>,
     ) {
+        if !crate::TABLE_LAYOUT {
+            return;
+        }
         let pendings = std::mem::take(&mut self.pending_tables);
         for pending in pendings {
             let mut ledger = self.table_shadow.take_table(pending.table);
@@ -778,6 +799,9 @@ where
         text_frame: &mut TextFrame<D::NodeId>,
         intrinsic_sizes: &mut IntrinsicSizeCache,
     ) -> Result<(), LayoutError> {
+        if !crate::TABLE_LAYOUT {
+            return Ok(());
+        }
         let Self {
             dom,
             styles,
@@ -852,7 +876,10 @@ where
         parent_font_size: f32,
         containing_size: (Option<f32>, Option<f32>),
     ) -> Result<Option<AlgorithmNodeId>, LayoutError> {
-        let table_style = anonymous_table_style(inherited);
+        if !crate::TABLE_LAYOUT {
+            return Ok(None);
+        }
+        let table_style = anonymous_table_style(inherited, || self.styles.initial_style());
         let computed = grid_style(&table_style, containing_size);
         debug_assert!(
             self.pending_table_handoff.is_none(),
@@ -912,10 +939,12 @@ where
     ) -> Result<Vec<AlgorithmNodeId>, LayoutError> {
         // A `display: table` box takes its flattened cells directly, matching
         // the precomputed atomic subtree.
-        if matches!(
-            parent_style.display,
-            CssDisplay::Table | CssDisplay::InlineTable
-        ) {
+        if crate::TABLE_LAYOUT
+            && matches!(
+                parent_style.display,
+                CssDisplay::Table | CssDisplay::InlineTable
+            )
+        {
             let table = build_table_grid(self.boxes, self.dom, parent);
             let mut cell_nodes = Vec::with_capacity(table.cells.len());
             let mut children = Vec::with_capacity(table.cells.len());

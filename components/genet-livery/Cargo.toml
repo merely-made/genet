@@ -15,6 +15,16 @@ default = ["image-decode"]
 # size and are not painted, as for a failed decode.
 image-decode = ["dep:image"]
 parallel-text = ["dep:rayon"]
+# Instantiates the retained pipeline once over `genet-scripted-dom`, upstream of
+# every crate that drives a `LiveryDocument<ScriptedDom>`, so shared generics
+# link one copy instead of one per sibling (`src/scripted_instance.rs`). The
+# crates that use `ScriptedDom` turn it on; a graph without one needs no flag.
+scripted-dom = ["dep:genet-scripted-dom"]
+# Compiles table layout out (`display: table*` lays out as block, or as
+# inline-block for `inline-table`). Off by default: every consumer keeps tables,
+# including those that build with `default-features = false`. A consumer that
+# never lays out a table turns it on to drop the table pipeline from its binary.
+without-table-layout = []
 
 [dependencies]
 buckram = { version = "0.0.3", path = "../buckram" }
@@ -22,6 +32,7 @@ cssparser.workspace = true
 data-url = { workspace = true }
 genet-document-resources = { workspace = true }
 euclid.workspace = true
+genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom", optional = true }
 image = { workspace = true, optional = true }
 icu_properties.workspace = true
 icu_segmenter.workspace = true

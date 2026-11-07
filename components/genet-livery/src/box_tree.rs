@@ -227,6 +227,14 @@ fn display_role(display: ComputedDisplay, replaced: bool) -> DisplayRole {
         list_item: false,
         internal_table: Some(role),
     };
+    if !crate::TABLE_LAYOUT
+        && (matches!(
+            display,
+            ComputedDisplay::Table | ComputedDisplay::InlineTable
+        ) || is_internal_table_display(display))
+    {
+        return DisplayRole::BLOCK_FLOW;
+    }
     match display {
         ComputedDisplay::None => DisplayRole::NONE,
         ComputedDisplay::Contents => DisplayRole::CONTENTS,

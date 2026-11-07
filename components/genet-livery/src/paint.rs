@@ -1551,6 +1551,9 @@ fn emit_collapsed_table_borders<Id>(
 ) where
     Id: Copy + Eq + Hash,
 {
+    if !crate::TABLE_LAYOUT {
+        return;
+    }
     let Some(segments) = table.collapsed_segments() else {
         return;
     };
@@ -4717,9 +4720,9 @@ fn border_side(style: CssBorderStyle, color: &ComputedColor) -> BorderSide {
 }
 
 pub(crate) fn resolve_color(color: &ComputedColor) -> ColorF {
-    let (red, green, blue, alpha) = color
-        .to_srgb()
-        .expect("C3 resolves every paint color before emission");
+    let (red, green, blue, alpha) = color.to_srgb().unwrap_or_else(|| {
+        panic!("C3 resolves every paint color before emission, but {color:?} is unresolved")
+    });
     ColorF::new(
         red.clamp(0.0, 1.0),
         green.clamp(0.0, 1.0),

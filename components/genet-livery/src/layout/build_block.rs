@@ -333,7 +333,10 @@ where
         parent_font_size: f32,
         containing_size: (Option<f32>, Option<f32>),
     ) -> Result<Option<AlgorithmNodeId>, LayoutError> {
-        let table_style = anonymous_table_style(inherited);
+        if !crate::TABLE_LAYOUT {
+            return Ok(None);
+        }
+        let table_style = anonymous_table_style(inherited, || self.styles.initial_style());
         let computed = grid_style(&table_style, containing_size);
         let font_size = font_size_px(&computed.font_size, parent_font_size);
         let child_containing_size =
@@ -408,6 +411,9 @@ where
     /// after the tree is built and before the main layout pass; the queries
     /// only scribble on scratch layout state that the main pass recomputes.
     pub(in crate::layout) fn apply_buckram_table_layout(&mut self) {
+        if !crate::TABLE_LAYOUT {
+            return;
+        }
         let mut pendings = std::mem::take(&mut self.pending_tables);
         let mut aggregate = std::mem::take(&mut self.table_shadow);
         let mut intrinsic_wrappers = HashMap::new();
@@ -528,6 +534,9 @@ where
         &mut self,
         pendings: &mut [PendingTable<D::NodeId>],
     ) {
+        if !crate::TABLE_LAYOUT {
+            return;
+        }
         let mut ledger = std::mem::take(&mut self.table_shadow.block);
         let Self {
             tree,
@@ -625,6 +634,9 @@ where
         &mut self,
         live_rect_of: impl Fn(BoxId) -> Option<Fragment>,
     ) {
+        if !crate::TABLE_LAYOUT {
+            return;
+        }
         let pendings = std::mem::take(&mut self.pending_tables);
         for pending in pendings {
             let mut ledger = self.table_shadow.take_table(pending.table);
@@ -642,6 +654,9 @@ where
         fragments: &mut FragmentTree,
         tables: &TableFragmentPlane,
     ) -> Result<(), LayoutError> {
+        if !crate::TABLE_LAYOUT {
+            return Ok(());
+        }
         let parts = self
             .pending_tables
             .iter()
@@ -758,7 +773,11 @@ where
     ) -> Result<Option<AlgorithmNodeId>, LayoutError> {
         match self.boxes[box_id].origin {
             BoxOrigin::Element(node) => {
-                let mut computed = self.styles.get(node).cloned().unwrap_or_default();
+                let mut computed = self
+                    .styles
+                    .get(node)
+                    .cloned()
+                    .unwrap_or_else(|| self.styles.initial_style());
                 if self.contribution_root == Some(node) {
                     contribution_style(&mut computed);
                 }
@@ -818,10 +837,11 @@ where
                 }
                 // A `display: table` box takes its flattened cells directly,
                 // so the row-group and row boxes never enter the tree.
-                let table = (matches!(
-                    computed.display,
-                    CssDisplay::Table | CssDisplay::InlineTable
-                ))
+                let table = (crate::TABLE_LAYOUT
+                    && matches!(
+                        computed.display,
+                        CssDisplay::Table | CssDisplay::InlineTable
+                    ))
                 .then(|| build_table_grid(self.boxes, self.dom, box_id));
                 let mut table_cell_nodes = Vec::new();
                 let mut table_out_of_flow_parts = Vec::new();
@@ -1154,8 +1174,12 @@ where
                 {
                     // See InlineBuildState's corresponding K4e1 wrapper.
                     let table = match legacy_origin_node(self.boxes, grid) {
-                        Some(element) => self.styles.get(element).cloned().unwrap_or_default(),
-                        None => anonymous_table_style(inherited),
+                        Some(element) => self
+                            .styles
+                            .get(element)
+                            .cloned()
+                            .unwrap_or_else(|| self.styles.initial_style()),
+                        None => anonymous_table_style(inherited, || self.styles.initial_style()),
                     };
                     let computed = wrapper_style(&table);
                     let font_size = font_size_px(&computed.font_size, parent_font_size);
@@ -1246,7 +1270,9 @@ where
                         containing_size,
                     );
                 }
-                let computed = inherited.cloned().unwrap_or_default();
+                let computed = inherited
+                    .cloned()
+                    .unwrap_or_else(|| self.styles.initial_style());
                 let children = self.boxes[box_id]
                     .children()
                     .iter()

@@ -1259,6 +1259,20 @@ where
         }
     }
 
+    /// The style a box takes when no element and no parent box supplied one:
+    /// the anonymous box around text hung straight off the document, or an
+    /// element the plane has no entry for. It is the initial values with their
+    /// colors resolved under this plane's host palette and the scheme the
+    /// initial `color-scheme` uses, which is what the cascade does for a root
+    /// element. `ComputedValues::default()` alone keeps `color` as the
+    /// contextual system color `CanvasText`, which text shaping cannot paint.
+    pub(crate) fn initial_style(&self) -> ComputedValues {
+        let mut values = ComputedValues::default();
+        let context = self.used_color_context_for(&values);
+        values.resolve_used_colors_in_place(context);
+        values
+    }
+
     fn used_color_context_for(&self, values: &ComputedValues) -> UsedColorContext {
         let scheme = values
             .color_scheme
@@ -1811,6 +1825,9 @@ where
         );
         resolve_viewport_units(&mut computed, device, tree_counts);
         resolve_font_metrics(&mut computed, parent);
+        if !crate::TABLE_LAYOUT {
+            flatten_table_display(&mut computed);
+        }
         for (selector_pseudo, box_pseudo) in [
             (
                 livery::selector::GeneratedPseudo::Before,
@@ -1985,6 +2002,25 @@ fn cascade_with_logical_properties(
             .expect("generated logical property read and write types agree");
     }
     (computed, custom)
+}
+
+/// The `without-table-layout` projection of the table display values. The
+/// table-internal boxes become blocks (columns and column groups, which paint
+/// nothing, become `none`), `table` a block and `inline-table` an inline block.
+fn flatten_table_display(computed: &mut ComputedValues) {
+    use livery::values::Display;
+    computed.display = match computed.display {
+        Display::Table
+        | Display::TableRowGroup
+        | Display::TableHeaderGroup
+        | Display::TableFooterGroup
+        | Display::TableRow
+        | Display::TableCell
+        | Display::TableCaption => Display::Block,
+        Display::InlineTable => Display::InlineBlock,
+        Display::TableColumn | Display::TableColumnGroup => Display::None,
+        other => other,
+    };
 }
 
 fn resolve_viewport_units(computed: &mut ComputedValues, device: &Device, tree_counts: TreeCounts) {

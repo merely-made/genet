@@ -38,7 +38,7 @@ genet-scripted-dom = { path = "../genet-scripted-dom" }
 genet-document-resources = { workspace = true }
 genet-host-api = { workspace = true }
 layout-dom-api = { path = "../shared/layout-dom", features = ["capture"] }
-genet-livery = { path = "../genet-livery", optional = true, default-features = false }
+genet-livery = { path = "../genet-livery", optional = true, default-features = false, features = ["scripted-dom"] }
 genet-render = { path = "../genet-render", optional = true, default-features = false, features = ["livery", "accesskit"] }
 # The style engine itself, for `livery::media::MediaQueryList`: genet-livery
 # re-exports `Device` but not the query parser `matchMedia` needs.

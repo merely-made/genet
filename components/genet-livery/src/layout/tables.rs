@@ -329,6 +329,9 @@ pub(in crate::layout) fn table_paint_plane<Id>(
 where
     Id: Copy + Eq + Hash,
 {
+    if !crate::TABLE_LAYOUT {
+        return TablePaintPlane::default();
+    }
     let mut tables = HashMap::new();
     for pending in pending_tables {
         let Some(block) = &pending.block else {
@@ -413,6 +416,9 @@ pub(in crate::layout) fn commit_table_structure<Id>(
 ) where
     Id: Copy + Eq + Hash,
 {
+    if !crate::TABLE_LAYOUT {
+        return;
+    }
     let mut ids: Vec<Option<FragmentId>> = vec![None; emitted.fragments().len()];
     for (index, fragment) in emitted.fragments().iter().enumerate() {
         // The walk already pushed the grid's own fragment; record it so

@@ -16,7 +16,7 @@ Not in scope: in-app chrome (shellbar, panes, toolbars), which is product UI.
 - `components/cambium/cambium-genet-winit-host` — the extracted host, which
   already owns half of this.
 - Woodshed's [genet host cross-platform plan](https://github.com/merely-made/woodshed)
-  (`design_docs/2026-07-04_genet_host_cross_platform_plan.md`), whose 2026-07-05
+  (`woodshed/design_docs/archive_docs/2026-11-03/2026-07-04_genet_host_cross_platform_plan.md`), whose 2026-07-05
   slice 8 and 2026-07-08 polish tail built the CSD this brief generalizes.
 - Retinue's `2026-08-09_signalman_cambium_desktop_scope.md` — the consumer
   that will want a frame next.

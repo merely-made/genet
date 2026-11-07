@@ -4,14 +4,14 @@
 **Status:** implemented and focused-verified 2026-08-23. First scope of
 the reader/extraction capability; before this work nothing else in genet or
 mere had planned it beyond the one-line U3 item in Turnstone's
-[user-agent taxonomy](../../turnstone/design_docs/2026-08-03_user_agent_taxonomy_plan.md).
+[user-agent taxonomy](../../turnstone/design_docs/archive_docs/2026-11-02/2026-08-03_user_agent_taxonomy_plan.md).
 Mere-side context: the port law in the
 [family composition thesis](../../mere/design_docs/2026-08-12_family_composition_thesis_brief.md).
 
 **2026-08-26 follow-through:** F0's one-release compatibility allowance was not
 retired after Fleece 0.2; `genet-extract` survived through 0.3.0. It is now
 retired under the
-[Fleece follow-through plan](../design_docs/2026-08-26_fleece_followthrough_plan.md):
+[Fleece follow-through plan](../design_docs/archive_docs/2026-11-03/2026-08-26_fleece_followthrough_plan.md):
 Mere imports through Fleece directly, and the Genet shim and its workspace/CI
 requirements are gone. Published historical versions remain available.
 The lowering-home and scripted-sequencing questions below were resolved by the
@@ -50,7 +50,7 @@ open.
   to "a themed, rendered, selectable page," and it is the path a reader
   rendering should reuse rather than growing a second renderer.
 - Downstream wants the text and does not have it: the
-  [search surface wiring plan](../../mere/design_docs/mere_docs/implementation_strategy/2026-08-12_search_surface_wiring_plan.md)
+  [search surface wiring plan](../../mere/design_docs/archive_docs/2026-10-28/2026-08-12_search_surface_wiring_plan.md)
   landed W1 capture, but `BrowsingTrace` carries `PageRef`s and transitions,
   not page text; W2/W3 need a corpus. The
   [gazette brief](../../mere/design_docs/mere_docs/research/2026-08-10_credential_port_gazette_brief.md)

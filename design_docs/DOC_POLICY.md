@@ -57,7 +57,7 @@ user data. Tests track current semantics only.
 ### 5. Cross-referencing
 
 - Within a repo: relative links.
-- Across repos: cite by path (`isometry/design_docs/...`), since relative links
+- Across repos: cite by path (`isocosm/design_docs/...`), since relative links
   do not cross repository boundaries reliably and rot silently when the
   neighbour moves or is archived.
 - Crates: link to crates.io when referring to a public API
@@ -247,3 +247,16 @@ is* belongs there, cited by path.
 genet has no `design_docs/PROJECT_DESCRIPTION.md`. The root `README.md` carries
 the description today, so core §7's derivation rule is inert here rather than
 violated.
+
+### Receipt storage (2026-11-03)
+
+Historical run evidence lives under `Code/testing/genet/`, with its old
+repository-relative grouping and exact original Git bytes. The canonical index
+links the transfer manifest and reader review. Code-read inputs remain owner
+`tests/fixtures` or established WPT/expectation data; maintained runners stay
+versioned with fresh external outputs. Frozen packet scripts and manifests are
+historical source snapshots, not a current replay or qualification promise.
+
+The actively appended WebRTC receipt is retained at its current tracked path
+until its owner completes that lane. Archived originals, recorded JSON fields
+and commit-pinned URLs keep their historical wording and identities.

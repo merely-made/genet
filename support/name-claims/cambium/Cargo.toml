@@ -7,3 +7,13 @@ repository = "https://github.com/merely-made/genet"
 description = "Cambium: the reactive view layer over the genet engine (xilem-fork heritage; cambium depends on genet, never the reverse). NAME CLAIM: the real crate is being refactored out of mark-ik/serval; consume it as a git dependency."
 
 [workspace]
+
+[workspace.lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"
+
+[lints]
+workspace = true

@@ -50,3 +50,10 @@ genet-scripted-dom = { path = "../genet-scripted-dom" }
 paint_list_api = { workspace = true }
 paint_list_render = { workspace = true }
 image = { workspace = true }
+
+[lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"

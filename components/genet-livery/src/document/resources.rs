@@ -89,7 +89,7 @@ where
     }
 
     pub(in crate::document) fn rebuild_font_resources(&mut self) {
-        self.text = TextSystem::new();
+        self.text = self.text.fresh_font_context();
         // These immutable entries were all validated before ledger admission.
         for (generic, bytes) in &self.generic_font_sources {
             self.text

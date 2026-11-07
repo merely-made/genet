@@ -337,12 +337,17 @@ fn native_batch_completion_wakes_from_worker_and_collection_is_channel_only() {
     );
     let completed_on = receiver.recv_timeout(Duration::from_secs(6)).unwrap();
     assert_ne!(completed_on, ui);
-    pending
+    let accepted = pending
         .poll()
         .expect("wake preceded completion delivery")
-        .unwrap()
-        .publish(|_| ())
         .unwrap();
+    let timing = accepted.timing();
+    assert!(timing.collected_at() <= std::time::Instant::now());
+    assert_eq!(
+        timing.queue() + timing.worker() + timing.ready_to_collect(),
+        timing.seal_to_collect()
+    );
+    accepted.publish(|_| ()).unwrap();
 }
 
 #[test]
@@ -448,3 +453,132 @@ fn native_batch_loss_waits_for_active_publication_to_retire() {
     assert!(matches!(result, Err(RasterizeFailure::DeviceLost(_))));
     assert!(core.loss_notice().is_some());
 }
+
+#[test]
+fn worker_close_drains_and_rejects_later_work() {
+    let worker = Worker::default();
+    let count = Arc::new(AtomicUsize::new(0));
+    let count_in_job = count.clone();
+    worker
+        .schedule(Box::new(move || {
+            count_in_job.fetch_add(1, Ordering::SeqCst);
+        }))
+        .unwrap();
+    worker.close().unwrap();
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    assert!(worker.schedule(Box::new(|| {})).is_err());
+    worker.close().unwrap();
+}
+
+#[test]
+fn worker_close_waits_for_running_job() {
+    let worker = Arc::new(Worker::default());
+    let (started_tx, started_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    worker
+        .schedule(Box::new(move || {
+            started_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+        }))
+        .unwrap();
+    started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    let closer = worker.clone();
+    let (done_tx, done_rx) = mpsc::channel();
+    let thread = std::thread::spawn(move || {
+        done_tx.send(closer.close()).unwrap();
+    });
+    assert!(matches!(
+        done_rx.recv_timeout(Duration::from_millis(50)),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    ));
+    release_tx.send(()).unwrap();
+    done_rx
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap()
+        .unwrap();
+    thread.join().unwrap();
+}
+
+#[test]
+fn worker_refuses_to_join_itself() {
+    let worker = Arc::new(Worker::default());
+    let inner = worker.clone();
+    let (sender, receiver) = mpsc::channel();
+    worker
+        .schedule(Box::new(move || {
+            sender.send(inner.close().is_err()).unwrap();
+        }))
+        .unwrap();
+    assert!(receiver.recv_timeout(Duration::from_secs(2)).unwrap());
+    worker.close().unwrap();
+}
+
+#[test]
+fn close_refuses_active_submission_and_keeps_closed_gate_closed() {
+    let frames = NativeFrames::default();
+    frames.state.lock().unwrap().phase = State::Submitting;
+    assert!(frames.close().is_err());
+    frames.state.lock().unwrap().phase = State::Pending;
+    frames.close().unwrap();
+    frames.finish(true);
+    assert!(matches!(frames.state.lock().unwrap().phase, State::Closed));
+    assert!(frames.checked().is_err());
+}
+
+#[test]
+#[ignore = "actual GPU; execute the serialized native frame gate"]
+fn native_shutdown_drains_cancelled_frame_and_refuses_new_admission() {
+    let core = core();
+    let owner = core.shared_recovery();
+    let frame = core.try_begin_native_frame().unwrap();
+    let staging = draw(&frame, &scene());
+    drop(frame.seal(staging));
+    owner.close_native_frames().unwrap();
+    assert!(matches!(
+        core.try_begin_native_frame(),
+        Err(NativeFrameStartError::Refused(_))
+    ));
+    owner.close_native_frames().unwrap();
+}
+
+#[test]
+fn close_waits_for_publication_and_revokes_later_publication() {
+    let frames = Arc::new(NativeFrames::default());
+    frames.state.lock().unwrap().phase = State::Pending;
+    let publication = frames.begin_publication().unwrap();
+    assert!(frames.close().is_err(), "reentrant close must refuse");
+    let other = frames.clone();
+    let (sender, receiver) = mpsc::channel();
+    let closer = std::thread::spawn(move || sender.send(other.close()).unwrap());
+    assert!(matches!(
+        receiver.recv_timeout(Duration::from_millis(50)),
+        Err(mpsc::RecvTimeoutError::Timeout)
+    ));
+    drop(publication);
+    receiver
+        .recv_timeout(Duration::from_secs(2))
+        .unwrap()
+        .unwrap();
+    closer.join().unwrap();
+    assert!(frames.begin_publication().is_err());
+}
+
+#[test]
+#[ignore = "actual GPU; execute the serialized native frame gate"]
+fn native_shutdown_revokes_accepted_frame() {
+    let core = core();
+    let frame = core.try_begin_native_frame().unwrap();
+    let staging = draw(&frame, &scene());
+    let accepted = collect(&mut frame.seal(staging)).unwrap();
+    core.close_native_frames().unwrap();
+    let called = AtomicUsize::new(0);
+    assert!(
+        accepted
+            .publish(|_| called.fetch_add(1, Ordering::SeqCst))
+            .is_err()
+    );
+    assert_eq!(called.load(Ordering::SeqCst), 0);
+}
+
+#[path = "native_frame_progress_tests.rs"]
+mod progress_tests;

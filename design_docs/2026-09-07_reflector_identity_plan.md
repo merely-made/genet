@@ -28,7 +28,7 @@ because a pin taken on a write has no natural release.
 **Realm clarification (2026-09-13):** Access from another realm does not create
 a new wrapper. The associated realm and prototype are distinct from the
 registration holding the engine's weak cache. The
-[Realms continuation](2026-09-08_realms_plan.md#phase-wrapper-identity-after-disposal-2026-09-13)
+[Realms continuation](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-wrapper-identity-after-disposal-2026-09-13)
 closed cache relocation at disposal, with shared weak wrapper/group/owner maps,
 directed template-to-contents retention, and both-engine collection tests and
 headed acceptance.
@@ -105,10 +105,10 @@ entries. Generic rooting may still remint; the policy's inventory-to-root
 handoff uses existing live targets before any JavaScript allocation. Its private
 hook looks up existing wrappers instead of calling `wrapNode`, and uses captured
 intrinsics and null-prototype property descriptors for ephemeron groups. See the
-[census plan](2026-10-03_census_panics_plan.md) and its qualified controls. The
+[census plan](archive_docs/2026-11-03/2026-10-03_census_panics_plan.md) and its qualified controls. The
 complete runtime gate passes 672 tests, including identity/reclamation soaks,
 and the four-directory WPT comparison loses zero passing files or subtests.
-The [final receipt](receipts/2026-10-04_genet_census_panics/receipt.md) qualifies
+The [final receipt](../../../testing/genet/design_docs/receipts/2026-10-04_genet_census_panics/receipt.md) qualifies
 the captured-split parser, poisoning controls and remaining singleton costs.
 
 `drain_dead_reflectors` is unchanged and remains the liveness signal for

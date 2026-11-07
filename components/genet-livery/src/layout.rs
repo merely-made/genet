@@ -89,6 +89,9 @@ mod tables;
 mod taffy_style;
 #[cfg(test)]
 mod tests;
+mod text_batch;
+#[cfg(test)]
+pub(crate) use text_batch::{FIXTURE_FAULT, FIXTURE_GATE, FIXTURE_UPDATES, INPUT_OWNERSHIP};
 mod transaction;
 
 #[cfg(test)]
@@ -323,7 +326,7 @@ impl LayoutError {
 
 impl Error for LayoutError {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct TextMeasure {
     min_width: f32,
     max_width: f32,
@@ -335,10 +338,14 @@ struct TextMeasure {
     wrap: Option<Box<TextWrap>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct TextWrap {
     source: BoxId,
     parent_style: ComputedValues,
+    prepared: std::sync::Arc<crate::text::prepared::PreparedInlineGroup>,
+    generation: u64,
+    group: crate::text::InlineGroupId,
+    results: Vec<crate::text::ShapeResult>,
     /// Widths already formatted, with the height and line baselines at each.
     formatted: Vec<(f32, f32, Option<(f32, f32)>)>,
 }
@@ -351,32 +358,30 @@ fn wrapped_text_height<D>(
     width: f32,
     text: Option<&mut TextSystem>,
     dom: &D,
-    styles: &StylePlane<D::NodeId>,
-    boxes: &GeneratedBoxTree<D::NodeId>,
-) -> f32
+) -> Result<f32, LayoutError>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
     let (Some(wrap), Some(text)) = (context.wrap.as_deref_mut(), text) else {
-        return context.height;
+        return Ok(context.height);
     };
     if width >= context.max_width - 0.5 {
-        return context.height;
+        return Ok(context.height);
     }
     if let Some(&(_, height, _)) = wrap
         .formatted
         .iter()
         .find(|(formatted, ..)| (formatted - width).abs() <= 0.01)
     {
-        return height;
+        return Ok(height);
     }
+    let fragments = AtomicLayoutPlane::default();
     let (height, baselines) = text
-        .format_inline_group(
-            dom,
-            styles,
-            boxes,
-            &AtomicLayoutPlane::default(),
+        .format_prepared_inline_group::<D::NodeId, _>(
+            &wrap.prepared,
+            &fragments,
+            dom.quirks_mode(),
             InlineRequest {
                 roots: &[wrap.source],
                 parent_style: &wrap.parent_style,
@@ -384,12 +389,30 @@ where
                 intrinsic_kind: None,
                 line_constraints: None,
             },
+            crate::text::Candidates::Transactional {
+                results: &mut wrap.results,
+                generation: wrap.generation,
+                group: wrap.group,
+            },
         )
+        .map_err(|error| {
+            LayoutError::retained_state(match error {
+                crate::text::PreparedFormatError::Batch(error) => {
+                    format!("late text batch rejected: {error:?}")
+                },
+                crate::text::PreparedFormatError::EmptyLateResult => {
+                    "late text batch returned no result".to_string()
+                },
+                crate::text::PreparedFormatError::InvalidLateResult => {
+                    "late text batch returned invalid result".to_string()
+                },
+            })
+        })?
         .map_or((context.height, None), |layout| {
             (layout.size().1, layout.baselines())
         });
     wrap.formatted.push((width, height, baselines));
-    height
+    Ok(height)
 }
 
 /// `context`'s first and last line baselines at `width`: as it was formatted
@@ -492,20 +515,22 @@ struct InlineMeasure {
     /// `owner` above is only the optional intrinsic-cache identity.
     formatting_owner: BoxId,
     roots: Vec<BoxId>,
-    style: ComputedValues,
+    style: Box<ComputedValues>,
     width: f32,
     height: f32,
     /// Natural content-box dimensions for a directly measured replaced leaf.
     replaced_size: Option<(f32, f32)>,
     layouts: Vec<InlineLayoutEntry>,
     placement_constraints: Option<FloatLineConstraints>,
+    prepared: Option<text_batch::PreparedMeasure>,
+    shape_error: Option<LayoutError>,
 }
 
 struct InlineLayoutEntry {
     width: f32,
     /// Formatted for an intrinsic query, where an atomic box takes its
     /// contribution width rather than its used one.
-    intrinsic: bool,
+    intrinsic: Option<IntrinsicSizeKind>,
     constraints: Option<FloatLineConstraints>,
     layout: InlineLayout<BoxId>,
 }
@@ -517,18 +542,34 @@ struct InlineMeasureGeometry<'a> {
     line_constraints: Option<&'a FloatLineConstraints>,
 }
 
+fn inline_width_distance(left: f32, right: f32) -> f32 {
+    if left == right {
+        0.0
+    } else {
+        (left - right).abs()
+    }
+}
+
+fn inline_measure_matches(
+    entry_width: f32,
+    entry_policy: Option<IntrinsicSizeKind>,
+    width: f32,
+    policy: Option<IntrinsicSizeKind>,
+) -> bool {
+    entry_policy == policy && inline_width_distance(entry_width, width) <= 0.01
+}
+
 impl InlineMeasure {
     fn cached_size(
         &self,
         width: f32,
-        intrinsic: bool,
+        intrinsic: Option<IntrinsicSizeKind>,
         constraints: Option<&FloatLineConstraints>,
     ) -> Option<(f32, f32)> {
         self.layouts
             .iter()
             .find(|entry| {
-                (entry.width - width).abs() <= 0.01
-                    && entry.intrinsic == intrinsic
+                inline_measure_matches(entry.width, entry.intrinsic, width, intrinsic)
                     && entry.constraints.as_ref() == constraints
             })
             .map(|entry| entry.layout.size())
@@ -537,7 +578,7 @@ impl InlineMeasure {
     fn remember(
         &mut self,
         width: f32,
-        intrinsic: bool,
+        intrinsic: Option<IntrinsicSizeKind>,
         constraints: Option<&FloatLineConstraints>,
         layout: InlineLayout<BoxId>,
     ) -> (f32, f32) {
@@ -558,10 +599,9 @@ impl InlineMeasure {
             .iter()
             .filter(|entry| entry.constraints.as_ref() == self.placement_constraints.as_ref())
             .min_by(|left, right| {
-                (left.width - width)
-                    .abs()
-                    .total_cmp(&(right.width - width).abs())
-                    .then(left.intrinsic.cmp(&right.intrinsic))
+                inline_width_distance(left.width, width)
+                    .total_cmp(&inline_width_distance(right.width, width))
+                    .then(left.intrinsic.is_some().cmp(&right.intrinsic.is_some()))
             })
             .map(|entry| &entry.layout)
     }
@@ -570,8 +610,8 @@ impl InlineMeasure {
 fn measure_inline_context<D>(
     text: &mut TextSystem,
     dom: &D,
-    styles: &StylePlane<D::NodeId>,
-    boxes: &GeneratedBoxTree<D::NodeId>,
+    _styles: &StylePlane<D::NodeId>,
+    _boxes: &GeneratedBoxTree<D::NodeId>,
     atomic: &AtomicLayoutPlane,
     context: &mut InlineMeasure,
     geometry: InlineMeasureGeometry<'_>,
@@ -591,15 +631,23 @@ where
     if let Some(constraints) = constraints {
         context.placement_constraints = Some(constraints.clone());
     }
-    let intrinsic = intrinsic_kind.is_some();
     context
-        .cached_size(width, intrinsic, constraints)
+        .cached_size(width, intrinsic_kind, constraints)
         .unwrap_or_else(|| {
-            let formatted = text.format_inline_group(
-                dom,
-                styles,
-                boxes,
+            let prepared = context
+                .prepared
+                .as_mut()
+                .expect("inline batch must flush before measurement");
+            if let Some(atom) = prepared.template.missing_atom::<D::NodeId, _>(atomic) {
+                context.shape_error.get_or_insert_with(|| {
+                    LayoutError::retained_state(format!("missing inline atom geometry: {atom:?}"))
+                });
+                return (context.width, context.height);
+            }
+            let formatted = text.format_prepared_inline_group::<D::NodeId, _>(
+                &prepared.template,
                 atomic,
+                dom.quirks_mode(),
                 InlineRequest {
                     roots: &context.roots,
                     parent_style: &context.style,
@@ -607,9 +655,33 @@ where
                     intrinsic_kind,
                     line_constraints: constraints,
                 },
+                crate::text::Candidates::Transactional {
+                    results: &mut prepared.results,
+                    generation: prepared.generation,
+                    group: prepared.group,
+                },
             );
+            let formatted = match formatted {
+                Ok(formatted) => formatted,
+                Err(error) => {
+                    context.shape_error.get_or_insert_with(|| {
+                        LayoutError::retained_state(match error {
+                            crate::text::PreparedFormatError::Batch(error) => {
+                                format!("late inline batch rejected: {error:?}")
+                            },
+                            crate::text::PreparedFormatError::EmptyLateResult => {
+                                "late inline batch returned no result".to_string()
+                            },
+                            crate::text::PreparedFormatError::InvalidLateResult => {
+                                "late inline batch returned invalid result".to_string()
+                            },
+                        })
+                    });
+                    return (context.width, context.height);
+                },
+            };
             formatted.map_or((context.width, context.height), |layout| {
-                context.remember(width, intrinsic, constraints, layout)
+                context.remember(width, intrinsic_kind, constraints, layout)
             })
         })
 }

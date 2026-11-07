@@ -38,6 +38,83 @@ session rung. Flex and grid containers lower their bounded direction, track,
 gap, alignment, order, and placement values into Taffy. Box shadows lower into
 the neutral shadow primitive before backgrounds.
 
+## Retained and parallel text shaping
+
+`LiveryDocument::set_text_shaping_options` configures `TextShapingOptions`.
+The initial defaults retain up to 512 entries, 4 MiB of key text, and 32 MiB
+of requested backing storage for the ten direct Parley layout vectors. Any
+zero limit disables retention. The vector gauge includes spare capacity and
+inline elements and charges each retained entry independently, but excludes
+nested and shared resources, allocator overhead,
+input keys, scratch, placed clones, and RSS. It is not a total-memory bound.
+Oversized groups are shaped but not retained. The 32 MiB starting point reflects
+the observed roughly 3.41 MB per historical long result, not an optimum.
+Adding the option requires callers with exhaustive struct literals to supply it
+or use `..Default::default()`. `text_system().shaping_stats()` reports cumulative
+builds, hits, late misses and pool work, plus current retention gauges. Optional
+timings are disabled by default (`record_timings: false`).
+
+Shaping is serial by default. On native targets, enable `parallel-text` and
+supply an `Arc<rayon::ThreadPool>` with `set_text_shaping_pool`; the global
+pool is never selected implicitly. Initial admission requires at least eight
+unique misses and 16 KiB of text, both configurable. Ready inputs are batched
+before their measurement consumers; inputs whose geometry is not ready can
+shape synchronously later and are counted as late misses. One long paragraph
+is one group and is not split across workers. Calls join before results publish.
+
+Bounded measurements show mixed results. With a 4,096-entry cache, resize of
+2,048 groups reused all keys and retained serial layout improved over the
+original in two 30-sample cohorts. A one-key edit rebuilt one key. The default
+512-entry cache did not hold that working set. In three cold cohorts, pooled
+layout improved over the new retained serial implementation, but both were
+slower than the original layout pipeline. A 129 KB long-edit process peaked at
+194.5 MiB retained serial versus 86.4 MiB original; these peaks include font
+and serialization work. Small and edit cases met the specified empirical noise
+band, but 30 samples and different process counts in the independent control
+leave p95 uncertainty. The long edit used no pool jobs. These CPU measurements
+are not GPU or headed runtime evidence. See the [qualification receipt](../../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md).
+
+The subsequent cost-reduction work shares retained inputs and precomputes a
+per-context key fingerprint while still checking the complete key and current
+source slots. The ready queue borrows context styles and prepared spans, and a
+private boxed style reduces context-slot size. These changes preserve owned
+layout output and exact validation; the fingerprint is not identity. At source
+`24f743517497`, bounded CPU 0 controls showed a material tradeoff: atomic
+layout was 4.9–9.5 ms slower in paired medians than the preceding source, even
+though it remained 4.1–5.2 ms faster than the original in those cohorts. Small
+and article results varied by fixture and control. Cumulative allocation traffic
+is not live memory, copied bytes, or RSS. Current-source WPT, browser/GPU and
+platform runtime remain untested. Three later CPU 0,2 cold cohorts included two
+independent original processes. Final cached-serial article layout compared
+with the second original had paired medians of -6.719, +0.089 and +0.355 ms;
+process variation leaves the original cold goal unresolved. Final cached-serial
+small resize with raised capacity reused all 2,048 keys with zero builds. One
+remaining-case scope had a single 677-microsecond throttle; the three headline
+scopes had none. See the receipt for full ranges and source-specific results.
+
+The single-cohort default cold controls also showed final cached-serial layout
+medians 0.754 ms slower for mixed-256 and 0.793 ms slower for single-long
+against original; these are bounded process comparisons. For small-2048,
+pooled layout medians improved in three cohorts, while pooled frame and cycle
+medians varied in direction. A consistent small end-to-end pool gain is not
+established.
+
+The borrowed-validation checkpoint `5ba4d1fa282` avoids rebuilding an owned key
+for a validated single prepared result. Three bounded CPU 0,2 cold cohorts
+showed small and article serial layout improvements against both original
+processes, while mixed and single-long comparisons varied. A retained Parley
+layout allocation remains on the long path. The whole-workload cold goal is
+still open; see the [qualification receipt](../../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md)
+for paired results, allocation limits and current test boundaries.
+
+A separate shared-buffer diagnostic at `463deba6b9a` removed the long fixture's
+3,096,768 logical element bytes of cloning. Its three serial same-binary
+cohorts favored long-text frame medians, but the small-text guard became slower
+and noise and cross-binary controls limit interpretation. The experiment stays
+on its own branch; this branch retains borrowed validation without adopting
+shared buffers. Any selective sharing policy needs a separate supplier design
+and review. The receipt records the full diagnosis and preserved evidence.
+
 ## Explicit host generic resources
 
 A browser does not lend Parley its installed system fonts. Registering a face

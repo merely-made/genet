@@ -11,17 +11,26 @@ use std::{
     marker::PhantomData,
     pin::Pin,
     rc::Rc,
-    sync::{Arc, Mutex, OnceLock, Weak, mpsc},
+    sync::{Arc, Condvar, Mutex, Weak, mpsc},
     task::{Context, Poll},
     time::{Duration, Instant},
 };
 
 type Scope = Pin<Box<dyn Future<Output = Option<wgpu::Error>> + Send>>;
 type Wake = Arc<dyn Fn() + Send + Sync>;
+mod availability;
+pub use availability::NativeFrameWaiter;
+mod timing;
+pub use timing::NativeFrameTiming;
+mod attribution;
+pub use attribution::{NativeWorkSpan, NativeWorkerAttribution};
 #[derive(Default)]
 pub(crate) struct NativeFrames {
-    state: Mutex<State>,
-    worker: OnceLock<Result<mpsc::Sender<Job>, String>>,
+    state: Arc<Mutex<availability::Gate>>,
+    worker: Arc<Worker>,
+    changed: Arc<Condvar>,
+    batch_counter: std::sync::atomic::AtomicU64,
+    diagnostic: std::sync::atomic::AtomicBool,
 }
 #[derive(Default)]
 enum State {
@@ -30,7 +39,9 @@ enum State {
     Legacy,
     Submitting,
     Pending,
+    Publishing(std::thread::ThreadId, bool),
     Unavailable,
+    Closed,
 }
 pub(crate) struct LegacyRaster<'a>(&'a NativeFrames);
 impl Drop for LegacyRaster<'_> {
@@ -41,8 +52,8 @@ impl Drop for LegacyRaster<'_> {
 impl NativeFrames {
     pub(crate) fn checked(&self) -> Result<LegacyRaster<'_>, RasterizeFailure> {
         let mut state = self.state.lock().expect("native frames poisoned");
-        if matches!(*state, State::Idle) {
-            *state = State::Legacy;
+        if matches!(state.phase, State::Idle) {
+            state.phase = State::Legacy;
             Ok(LegacyRaster(self))
         } else {
             Err(unavailable(
@@ -51,35 +62,25 @@ impl NativeFrames {
         }
     }
     fn finish(&self, reusable: bool) {
-        *self.state.lock().expect("native frames poisoned") = if reusable {
-            State::Idle
-        } else {
-            State::Unavailable
-        };
-    }
-    fn schedule(&self, job: Job) {
-        let sender = self.worker.get_or_init(|| {
-            let (sender, receiver) = mpsc::channel::<Job>();
-            std::thread::Builder::new()
-                .name("genet-frame-completion".into())
-                .spawn(move || {
-                    for job in receiver {
-                        job.run();
-                    }
-                })
-                .map(|_| sender)
-                .map_err(|error| error.to_string())
-        });
-        match sender {
-            Ok(sender) => {
-                if let Err(error) = sender.send(job) {
-                    error.0.refuse("native completion worker stopped");
-                }
-            },
-            Err(_) => job.refuse("native completion worker could not start"),
+        let waiters = self
+            .state
+            .lock()
+            .expect("native frames poisoned")
+            .finish(reusable);
+        for waiter in waiters {
+            waiter.notify();
         }
     }
 }
+
+#[path = "native_frame_checks.rs"]
+mod checks;
+#[path = "native_frame_progress.rs"]
+mod progress;
+#[path = "native_frame_queue.rs"]
+mod queue;
+pub(crate) use queue::NativeFrameShutdown;
+use queue::Worker;
 #[derive(Debug)]
 pub enum NativeFrameStartError {
     Busy,
@@ -99,37 +100,21 @@ struct Qualification {
     scopes: Vec<Scope>,
     first_error: Option<RasterizeFailure>,
     deadline: Instant,
+    admitted: Instant,
+    sealed: Option<Instant>,
+    worker_started: Option<Instant>,
+    last_observation: Option<(usize, Option<(usize, u64)>)>,
+    progress: progress::Progress,
+    batch_id: u64,
+    attribution: Option<attribution::Capture>,
 }
 impl Qualification {
-    fn check(&self) -> Result<Arc<RenderCore>, RasterizeFailure> {
-        if let Some(loss) = &self
-            .admission
-            .lock()
-            .expect("native admission poisoned")
-            .loss
-        {
-            return Err(RasterizeFailure::DeviceLost(loss.clone()));
-        }
-        let core = self
-            .core
-            .upgrade()
-            .ok_or_else(|| unavailable("native frame Core retired"))?;
-        if let Some(loss) = core.device_failure() {
-            return Err(RasterizeFailure::DeviceLost(loss));
-        }
-        if Instant::now() >= self.deadline {
-            return Err(unavailable(
-                "native frame qualification exceeded five seconds",
-            ));
-        }
-        Ok(core)
-    }
     fn poll(&mut self) -> Option<Result<(), RasterizeFailure>> {
         let core = match self.check() {
             Ok(core) => core,
             Err(error) => return Some(Err(error)),
         };
-        if let Err(error) = core.device().poll(wgpu::PollType::Poll) {
+        if let Err(error) = self.poll_device(&core) {
             return Some(Err(self.check().err().unwrap_or_else(|| {
                 RenderCore::native_raster_unavailable(format!(
                     "native completion poll failed: {error}"
@@ -139,15 +124,22 @@ impl Qualification {
         if let Err(error) = self.check() {
             return Some(Err(error));
         }
+        let started = Instant::now();
         self.observe_scopes();
+        self.progress.last_scope_poll = Some(started.elapsed());
         let mut empty = false;
+        let mut last_backlog = None;
         for _ in 0..=256 {
-            match core.renderer.poll_vello_curve_quality() {
+            match self.poll_quality(&core) {
                 Ok(Some((0, 0))) => {
+                    last_backlog = Some((0, 0));
                     empty = true;
                     break;
                 },
-                Ok(Some(_)) => break,
+                Ok(Some(counts)) => {
+                    last_backlog = Some(counts);
+                    break;
+                },
                 Ok(None) => {
                     return Some(Err(self.check().err().unwrap_or_else(|| {
                         unavailable("native Classic quality observer unavailable")
@@ -159,6 +151,8 @@ impl Qualification {
                 },
             }
         }
+        self.last_observation = Some((self.scopes.len(), last_backlog));
+        self.progress.last_sample = Some(Instant::now());
         if let Err(error) = self.check() {
             return Some(Err(error));
         }
@@ -169,6 +163,7 @@ impl Qualification {
         }
     }
     fn observe_scopes(&mut self) {
+        let stamp = self.scope_stamp();
         let mut context = Context::from_waker(std::task::Waker::noop());
         let mut remaining = Vec::new();
         for mut scope in self.scopes.drain(..) {
@@ -184,6 +179,7 @@ impl Qualification {
             }
         }
         self.scopes = remaining;
+        self.record_scopes(stamp);
     }
     fn wait(&mut self) -> Result<(), RasterizeFailure> {
         loop {
@@ -193,11 +189,8 @@ impl Qualification {
             // Only the shared completion worker enters this bounded wait. Do
             // not retain the Core while waiting or introduce a UI-side poll.
             let device = self.check()?.device().clone();
-            let _ = device.poll(wgpu::PollType::Wait {
-                submission_index: None,
-                timeout: Some(Duration::from_millis(5)),
-            });
-            std::thread::yield_now();
+            self.wait_device(&device);
+            self.yield_worker();
         }
     }
     fn drained(&self) -> bool {
@@ -212,6 +205,9 @@ struct Completion {
     qualification: Option<Qualification>,
     result: Result<(), RasterizeFailure>,
     reusable: bool,
+    timing: timing::ReadyTiming,
+    batch_id: u64,
+    attribution: Option<NativeWorkerAttribution>,
 }
 impl Drop for Completion {
     fn drop(&mut self) {
@@ -228,6 +224,7 @@ struct Job {
     qualification: Qualification,
     completed: Option<mpsc::Sender<Completion>>,
     wake: Wake,
+    timing: timing::WorkTiming,
 }
 #[path = "native_frame_worker.rs"]
 mod worker;
@@ -242,19 +239,31 @@ pub struct NativeFrameSubmission {
     error: Arc<Mutex<Option<RasterizeFailure>>>,
     _thread: PhantomData<Rc<()>>,
     _submitting: LossOperation,
+    batch_id: u64,
 }
 impl RenderCore {
+    pub(crate) fn native_frame_shutdown_handle(&self) -> NativeFrameShutdown {
+        self.native_frames.shutdown_handle()
+    }
+    /// Permanently stop native frame admission and join its completion worker.
+    /// Drop all active submissions first. Call for every shared Core before
+    /// releasing host GPU resources or exiting the process. This may wait for
+    /// an already admitted qualification or active publication to finish; it
+    /// does not poll on the caller. Reentrant closure returns an error.
+    pub fn close_native_frames(&self) -> Result<(), String> {
+        self.native_frames.close()
+    }
     /// Status-only scheduling hint for other hosts on this Core. Raster
     /// admission remains authoritative; this does not acquire a drawing lease.
     /// A terminal attribution refusal is reported by the checked draw itself.
     pub fn native_frame_busy(&self) -> bool {
         !matches!(
-            *self
-                .native_frames
+            self.native_frames
                 .state
                 .lock()
-                .expect("native frames poisoned"),
-            State::Idle | State::Unavailable
+                .expect("native frames poisoned")
+                .phase,
+            State::Idle | State::Unavailable | State::Closed
         )
     }
     pub(super) fn rasterize_native_batch(
@@ -308,16 +317,16 @@ impl RenderCore {
             .state
             .lock()
             .expect("native frames poisoned");
-        match &*state {
+        match &state.phase {
             State::Idle => {},
-            State::Unavailable => {
+            State::Unavailable | State::Closed => {
                 return Err(NativeFrameStartError::Refused(unavailable(
                     "native frame attribution unavailable",
                 )));
             },
             _ => return Err(NativeFrameStartError::Busy),
         }
-        *state = State::Submitting;
+        state.phase = State::Submitting;
         drop(state);
         if self.renderer.vello_curve_quality_status() != Some((0, 0)) {
             self.native_frames.finish(true);
@@ -354,6 +363,9 @@ impl RenderCore {
         .into_iter()
         .map(|filter| self.device().push_error_scope(filter))
         .collect();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let batch_id = self.native_frames.next_batch_id();
+        let attribution = self.native_frames.begin_attribution(self, batch_id);
         Ok(NativeFrameSubmission {
             core: self.clone(),
             qualification: Some(Qualification {
@@ -362,12 +374,20 @@ impl RenderCore {
                 _cancellation: cancellation,
                 scopes: Vec::new(),
                 first_error: None,
-                deadline: Instant::now() + Duration::from_secs(5),
+                deadline,
+                admitted: Instant::now(),
+                sealed: None,
+                worker_started: None,
+                last_observation: None,
+                progress: progress::Progress::default(),
+                batch_id,
+                attribution,
             }),
             scopes,
             error: Arc::new(Mutex::new(None)),
             _thread: PhantomData,
             _submitting: submitting,
+            batch_id,
         })
     }
 }
@@ -396,6 +416,7 @@ impl NativeFrameSubmission {
             .qualification
             .take()
             .expect("native batch already sealed");
+        qualification.sealed = Some(Instant::now());
         qualification.first_error = self
             .error
             .lock()
@@ -413,16 +434,17 @@ impl NativeFrameSubmission {
         let qualification = self.finish_scopes();
         let admission = Arc::downgrade(&qualification.admission);
         let (sender, receiver) = mpsc::channel();
-        *self
-            .core
+        self.core
             .native_frames
             .state
             .lock()
-            .expect("native frames poisoned") = State::Pending;
+            .expect("native frames poisoned")
+            .phase = State::Pending;
         self.core.native_frames.schedule(Job {
             qualification,
             completed: Some(sender),
             wake,
+            timing: timing::WorkTiming::new(),
         });
         PendingNativeFrame {
             admission,
@@ -436,16 +458,17 @@ impl Drop for NativeFrameSubmission {
     fn drop(&mut self) {
         if self.qualification.is_some() {
             let qualification = self.finish_scopes();
-            *self
-                .core
+            self.core
                 .native_frames
                 .state
                 .lock()
-                .expect("native frames poisoned") = State::Pending;
+                .expect("native frames poisoned")
+                .phase = State::Pending;
             self.core.native_frames.schedule(Job {
                 qualification,
                 completed: None,
                 wake: Arc::new(|| {}),
+                timing: timing::WorkTiming::new(),
             });
         }
     }
@@ -485,18 +508,32 @@ impl<T> PendingNativeFrame<T> {
                 return Some(Err(unavailable("native completion worker disconnected")));
             },
         };
+        let timing = completion.timing.collected(Instant::now());
         self.completed.take();
+        if let Some(qualification) = &completion.qualification {
+            let now = Instant::now();
+            if completion.result.is_ok()
+                && now >= qualification.deadline
+                && std::env::var_os("GENET_NATIVE_PROGRESS_DIAGNOSTIC").is_some()
+            {
+                tracing::warn!(progress = %qualification.progress.describe(now),
+                    "qualified native frame collected after qualification deadline");
+            }
+        }
         let result = completion
             .qualification
             .as_ref()
             .expect("completion qualification")
-            .check()
+            .check_live()
             .map(|_| ())
             .and(completion.result.clone());
         match result {
             Ok(()) => Some(Ok(AcceptedNativeFrame {
                 qualification: completion.qualification.take(),
                 value: self.value.take(),
+                timing,
+                batch_id: completion.batch_id,
+                attribution: completion.attribution,
             })),
             Err(error) => {
                 drop(self.value.take());
@@ -515,23 +552,31 @@ impl<T> Drop for PendingNativeFrame<T> {
 pub struct AcceptedNativeFrame<T> {
     qualification: Option<Qualification>,
     value: Option<T>,
+    timing: NativeFrameTiming,
+    batch_id: u64,
+    attribution: Option<NativeWorkerAttribution>,
 }
 impl<T> AcceptedNativeFrame<T> {
+    /// Timing follows the original submission, independent of UI poll count.
+    pub fn timing(&self) -> NativeFrameTiming {
+        self.timing
+    }
+
     pub fn publish<R>(mut self, publish: impl FnOnce(T) -> R) -> Result<R, RasterizeFailure> {
         let core = self
             .qualification
             .as_ref()
             .expect("native frame already published")
-            .check()?;
+            .check_live()?;
+        let _publication = core.native_frames.begin_publication()?;
         // Publication may access GPU resources. Cancellation may release an
         // idle lease, but recovery must await this active callback interval.
         let _publishing = core
             .loss
             .begin_operation()
             .map_err(RasterizeFailure::DeviceLost)?;
-        drop(core);
         let result = publish(self.value.take().expect("native frame value"));
-        self.qualification.as_ref().unwrap().check()?;
+        self.qualification.as_ref().unwrap().check_live()?;
         Ok(result)
     }
 }

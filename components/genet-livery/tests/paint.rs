@@ -2061,6 +2061,9 @@ fn retained_document_reuses_complete_frames_and_font_allocations() {
     let first = document.frame(320, 240).unwrap();
     let first_generation = document.generation();
     let first_shape_count = document.text_system().shape_count();
+    let first_stats = document.text_system().shaping_stats();
+    assert!(first_shape_count > 0);
+    assert!(first_stats.layout_builds > first_stats.metric_layout_builds);
     let first_font = first.fonts().first().unwrap().data.clone();
 
     let cached = document.frame(320, 240).unwrap();
@@ -2073,7 +2076,24 @@ fn retained_document_reuses_complete_frames_and_font_allocations() {
 
     let resized = document.frame(480, 240).unwrap();
     assert!(document.generation() > first_generation);
-    assert!(document.text_system().shape_count() > first_shape_count);
+    let resized_stats = document.text_system().shaping_stats();
+    assert_eq!(document.text_system().shape_count(), first_shape_count);
+    assert!(resized_stats.cache_hits > first_stats.cache_hits);
+    assert_eq!(
+        resized_stats.layout_builds - resized_stats.metric_layout_builds,
+        first_stats.layout_builds - first_stats.metric_layout_builds
+    );
+    let mut fresh = LiveryDocument::new(
+        StaticDocument::parse(
+            r#"<html><body><div class="label">retained text</div></body></html>"#,
+        ),
+        StyleSet::cambium(&[".label { color: navy; font-size: 18px; width: 120px; }"]),
+        Device::screen(480.0, 240.0),
+    );
+    assert_eq!(
+        format!("{:?}", resized.commands()),
+        format!("{:?}", fresh.frame(480, 240).unwrap().commands())
+    );
     assert!(Arc::ptr_eq(
         &first_font,
         &resized.fonts().first().unwrap().data
@@ -2510,6 +2530,51 @@ fn wrapped_inline_spans_paint_one_fragment_per_line() {
         fragments >= 2,
         "wrapped span should paint multiple line boxes"
     );
+}
+
+/// A wrapped inline's background on a continuation line paints before the
+/// text it backs. Decorations that begin on a later line paint at their
+/// source-order walk (so their borders can bleed over the preceding line), but
+/// the paragraph's text stream used to drain at the first text node, so those
+/// backgrounds covered their own line's text.
+#[test]
+fn wrapped_inline_text_paints_over_its_background_on_every_line() {
+    let list = render(
+        r#"<html><body><p>Plain words then <mark>alpha</mark> beta gamma delta epsilon <mark>zeta</mark> eta theta iota kappa lambda <mark>mu</mark> nu xi omicron <mark>pi</mark> rho sigma tau.</p></body></html>"#,
+        "body { margin: 8px; font-size: 16px; } p { width: 220px; } \
+         mark { background-color: lime; color: red; }",
+        1,
+    );
+    let lime = ColorF::new(0.0, 1.0, 0.0, 1.0);
+    let red = ColorF::new(1.0, 0.0, 0.0, 1.0);
+    let commands = list.commands();
+    let rects: Vec<(usize, _)> = commands
+        .iter()
+        .enumerate()
+        .filter_map(|(index, command)| match command {
+            PaintCmd::DrawRect(rect) if rect.color == lime => Some((index, rect.placement.bounds)),
+            _ => None,
+        })
+        .collect();
+    assert!(rects.len() >= 4, "every mark paints a background fragment");
+    let mut lines: Vec<f32> = rects.iter().map(|(_, bounds)| bounds.min.y).collect();
+    lines.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+    assert!(lines.len() >= 3, "the marks sit on first and later lines");
+    for (index, bounds) in rects {
+        let covered = commands.iter().skip(index + 1).any(|command| match command {
+            PaintCmd::DrawText(run) if run.color == red => run.glyphs.iter().any(|glyph| {
+                glyph.point.x >= bounds.min.x - 0.5
+                    && glyph.point.x <= bounds.max.x + 0.5
+                    && glyph.point.y >= bounds.min.y
+                    && glyph.point.y <= bounds.max.y
+            }),
+            _ => false,
+        });
+        assert!(
+            covered,
+            "mark text must be emitted after its background at {bounds:?}"
+        );
+    }
 }
 
 #[test]

@@ -1,0 +1,30 @@
+[package]
+name = "genet-webrtc"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version = "1.97.1"
+description = "Caller-driven native WebRTC host for Genet documents"
+
+[dependencies]
+genet-runtime = { path = "../script-runtime-api" }
+# Independent wire leaf, not Murm's application carrier or root radio workspace.
+murm-rtc = { git = "https://github.com/merely-made/murm.git", branch = "main", default-features = false, features = ["crypto-ring", "dns"] }
+serde_json = { workspace = true }
+bytes = "1"
+
+[dev-dependencies]
+socket2 = "0.6"
+hickory-proto = { version = "0.26.3", default-features = false, features = ["std"] }
+log = { workspace = true }
+script-engine-api = { path = "../script-engine-api" }
+genet-bole = { path = "../script-engine-boa" }
+
+[target.'cfg(target_pointer_width = "64")'.dev-dependencies]
+genet-vano = { path = "../script-engine-nova" }
+
+[lints]
+workspace = true

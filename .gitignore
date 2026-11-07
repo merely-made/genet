@@ -111,3 +111,11 @@ justfile
 # Claude Code session state: worktrees, hooks, agent transcripts.
 .claude/
 support/name-claims/*/target/
+
+# Historical packets moved to Code/testing/genet, retaining exact original bytes.
+# New run evidence stays external; existing tracked active RTC receipt remains.
+/design_docs/receipts/
+/docs/receipts/
+/components/genet-render-host/receipts/
+/testing/genet/
+/design_docs/archive_docs/receipts/

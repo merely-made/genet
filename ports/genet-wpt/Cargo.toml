@@ -58,6 +58,7 @@ image = { workspace = true }
 # old regex shim is retired).
 script-engine-api = { path = "../../components/script-engine-api" }
 genet-runtime = { path = "../../components/script-runtime-api" }
+genet-webrtc = { path = "../../components/genet-webrtc", optional = true }
 genet-bole = { path = "../../components/script-engine-boa" }
 genet-vano = { path = "../../components/script-engine-nova" }
 
@@ -78,7 +79,8 @@ webgl_wgpu = { workspace = true, optional = true }
 pollster = { version = "1.0", optional = true }
 
 [features]
-default = ["image-decode"]
+default = ["image-decode", "webrtc"]
+webrtc = ["dep:genet-webrtc"]
 webgl-tests = ["dep:webgl_wgpu", "dep:pollster"]
 netfetch = ["dep:netfetcher", "dep:tokio", "dep:bytes", "dep:url"]
 # Forwards genet-livery's image decoding; see its `image-decode` feature.
@@ -87,3 +89,6 @@ image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode", "gen
 [dev-dependencies]
 # Offline mock server for the fetch()->netfetcher integration test.
 mockito = "1"
+
+[lints]
+workspace = true

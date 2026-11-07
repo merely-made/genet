@@ -22,3 +22,6 @@ toml = "1"
 # Same crate the build script uses, so the data file cannot drift into a shape
 # the generator would reject.
 toml = "1"
+
+[lints]
+workspace = true

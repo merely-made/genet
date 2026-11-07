@@ -85,7 +85,10 @@ fn quoted_inside_string_markers_match_literal_glyphs_and_cached_frames() {
 
     for list in ["ol", "ul"] {
         let html = format!("<html><body><{list}><li>item</li></{list}></body></html>");
-        assert_eq!(glyph_signature(&render(&html, css, 320)), glyph_signature(&reference));
+        assert_eq!(
+            glyph_signature(&render(&html, css, 320)),
+            glyph_signature(&reference)
+        );
 
         let (first, cached) = render_retained(&html, css, 320);
         assert_eq!(glyph_signature(&first), glyph_signature(&reference));

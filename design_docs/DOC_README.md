@@ -1,8 +1,12 @@
 # genet Documentation Index
 
-Read-only selector intake (2026-10-21): the [accessible names plan](2026-09-26_accessible_names_plan.md#read-only-selector-intake-2026-10-21) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
+- [WebRTC mDNS candidates](2026-11-04_webrtc_mdns_plan.md): remote fixed-IPv4 UUID receiving qualified with 44 native checks, unchanged selected WPT maps and 48 controlled headed cases. The core responder passes 115 checks; opt-in local registration/privacy passes both-engine same-machine LAN-interface exchange. The corrected headed advertisement matrix passes 40/48: Chrome 24/24, Firefox 16/24. An SDP privacy roundtrip defect is fixed; eight Firefox direct-restart cases remain failed. The same build passes 38 ordinary native checks, two LAN checks, six pure adapter checks and 12 Node helper checks. Native names stay untouched; Firefox's incoming observed IPv4 sockets use controlled aliases. The fresh packet is closed and owned processes/permissions restored. Full headed advertisement acceptance, cross-machine, Firefox native responder acceptance, IPv6 multicast, TURN TCP/TLS, server/interface replacement, browser-guest, media and carriers remain open.
+- [Firefox direct mDNS restart investigation](2026-11-05_webrtc_firefox_mdns_restart.md): 17 diagnostic runs reproduce the unresolved gate. Firefox exposes no remote host after restart; signaling controls and a discarded unicast responder prototype do not restore it. Supplier/pins and normal privacy behavior remain unchanged. All 25 helper tests pass.
+- [Firefox restart resolution trace](2026-11-05_webrtc_firefox_resolution_trace.md): both offerers send lookup requests that complete about nine seconds later without parser entry. A post-failure fixture-answer control completes in about 150 ms and reaches the matching ICE generation. The multicast follow-up reproduces WSL egress against a Wi-Fi registration for both offerers and observes a separate failure after successful Wi-Fi delivery. The nomination trace shows a queued pre-answer check creating the peer-reflexive pair. A controlled hold gives the named pair the first restart. In the native-offerer closure, Firefox replays the previous nomination as the fresh checklist fails. Timely resolution keeps both channels open under the same answer hold. Acceptance stays 40/48.
 
-Rust policy (2026-10-13): working toolchain 1.99.0 and shared MSRV 1.97.1, qualified separately. Canonical policy: `mere/design_docs/2026-08-12_family_composition_thesis_brief.md`, section "Shared Rust toolchain and minimum version".
+Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
+
+Rust policy (2026-10-13; configured version reconciled 2026-11-03): working toolchain 1.99.1 and shared MSRV 1.97.1, qualified separately. Canonical policy: `mere/design_docs/2026-08-12_family_composition_thesis_brief.md`, section "Shared Rust toolchain and minimum version".
 
 The canonical index for `genet/design_docs/`, per [`DOC_POLICY.md`](DOC_POLICY.md)
 §6. If any other index disagrees with this file, this file wins.
@@ -38,7 +42,48 @@ preserve raw comparisons and rows inside ERROR records separately.
 > inventory or a migration. The split is deliberate, and migration remains
 > open, unscheduled work. New documents go here.
 
-Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wire_adoption_plan.md) keeps Fetch/WebSocket policy and public package identity in Genet while delegating raw carriage to Murm's independent wire workspace. Canonical migration: `murm/design_docs/2026-10-13_murm_family_move_plan.md`, MOVE5.
+Netfetcher wire adoption (2026-10-14): [receiving plan](archive_docs/2026-11-03/2026-10-14_netfetcher_wire_adoption_plan.md) keeps Fetch/WebSocket policy and public package identity in Genet while delegating raw carriage to Murm's independent wire workspace. Canonical migration: `murm/design_docs/archive_docs/2026-11-02/2026-10-13_murm_family_move_plan.md`, MOVE5.
+
+## Completed records archived 2026-11-03
+
+Eight completed governed records are archived whole at their dated links below:
+Fleece follow-through, Servo cone retirement, MallocSizeOf removal, image-decode,
+Netfetcher wire adoption, dependency currency, Encoding, and census repair.
+Their test counts, source revisions and qualification limits remain historical.
+The [carry-forward owner table](2026-09-07_deferred_web_platform_lanes_scoping.md#completed-lane-carry-forward-2026-11-03)
+keeps deferred work with the live Fleece preservation, Realms/parser, Streams,
+observers, Forms, request-security and consumer owners. Eight reviewed successors were adopted on 2026-11-03, with their originals
+archived whole and design questions left open. The 169 older root `docs/` files
+remain in their existing homes; no legacy migration or active-lane closure was
+approved in this round.
+
+## Successor cuts adopted 2026-11-03
+
+Mark approved all eight reviewed cuts: "Yep". The current plans below replace
+their history-heavy originals, which remain whole in the dated archive.
+Adoption preserves open design questions, existing rulings and exact evidence
+limits; it does not implement or newly qualify the remaining work.
+
+## Receipt storage (2026-11-03)
+
+Historical receipt packets and the four flex ledgers are retained byte-for-byte
+under `Code/testing/genet/`, mirroring their former repository-relative paths.
+[Transfer manifest](../../../testing/genet/receipt-relocation/export-manifest.json)
+and [reader classification](../../../testing/genet/receipt-relocation/reader-classification.md)
+record identities, frozen snapshot dependencies and verification limits.
+Existing owner fixtures, WPT corpus/metadata and expectation maps remain
+versioned inputs. Historical packet scripts retain their original source/path
+requirements; do not run their writers against frozen evidence.
+
+The completed [WebRTC baseline packet](archive_docs/receipts/2026-11-01_webrtc_conformance_plan_receipts.md)
+is frozen at its cited path. The [closed E2d packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-03_webrtc_conformance_plan_receipts.md)
+and [closed E2s packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_conformance_plan_receipts.md)
+live under `Code/testing/genet/`. Earlier qualification keeps its original
+scope and identities; never overwrite a cited receipt.
+The [closed E2m packet](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-04_webrtc_mdns_plan_receipts.md)
+records remote mDNS qualification independently of those closed packets. The [unattended setup](2026-11-04_webrtc_mdns_plan.md#unattended-test-setup-2026-11-04) has a stable native test executable and read-only application-rule checks. After the user's one-time administrator installation, all 44 native checks passed from an ordinary shell, including eight controlled STUN/TURN checks; the temporary fixture is stopped. Its fresh operational receipt is separate from closed conformance evidence and does not qualify local advertisement adoption.
+
+The shaping [qualification receipt](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md) is also frozen externally with exact original Git bytes. Its [export manifest](../../../testing/genet/shaping-publish-20261103/receipt-export.json) records the source commit and SHA-256; [publication checks](../../../testing/genet/shaping-publish-20261103/report.md) hold the new continuation. Future outputs use new files rather than overwrite the frozen receipt.
 
 ## Required reading order
 
@@ -51,9 +96,9 @@ Netfetcher wire adoption (2026-10-14): [receiving plan](2026-10-14_netfetcher_wi
 
 - [Genet lane handoff, 2026-10-15](2026-10-15_genet_lane_handoff.md): what landed (ValueEngine, Buckram context-free core, without-classic-vello, Linux test triage), protected Codex worktrees, completed Genet Netrender adoption with fresh Windows/wasm gates, and remaining viewer options and warning cleanup; Mere receiving status lives in its browser presentation plan. Adds (2026-10-15, O-PC) the accessibility/AccName lanes (365/405), Forms Phase C's paused state and rulings, and Mark's queued Genet work.
 
-- [Architecture and removal audit, 2026-10-16](2026-10-16_architecture_removal_audit.md): Reconciled register at 2026-10-17: 56 of 56 named findings addressed locally, 0 partial, 0 open, qualification gates in the 2026-10-17 qualification ledger (index corrected 2026-10-20; the older count was 39/5/12); I2 shared lifecycle, R8 truthful execution bounds and R14 owned registrations verified with 131 passing tests and the Ortet host check, including actual GPU draw; R7 remains partial with default cancellation refusal and explicit trusted cooperative operation; I13 compiler-owned normalization, L10 experimental fragmentation gating, L11 shared axes and L12 historical census verified by 591 tests including GPU readback, with six existing ignores; R4/R5 retained task dispatch and parser failures, H3 production rAF scheduling and R15 elapsed clock ownership verified by 205 tests including retained frame mutation and CPU repaint; R1/R2 shared selector ownership and static queries, R3 whole-list declarations and R9 fallible WebGL creation verified by 706 passing tests including WebGL draw/readback and CPU repaint, with 6 existing ignores; R6/R13 importer identity and scoped resolver/root cleanup, L8 table-owned aggregation and L13 font capture admission verified by 603 passing tests including an actual CPU repaint, with one separately reproduced baseline font-test failure and two existing ignores; I7/I8/L1/L7 canonical origins, decoded cache cap, shared token-aware CSS comments and borrowed retained planes verified by 789 tests including an actual CPU repaint; L3 shared image payload ownership and L4 generated-parent/positioned-inline repairs with 506 passing Genet tests, supplier CPU draw and a now-published supplier revision (Mere adoption remains separate); historical L4 transform/context evidence retained; I4 source-relative image identity, I5 capture observation and I3 retained resource acquisition; W1/W2 linked-layout repair with 582 passing tests and native Vulkan draws; historical post-cut dispositions and 52-package coverage retained; not Forms acceptance.
+- [Architecture audit follow-through](2026-11-03_architecture_audit_followthrough_plan.md): historical 56/56 source disposition and retained decisions; the reduction follow-through owns remaining execution, while Forms and request-security keep their own lanes.
 
-- [Architecture reduction implementation plan, 2026-10-16](2026-10-16_architecture_reduction_plan.md): bounded task execution across the audited ownership lanes, with serialized memory-capped validation and preserved Forms acceptance boundaries.
+- [Architecture reduction follow-through](2026-11-03_architecture_reduction_followthrough_plan.md): current receiving/platform gates and concrete resource, mutation, classifier and worker contracts; preserves the selected NetRender blob-identity comparison and open performance questions.
 
 - [Nonblocking native frame qualification](2026-10-30_nonblocking_native_frames_plan.md): pending native batches preserve current-frame quality and device-loss admission while the host services input; Turnstone pane/tile measurements are receiving evidence.
 
@@ -72,24 +117,24 @@ older `docs/` corpus without changing their location or governance.
 | [Font fallback](2026-09-04_common_script_font_fallback_plan.md) | Windows T1 is accepted with focused regressions and Ortet readback. Consumer revision adoption, upstream disposition, and other-platform measurements remain open. |
 | [Ortet](2026-09-03_ortet_founding_plan.md) | O0-O5 are landed for the native host. Exact-source Boa/Nova receipts accept native input, timer/microtask completion, bounded failure, idle-woken fetch and Worker delivery, semantic/pixel correlation, and stale-session rejection. Default Ortet stays script-free. Windows AccessKit native actions are accepted by the O2 UIAutomation receipt. Browser-hosted scripting remains open. Publication is a later packaging decision under the workspace's `publish = false` policy. |
 | [K6 fragmentation](../docs/2026-08-15_buckram_k6_fragmentation_execution_plan.md) | K6a typed inputs, K6b's retained context/token model, and a dormant pre-K6c style/input dispatch seam landed. All 6,077 named records match the frozen pre-K6 baseline. Live formatter continuation and multicol geometry remain K6c work. |
-| [Flex and grid, Row 18](2026-08-25_livery_flex_shorthand_plan.md#row-18-closure-and-remaining-work) | Bounded vertical-flex slices landed. Remaining work includes mixed-writing-mode baselines, generated/pseudo self edges, shared font metrics and percentage provenance, then a measured grid inventory. The dated guard review records 21 pre-K6 flex/grid pass-to-fail cases. |
+| [Flex and grid, Row 18](2026-11-03_flex_grid_remaining_plan.md) | Remaining mixed-writing and pseudo edges, shared metrics/provenance, grid inventory and the 21 historical guard losses; bounded completed slices retain their original receipt limits. |
 | [Floats and shapes, Row 12](../docs/2026-08-25_buckram_horizontal_float_direction_reconciliation.md) | Horizontal box-shape and direction slices landed. Vertical/orthogonal transforms and remaining shape families retain their own unproved boundaries. |
 | [Generated text, Row 17](2026-09-26_generated_text_plan.md) | Inline string/attr content and named decimal counters share retained text with AccName without changing DOM offsets. Nested/sibling counter scope and retained mutation fixtures pass; full package validation is recorded in the plan. Implicit list numbering, markers, other styles, quotes, images and general pseudo-box layout remain open. |
-| [Accessible names and descriptions](2026-09-26_accessible_names_plan.md) | Bounded DOM/generated names and neutral projection; `get_computed_label` plus families F, B, E and K are published. October 16: family A embedded-control values are qualified on ThinkPad, 424/484 to 437/484 on both engines with exactly 13 gains and no prior-pass loss; embedded-control file 29/29. Render/WPT gates pass 140 tests with two existing ignores. [A receipt](receipts/2026-10-16_accname_embedded_controls.json). Forty-seven assertion failures (including the separate dialog projection gap), 159 manual skips, `get_computed_role`, full AccName/HTML-AAM and human AT remain open. Forms C stays separate. Earlier qualification/adoption history and K's CSS guards remain in the plan. |
+| [Accessible names, roles and descriptions](2026-11-03_accessible_names_roles_plan.md) | Remaining name families, separate role-hook design/localization, dialog projection and human/host qualification; accepted A/F/B/E/K slices and Forms checkpoint epochs retain their dated boundaries. |
 | [Shared Unicode text boundaries](2026-09-26_text_boundaries_plan.md) | Unicode 17 grapheme/word/sentence boundaries with byte/scalar/UTF-16 offsets; official corpus and Genet editor pass. Mere search and Cambium editing adoption published as `ada6f265`, with focused consumer gates. Locale dictionaries and remaining consumers stay open. |
 | [K7 foundational sizing and dispatch](../docs/2026-07-26_buckram_css_layout_engine_plan.md#k7-foundational-sizing-and-dispatch-closure) | Reconcile landed sizing fixes with remaining deferrals before choosing a slice. Fragmentainer-dependent work consumes K6; final closure includes deleting CSS-facing Taffy block dispatch. One slice, chosen by Knot's D1 rather than by that reconciliation, landed 2026-09-24 under the [atomic-inline basis note](../docs/2026-09-24_buckram_k7_atomic_inline_basis_execution_plan.md): atomic inline roots resolve against their real containing block through a contribution pass and a basis pass, instead of the viewport, with no WPT `pass -> anything else` over six directories. A second slice closed the two pre-pass gaps the first found: atoms not admitted to shrink-to-fit now shrink to fit, and atom text is measured at the width it wraps at; its three `pass -> fail` transitions remove vacuous passes and are named there. |
 | [Line box model](2026-09-25_line_box_model_plan.md) | In progress, 2026-09-27: each line box built per CSS 2.1 10.8 in genet-livery's line pass (a strut, each box's own half-leading, atoms by margin box, lines stacked from those heights) instead of correcting Parley's single line height afterwards, with the quirks-mode line height quirk and each document's quirks mode carried through the scripted tier to layout and `compatMode`. Found through Knot's tall inline-block sitting 2px into the line above. Slice A implemented; slice B implemented too: inline-blocks, buttons, table cells, inline tables and form controls align on their own baselines, with buckram keeping a table's declared baselines and synthesizing a baseline-less row from its stretched cells. Under `line-height: normal` a text run paints over its box's content area inside its line box, as Chromium does (2026-09-27, Isometry's ruling 329); Ruling 379 (2026-09-27) authorizes explicit-line-height content bounds and wrapped inline border/padding bounds together; both are implemented with six combined fixtures, two fault-specific broken controls and 867 passing Livery/Buckram tests (6 existing ignored); Independent source/control review passed; 200 own-9607 boundary tests pass, and the qualified local-c8 Isometry pair measures 187 rows with 0 short versus 39 short on published dependencies. Portable Isometry repinning is separate. Main integration awaits a safe window around concurrent retained-motion work; primary pins and lock are unchanged. Historical Chromium/WPT/187-row claims are qualified in the dated annotation. **2026-09-27 integration refresh:** exact main f2e2850 merged into the existing text lane; the new wrapped/negative-leading retained-motion fixture passes. Combined CPU gates pass 876 with 6 existing ignored plus 200 boundary tests; the current 9607-family Isometry pair measures 187/0 short rows versus published 187/39. Sealed evidence and source qualifications are in the plan. Independent review passed and exact tested source 7b48f94d landed on main/origin; portable consumer repinning remains separate. Historical fixture output is preserved; automatic policy blocked worktree cleanup, so the integrated checkout remains. **2026-09-28 follow-up:** measured formatting-line scroll extent is missing from both nested clamp consumers; Genet owner query/retained geometry and seven focused CPU fixtures are implemented; missing-line, first-fragment and intrinsic-owner controls fail as intended; restored Livery/Buckram passes 883 with 6 existing ignored. Independent review passed; exact tested source `7a60ad7965a` is published on main/origin. Mere adoption and its original 12px consumer gate remain pending. See the dated plan annotation and raw receipt; existing font-content bounds stay unchanged. |
 | [Livery line breaking](2026-10-02_livery_line_breaking_plan.md) | S1.0–S1.1 landed on main, 2026-10-03. The S1.0 baseline and R14 release guard both cover 14 text/layout directories with 989 pass, 754 fail, 551 skip; two additional pre-existing entries (`mediaqueries`, `css-position`) complete the 16-entry guard. Both same-binary baseline runs had zero per-file status changes, and the R14 guard passed with `unexpected=0` and no errors. S1.1 retains its shaped public break stream without changing Parley, uses the approved ICU4X 2.2.0 edges and CSS-required SA fallback, and applies the ruling-14 Anywhere override after the NCA nowrap gate. Full crate gates, per-fixture controls, and source/dependency provenance are recorded in the plan and evidence checkpoint. Rulings 10–14 are complete. |
-| [Image decode feature](2026-10-05_image_decode_feature_plan.md) | Landed 2026-10-05, at Mere's mer3ly site canvas request (its Ruling 106): `genet-livery`'s image decoding is the default-on `image-decode` feature, with one private decode point (`src/image_decode.rs`). `genet-render`, `taproot`, `genet-documents`, `genet-scripted` and `genet-wpt` take `genet-livery` without defaults and forward the feature; `ortet` asks for it explicitly. With it off, images get no natural size and are not painted. The plan lists the Mere rows a viewer cone must change. |
+| [Image decode feature](archive_docs/2026-11-03/2026-10-05_image_decode_feature_plan.md) | Landed 2026-10-05, at Mere's mer3ly site canvas request (its Ruling 106): `genet-livery`'s image decoding is the default-on `image-decode` feature, with one private decode point (`src/image_decode.rs`). `genet-render`, `taproot`, `genet-documents`, `genet-scripted` and `genet-wpt` take `genet-livery` without defaults and forward the feature; `ortet` asks for it explicitly. With it off, images get no natural size and are not painted. The plan lists the Mere rows a viewer cone must change. |
 | [Out-of-flow placement](2026-09-26_out_of_flow_placement_plan.md) | Implemented 2026-09-26: a fixed box inside an absolute one no longer lands off by its ancestors' move (each placement is resolved just before its move, ancestors first); absolute, fixed, relative and sticky children no longer make a shrink-to-fit box fill its containing block (Buckram's intrinsic admission took only static children); and the one-shot layout entry, which CSSOM's resolved values read, shrinks an unadmitted inline-block to fit. Reported by the Knot session; each fix ruled by Mark. Open: the positioned queries' empty-leaf contract. |
 | [WPT harness and ledger](../docs/2026-08-24_wpt_harness_ledger_execution_plan.md) | Exact scorer and reference-verification gates landed. Freeze a fresh candidate runner for new work; unsupported test/reference agreement earns no conformance credit. |
-| [Servo cone retirement](2026-09-07_servo_cone_retirement_plan.md) | servo-paint's compositor half carved out as genet-compositor; the reftest lane renders through genet-render-host; the constellation trait cone left the graph 2026-09-07. All gates green; next proof is Mere's dependency rename at its next bump. |
+| [Servo cone retirement](archive_docs/2026-11-03/2026-09-07_servo_cone_retirement_plan.md) | servo-paint's compositor half carved out as genet-compositor; the reftest lane renders through genet-render-host; the constellation trait cone left the graph 2026-09-07. Historical source and gates are retained whole in the archive; current compositor/testdriver ownership and any consumer adoption remain separate. |
 | [Web platform WPT census](2026-09-06_web_platform_wpt_census.md) | Historical Boa snapshot retained: 82 maps, 21,671 genuine records plus one diagnosed fallback artifact. Full Vano refresh completed all 82 shards: 23,999 records and 33824/144238 passing reported subtests. Receipt separates historical/new membership, timeouts, no-results, unsupported cases and harness errors; profile/budget differences prevent an engine-only comparison. 2026-10-02: the 10 panics are attributed (3 in Vano, 7 in Genet), and Mark ruled that Vano's three be fixed in Vano. |
 | [Standards-to-features ledger](2026-09-07_standards_to_features_ledger.md) | Founding counts preserved; status reconciled September 29 with published text consumers, scripted generated names and bounded decimal counters, alongside dated Selection/Range, MutationObserver, Worker and Shadow DOM receipts. Vano names our maintained Nova fork. Census refresh is in progress; generated content belongs to rendering Row 17. 2026-10-02: conformance targets ruled (C1–C3) and briefed: Encoding through `encoding_rs`, HTML constraint validation, WHATWG Streams, and a CSS-wide WPT census refresh. Since 2026-10-18 each row names its ids in the family spec registry (`merelyllc.com/content/specs.toml`), which owns spec-first admission (D2). Reading revised 2026-10-19: consumer links and evidence limits supply cues, without prescribing an implementation order. |
 | [CSS 3D transforms, first-frame scaling and scene viewport embedding](2026-09-12_css_3d_transforms_and_first_frame_plan.md) | T3's bounded Genet content-box, shared 2D paint/input geometry and typed used-color seam implemented 2026-09-13; 61 focused checks pass. Native Bench B assembly is accepted on the recorded downstream development build (167 frames/15 captures, scale 2); a separate committed-dependency Mesocosm workspace check passes. Ordinary retained leaves gain no clip/layer; the percentage-padding approximation remains explicit. T3's host mutation instrument is built and measured 2026-09-15: a trait-level `apply_host_mutations` seam on `DocumentSession`, Ortet's `--mutate` driver, and per-frame timing that keeps actual work apart from presentation wait (`--timing-json`). On the bounded fixture the mutation costs ~2 ms of work per frame and the presentation wait absorbs it, so frame time alone would have shown nothing. The sweep is measured at 1,000, 5,000 and 20,000 elements and shows any host mutation costing a full-document geometry rebuild (532 ms of work per frame for two mutated elements at 1,000, against 1.85 ms unmutated); the sweep was repriced after T2 on 2026-09-16, 20,000 elements 560 s to 1.80 s per mutating frame and 50,000 first measured at 7.52 s. **Genet's T3 seam acceptance is complete, 2026-09-16.** The changed-source acceptance rerun at main `f1f21c61d26` with netrender `06f3a12f4` passed the native composition receipt: 25/25 probes on Boa and Nova at scale 2, with captures byte-identical to 2026-09-11 (`0xa440137ccc503f9c`). The WebGL and G5 guards, netrender's GPU gate and the focused suites also passed. WPT maps at `101d9e9ade8^`, `101d9e9ade8` and main found one `pass -> fail` introduced by the seam commit itself: `pointerevents/pointerup_button_value_matches_corresponding_pointerdown.html`. The rewritten hit test's half-open containment held no point of the zero-extent border box that Livery gives an unsized form control. Every later movement is T1's, apart from one cssom-view subtest loss from `e629817a244`. The hit-test fix closes done-condition bullet 3: a zero-extent border axis now holds its own coordinate, and four focused tests were added. The pointerup test passes 3 of 3 with zero `pass -> anything else` across `pointerevents`, `uievents`, `touch-events` and five reftest directories, and the native receipts reproduce their captures. The wing's bench still depends on Mere's producer lifecycle, picking/accessibility and update-cost receipts. Receipts: `Code/testing/genet/t3_acceptance_20260916/results.md`, `Code/testing/genet/wpt-ledger/2026-09-16_t3_seam_attribution/` and `Code/testing/genet/wpt-ledger/2026-09-16_t3_hit_test_fix/results.md`. The Bench B consumer receipt is not an Ortet-composition or WPT rerun. **T2 is implemented and measured 2026-09-15**: a child index and a deferred aggregate-overflow rebuild in buckram's `FragmentTree`, the same bound on the relative, sticky, retained-root, incremental-query and retained-text translate paths, and two per-element style costs removed in genet-livery and livery; plus a `--phase-timing` flag on Ortet over a new `genet_livery::phase` recorder that reports parse, style, layout and paint for one frame. The L0b grid rerun on the same host: fitted growth exponent 2.156 -> 1.168, the 50,000-element first frame 1,172.21 s -> 7.68 s, every rendered digest unchanged. The plan's 1-second bound at 50,000 is **not** reached; 7.68 s is, with the rationale recorded under T2 — the remaining per-element constant is the cascade, which matches every rule against every element. WPT census over css/css-position, css/CSS2/abspos, css/CSS2/positioning, css/CSS2/normal-flow, css/css-transforms and css/css-values, before and after: zero transitions of any kind. Receipt `Code/testing/wing/l0b_t2_2026-09-15/results.md`. **T1 is implemented and measured 2026-09-15**: a `Matrix3D` composer under Livery's existing `Matrix2D`, the CSS Transforms Level 2 functions (`matrix3d`, `translate3d`/`translateZ`, `rotate3d`/`rotateX`/`rotateY`/`rotateZ`, `scale3d`/`scaleZ`, `perspective()`), the `translate`, `perspective`, `perspective-origin`, `transform-style` and `backface-visibility` properties moved out of the catalog's unimplemented table, and axis and three-component forms for the individual `rotate` and `scale`. In genet-livery the accumulated 4x4 reaches the existing shared paint/hit-test `TransformSpec` unchanged; a `flat` boundary projects; a `preserve-3d` context z-sorts its participating boxes by transformed depth; `backface-visibility: hidden` culls against the element's own 3D rendering context; and a perspective divide is recorded as a named `TransformGap` before the orthographic approximation is painted. Seventeen focused tests added; livery, genet-livery, genet-documents and ortet suites rerun green (206 / 527 / 51 / 32). `css/css-transforms` re-measured on this host at the base commit and on the lane: testharness 291 -> 650 subtests with **zero `pass -> anything else`** and two attributed subtest losses, reftest 534 -> 600 passing with 70 fixed and 4 attributed new failures. The wing fixture's silhouette agrees with `isometer-mesh`'s bake to 98.73% with no pixel more than one pixel out; the yaw and depth-order headless readbacks pass 13 of 13 assertions. Receipts `Code/testing/genet/t1_css_3d_20260915/results.md` and `Code/testing/genet/wpt-ledger/2026-09-15_t1_css_transforms/`. **T4 is implemented and measured 2026-09-16**, in netrender as `06f3a12f4`: placements inside rect-clip, alpha and element-filter layers retain and read back byte-identical to independently expanded references, and the clip-wrapped L0a rerun takes the 200,000-rectangle cell from 40.46-52.04 ms to 8.80-9.56 ms, within 1.07x of the same run's unclipped cell. T4's retained path is unreachable from Ortet and `genet-wpt`, which place no retained fragments; Cambium's Rootstock registers them but never places them (mere receipt 2026-09-16), so T4 is reachable from no host until that wiring lands. **Form controls given intrinsic sizes 2026-09-16**, closing the hit-test fix's rotation residual for every default-styled control. A first pass (UA defaults plus `size`/`cols`/`rows` presentational hints) regressed two WPT subtests that check the attribute never reaches `getComputedStyle`, since a presentational hint is cascade input by construction; reworked the same day into a hint-less, ratio-less sibling of `apply_replaced_intrinsic_style` (`components/genet-livery/src/layout.rs`) that writes the natural size straight to Taffy and never touches `ComputedValues`. The rework's own bisection also found and fixed a real `css/css-sizing/max-content-input-001.html` reftest regression — a fixed cross-axis dimension perturbing an unrelated max-content measurement, evidenced with before/after pixel captures rather than attributed by hypothesis — via a narrow guard against writing a natural dimension on an axis whose sibling is an intrinsic-sizing keyword. Final state: genet-livery 543 passed/6 ignored, livery 206, ortet 32 (36 with `scripted-nova`), genet-documents 51, all green. WPT testharness+reftest over `html/rendering/widgets`, `html/rendering/replaced-elements`, `css/css-sizing`, the input/textarea/button element directories, `pointerevents` and `uievents`: **zero regressions**, one improvement (`the-select-element/select-1-block-size-001.html` fail→pass). Native standards-compositing receipt unchanged, 25/25 probes, digest `0xa440137ccc503f9c`, reproduced again after the rework. Receipts `Code/testing/genet/wpt-ledger/2026-09-16_c_form_controls/` (including `max_content_investigation/`) and `Code/testing/genet/c_form_controls_20260916/native_receipt_v2/`. **The animation-clock lane investigated and corrected the 2026-09-15 CSS Animations finding, 2026-09-16**: testharness mode has no animation clock at all (a structural gap in the scripted DOM's style route, its own lane, not fixed here); reftest mode's negative-delay convention already worked; `animation-play-state` was unimplemented and is now implemented with paused-freeze semantics; and `rotate-animation-with-will-change-transform-001`'s failure traced to an unrelated `animation` shorthand gap, not to the clock or T1. Five focused tests added, livery/genet-livery/genet-documents/genet-wpt/ortet suites rerun green, WPT before/after over four testharness and two reftest directories with one attributed regression (a vacuous pass removed) and five gains. Native compositing receipt not rerun (out of this lane's change surface). Receipts `Code/testing/genet/wpt-ledger/2026-09-16_d_animation_clock/`. **T2's second half is implemented and measured 2026-09-16** (lane F): a rightmost-compound selector index — id, class, local name, universal bucket — replaces the cascade's every-rule-against-every-element loop in both branches of `resolve_subtree_on_this_stack`, with cascade order preserved by merging bucket candidates back into source order before matching and every tree-scope-crossing rule routed to the universal bucket; and the finer split found a **second quadratic** in layout, a linear `placements.iter().find()` inside a per-positioned-box loop in `apply_admitted_positioned_inline_sizes`, growing n^2.19 and costing 994 ms of the 50,000-element frame, replaced by a lookup table for a 157x cut. The L0b grid rerun on the same host with both ends measured in one session: 50,000-element first frame **5.93 s -> 4.80 s**, the 20,000 -> 50,000 growth exponent **1.242 -> 1.016**, every phase's per-element cost now flat across the whole grid, every rendered digest unchanged. The whole-grid fitted exponent barely moves (1.112 -> 1.126) and is a poor instrument for a constant-factor change on four points; the pairwise steps and the per-phase table are the result. The 1-second bound at 50,000 is **still not** reached and **4.80 s is the restated bound**, with no superlinear term left anywhere in the four phases. The lane also **corrects the 2026-09-15 cascade finding**: a control that offers every rule puts the rule-matching loop at 157 ms of the style phase, not 2.25 s, so the index is worth 42x on that loop but 5% of the phase, and the remaining per-element constant is `ComputedValues`' shape — the double cascade and the 160-property colour walk — which inverts hypothesis 3's ranking and is left to its own lane. The inline `style` parse is measured at 156.5 ms (3.13 us/element) and deliberately not cached, because every element carries a distinct declaration and the parse genuinely happens once. Mutation reprice at 50,000 on lane E's command, both binaries: 6.96 s -> 6.01 s of work per mutating frame, the gain entirely in `session.frame`. WPT before and after over `css/selectors`, `css/css-cascade`, `css/css-position`, `css/CSS2/selectors` and `dom/nodes` (testharness) and `css/selectors`, `css/css-cascade`, `css/css-position`, `css/CSS2/selectors` and `shadow-dom` (reftest): **zero transitions of any kind** in all ten runs; `css/css-scoping` is absent from the checkout and was not run, and the `css/CSS2/selectors` testharness and `shadow-dom` reftest rows are null results because every file in them is skipped. Eight focused tests added; genet-livery 556, livery 206, genet-documents 51, ortet 32, all green. Native compositing receipt reproduced, 25/25 probes on both engines, digest `0xa440137ccc503f9c`. Temporary phase probes removed before the lane closed, instrumented tree preserved in the receipt. Receipts `Code/testing/wing/l0b_f_2026-09-16/results.md`, `Code/testing/genet/wpt-ledger/2026-09-16_f_selector_index/` and `Code/testing/genet/f_selector_index_20260916/`. |
 | [WPT harness repair](2026-09-07_wpt_harness_repair_plan.md) | Earlier isolation/include/handler/deadline repairs retained. September 29 isolated Vano workers use a fresh runtime because harness snapshots lost the window proxy; real sync/microtask reporting passes on both engines, GC on/off (`0c4aa9f60b8`). In-process snapshots and server-mode network measurements remain separate gates. |
 | [XMLHttpRequest](2026-09-07_xhr_plan.md) | XHR as a state machine over the fetch seam, landed 2026-09-07: xhr 53 to 281 subtests in disk mode, 831 of 1,336 in server mode, fetch holds. Residuals: responseXML needs DOMParser; 28 errors are Worker and document.domain demand. |
-| [Cheap globals](2026-09-07_cheap_globals_plan.md) | `performance` (+ `PerformanceObserver`), `queueMicrotask`, `structuredClone`, `MessageChannel` / `MessagePort` / `BroadcastChannel` and `crypto` landed 2026-09-07: 79 forward file movements, zero pass-to-fail, +462 subtest passes over ten directories. Next proof is `crypto.subtle`, real `ArrayBuffer` detachment, and the cross-agent reuse of the clone walker by the Worker lane. |
+| [Globals, clone and timing](2026-11-03_globals_clone_timing_frontier_plan.md) | Reconcile actual transfer custody, platform serialization, timing producers and cross-agent reach. SubtleCrypto, FileList and later Worker/frame messaging already exist; their presence does not establish full qualification. |
 | [IDL interface table](2026-09-07_idl_interface_table_plan.md) | The scripted tier's HTML interface table is generated from WPT's vendored WebIDL plus its tag map, with 41 reasoned overrides and a drift test. 72 interfaces / 338 reflected attributes / 41 shape-only DOM-CSSOM interfaces. Next proof is extending the shape pass past `html`, `dom` and `cssom`, and the reflection-algorithm gaps (`ReflectRange` clamping, invalid-value defaults). |
 | [MutationObserver](2026-09-07_mutation_observer_plan.md) | The arena's mutation point now has two consumers: Livery's `DomMutation` stream and a spec-shaped observer record fanned out at the same mutators, off until something observes. Landed 2026-09-07 with four `dom/nodes/MutationObserver-*` files all-pass, +495 subtest passes and zero pass-to-fail. `Range` landed 2026-09-07 and closed that residual (`childList` 18/38 to 32/38, `characterData` 13/23 to 21/23). The DOM node model lane then closed the rest on 2026-09-07 — fragment insertion, `normalize`, `outerHTML`, attribute namespaces and the static-to-scripted clone of comments and PIs — and the four `MutationObserver-*` files now pass. |
 | [Selection and Range](2026-09-07_selection_range_plan.md) | `Range` / `StaticRange` / `Selection` over the scripted arena, with the live-range steps at the bootstrap's mutation funnel and a boundary index keyed by node. Landed 2026-09-07: `selection` 0/280 to 28,582/33,621 subtests, `dom/ranges` 0 to 10 all-pass, +29,126 subtest passes and zero pass-to-fail. The DOM node model lane supplied all three on 2026-09-07 (plus a constructible `Document`, the second floor in the same file) and `dom/ranges` unfloored to 15 all-pass / 35,466 subtests. |
@@ -101,13 +146,13 @@ older `docs/` corpus without changing their location or governance.
 | [Host contract ownership](../docs/2026-08-14_web_platform_host_contract_plan.md) | Genet owns retained session contracts; Mere owns surface orchestration and product adapters. The older S0-S5 receipts need a consumer-side status refresh before resuming those lanes. |
 | [Shadow DOM](2026-09-07_shadow_dom_plan.md) | A parentless shadow root in both DOMs, a per-host slot assignment table maintained at the mutation, `flat_children` under Livery's rendering traversals, per-rule tree-scope matching with `:host` / `:host()` / `::slotted()` / `::part()`, event retargeting and `composedPath()`, and the declarative post-parse pass with `<template>.content` in one shared inert document. Landed 2026-09-07/08: `shadow-dom` 6 to 45 all-pass and 24 to 1,512 subtests, +1,761 subtest passes over four directories, one explained pass-to-fail. Residuals: `:host-context()`, `adoptedStyleSheets`, focus delegation, declarative attachment consulting the custom-element registry (which needs parser/script interleaving — Mark's call), and (2026-10-14, residual 11) the accessibility walk skipping shadow trees. Residual 11 is confirmed by a failing-first run and fixed 2026-10-14 on `shadow-a11y-walk` (not merged) under Mark's rulings 11.1–11.3. The projection, name from content and the scroll climbs now follow the flat tree; ID references resolve per tree; `descendant_text` stays on DOM children. Six tests, all 48 `genet-render` tests pass. AccName's two shadow WPT files wait on a `get_computed_label` testdriver hook. *(Annotated 2026-10-14: merged to main as `42cabb5a886`/`bd5f7ca0994`. With the hook on branch `computed-label`, `shadowdom/basic.html` passes 2/2 and `slot.html` 2/4; the gap is `aria-label` on a `<slot>`.)* |
 | [Component model](2026-10-20_component_model_plan.md) | Custom elements, ElementInternals and shadow trees against `dom`, `html/dom`, `custom-elements` and `shadow-dom`; ledger row 14. Planned 2026-10-20 under Mark's rulings, reactions first. The arena records reaction candidates at its mutation point (G5), custom-element state lives on the node, and the `[CEReactions]` members come from a generated table. P1 (reaction stack and timing) is in progress on branch `component-model`, not merged; the plan's Progress holds the matched accounting.
-| [Parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md) | HTML's parsing model with scripts run at the point the tree builder pops them: an html5ever `TreeSink` over the live arena, `document.write` at the tokenizer's insertion point, `currentScript`, the `readyState` transitions with `DOMContentLoaded` and `load`, parse-time custom-element upgrade, and declarative shadow roots consulting the registry. Landed 2026-09-08 in the engine (part one: +68 subtest passes over eight directories, 30 files `fail -> pass`, zero pass-to-fail, no repins). **Part two, 2026-09-08**, routed the WPT runner and `LiveryScriptedDocument` through the same parse and closed the named residuals: `testharness.js` as a prelude and one `load` dispatch, a two-phase `LiveryCssom` that resolves author sheets from the arena as the parser fills it, `document.write` tokenized inside the call so its markup is visible to the writing script and a written `<script>` runs, the open stream appending through one live tokenizer, upgrades at element creation, foreign-namespace scripts, and scripts in template contents left inert. +181 subtest passes over ten directories and +439 across the 79-directory disk census (excluding two identified timing artifacts), 19 census `pass -> fail` all attributed, six baselines repinned forward-only, all fourteen at `unexpected=0`, Ortet digest unchanged. **Both Shadow DOM declarative regressions now recover in WPT** — the open gate is closed. |
+| [Parser and scripts](2026-11-03_parser_script_frontier_plan.md) | Preserve the live parser/arena and policy contracts. Remaining work is async timing, XML/foreign-script ordering and current headed integration, with exact-case reconciliation before new claims. |
 
-| [iframes and nested browsing contexts](2026-09-08_iframes_plan.md) | Browsing-context tree, parent resource route and child paint-list composition landed 2026-09-08; the original script-free receipts remain dated in the plan. The [Realms continuation](2026-09-08_realms_plan.md) resolved the runtime decision, implemented child and top-level navigation, and completed scripted headed G5 acceptance on both engines. The current residual inventory lives there; the earlier request for a runtime/WindowProxy decision is superseded. |
-| [Realms](2026-09-08_realms_plan.md) | Status reconciled 2026-09-22 against source/history; existing September 13 receipts were not rerun. Proposed next slice: synthetic/template document metadata, with done-conditions in the plan. One runtime per agent, per-context realms, stable WindowProxy, navigation and ordinary/shadow/template adoption are landed. Latest closure, 2026-09-13: parent effective-base snapshots, frozen first-base semantics and retained Node/Document/Attr baseURI after queued teardown. All 160 focused tests and both isolated cost guards pass; 27 WPT files per engine preserve 74 Boa passes and gain four. Six headed runs preserve digest, 31 -> 31 nodes and collection. Open: synthetic document metadata, retired mutation, history/security qualifications, live canvas adoption and parser timing. Nova WPT no-results and prior aggregate timing variability remain qualified; no baseline repins. |
+| [iframes and nested browsing contexts](2026-09-08_iframes_plan.md) | Browsing-context tree, parent resource route and child paint-list composition landed 2026-09-08; the original script-free receipts remain dated in the plan. The [Realms continuation](2026-11-03_realms_frontier_plan.md) resolved the runtime decision, implemented child and top-level navigation, and completed scripted headed G5 acceptance on both engines. The current residual inventory lives there; the earlier request for a runtime/WindowProxy decision is superseded. |
+| [Realms and document lifetime](2026-11-03_realms_frontier_plan.md) | Synthetic metadata, retained mutation, history/security and navigation choices remain; one Runtime per agent, per-context realms, stable WindowProxy and bounded adoption/base receipts retain their historical limits. |
 | [cadency, the owned selector engine](2026-09-18_cadency_selector_engine_plan.md) | Removes what the servo/stylo repository still supplied after the fork left: `stylo_malloc_size_of`, `servo_arc`, and the `selectors` crate, replaced by an owned, spec-shaped standalone crate for the slice Livery enables. **Landed 2026-09-18 (`2c63a9aab16`) and published 2026-09-20**: `components/cadency` (10 tests), Livery's `selector.rs` 514 to 179 lines, `cargo tree -i` finds none of the removed crates, all suites at their 2026-09-16 counts, genet-wpt geometry relabelled `buckram`, and WPT before/after over lane F's ten runs plus `shadow-dom` testharness with zero transitions. The preserved `imported_part` direction bug was fixed after the measurement in `162831765e5`. On crates.io: `cadency` 0.0.1, `livery` 0.0.5, `buckram` 0.0.3, `genet-livery` 0.0.4; `livery` 0.0.2-0.0.4 and `genet-livery` 0.0.2-0.0.3 yanked for depending on upstream `selectors`. Open: `script-runtime-api`'s separate `querySelector` selector module as a second consumer; deleting the `genet-stylo` name-claim family on crates.io, which is Mark's. |
-| [MallocSizeOf and allocator removal](2026-09-22_malloc_size_of_removal_plan.md) | Servo's `about:memory` trait, derived across paint-types, xpath and the media crates with no reporter ever calling it, and the inherited `#[global_allocator]` that installed jemalloc on non-Windows builds through it. **Landed and published 2026-09-22 (`333c31285a2`)** under Mark's ruling: full removal, the allocator dropped so the host chooses. Script-free Ortet's dependency cone 401 -> 353 crates, upstream `taffy` gone from it; every suite at its recorded count; native standards-compositing receipt at `0xa440137ccc503f9c` on both engines. On crates.io: `genet-paint-types` 0.2.0, `engine-observables-api` 0.2.0, `genet-scripted-dom` 0.1.2. Open for Mere: its `=0.1.1` pin of `genet-scripted-dom` moves at the next repin. |
-| [Dependency currency](2026-10-21_dependency_currency_plan.md) | Landed 2026-10-22: sha2 0.11, cssparser 0.38, html5ever/markup5ever/xml5ever 0.40, AccessKit 0.25 with its adapters, pollster 1.0 and tokio-tungstenite 0.30, merged past 117 main commits with main's logic kept in all nine conflicted files and the rename carried through 66 further call sites. murm-wire moved to tungstenite 0.30 first (murm `5b1c5cac2f5`, Mark's ruling). Touched-crate gate 3,240 passed; every red reproduced on main. Genet's untracked lock needs `cargo update` past the rustls 0.23.46 and webpki-roots 1.0.10 floors, which do not bind a stale lock. |
+| [MallocSizeOf and allocator removal](archive_docs/2026-11-03/2026-09-22_malloc_size_of_removal_plan.md) | Servo's `about:memory` trait, derived across paint-types, xpath and the media crates with no reporter ever calling it, and the inherited `#[global_allocator]` that installed jemalloc on non-Windows builds through it. **Landed and published 2026-09-22 (`333c31285a2`)** under Mark's ruling: full removal, the allocator dropped so the host chooses. Script-free Ortet's dependency cone 401 -> 353 crates, upstream `taffy` gone from it; every suite at its recorded count; native standards-compositing receipt at `0xa440137ccc503f9c` on both engines. On crates.io: `genet-paint-types` 0.2.0, `engine-observables-api` 0.2.0, `genet-scripted-dom` 0.1.2. That consumer note is historical: Mere currently requests `genet-scripted-dom` 0.1.2. Current receiving qualification is separate from the archived native receipt. |
+| [Dependency currency](archive_docs/2026-11-03/2026-10-21_dependency_currency_plan.md) | Landed 2026-10-22: sha2 0.11, cssparser 0.38, html5ever/markup5ever/xml5ever 0.40, AccessKit 0.25 with its adapters, pollster 1.0 and tokio-tungstenite 0.30, merged past 117 main commits with main's logic kept in all nine conflicted files and the rename carried through 66 further call sites. murm-wire moved to tungstenite 0.30 first (murm `5b1c5cac2f5`, Mark's ruling). Touched-crate gate 3,240 passed; every red reproduced on main. The archived stale-lock and attributed baseline-failure notes describe that recorded gate; they are not a new instruction to update this checkout or a current pass claim. |
 The [Buckram master](../docs/2026-07-26_buckram_css_layout_engine_plan.md)
 defines ownership and the [lane program](../docs/2026-08-21_buckram_livery_lane_program_plan.md)
 assigns residuals. The linked execution plans carry their current gate; a
@@ -115,7 +160,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
 
 ## Servo cone retirement
 
-- [servo_cone_retirement_plan](2026-09-07_servo_cone_retirement_plan.md)
+- [servo_cone_retirement_plan](archive_docs/2026-11-03/2026-09-07_servo_cone_retirement_plan.md)
   (**landed 2026-09-07**: retired servo-paint's message painter,
   paint-api and the embedder/constellation trait cone; keeps the platform
   compositor as `genet-compositor` and absorbs the testdriver input path into
@@ -132,7 +177,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   requirements. Census counts stay historical. API lanes require dated plans;
   the shared scripted-host direction is planned in Ortet O5.)
 
-- [Encoding TextDecoder/TextEncoder](2026-10-05_encoding_textdecoder_plan.md)
+- [Encoding TextDecoder/TextEncoder](archive_docs/2026-11-03/2026-10-05_encoding_textdecoder_plan.md)
   (**Landed on main, 2026-10-06**): native-backed Encoding under E1/C2/E2 and
   the ruled E3 harness correction pass 1,100 merged-source tests across seven
   crates, with three existing ignores, and eight optimized reporting controls.
@@ -143,7 +188,8 @@ completed corpus census or bounded slice does not close its enclosing feature.
   branch publication and continued main integration; qualifications and known
   residuals remain recorded in the plan.
 
-- [WHATWG Streams](2026-10-06_whatwg_streams_plan.md)
+- [WHATWG Streams](archive_docs/2026-11-03/2026-10-06_whatwg_streams_plan.md)
+  ([current remaining work](2026-11-03_streams_frontier_plan.md); dated original receipt follows)
   (**Landed and published, 2026-10-07**): native transfer,
   private Promise reactions and Boa finalizer retention are qualified and
   published. Exact consumer `5a539ae3f40` passes 1,209 tests, three existing
@@ -186,11 +232,11 @@ completed corpus census or bounded slice does not close its enclosing feature.
   repair passes the original 285 affected tests there. The closing review's
   submission validity, listener-mutation and native-feedback repairs pass
   678 Windows tests with zero failures or ignores; see the
-  [repair receipt](receipts/2026-10-16_forms_submission_review_windows.json).
+  [repair receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_submission_review_windows.json).
   Fresh Windows native transport/visual checks pass on all three routes. Actual
   browser submission passes 20 cases and the editing-only control after three
   browser host repairs; see the
-  [host receipt](receipts/2026-10-16_forms_native_browser_windows.json).
+  [host receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_native_browser_windows.json).
   Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
   remain open.
   Earlier A/B results, original and corrected controls, and ThinkPad host
@@ -226,14 +272,14 @@ completed corpus census or bounded slice does not close its enclosing feature.
 
 ## WPT census — the web platform beyond CSS
 
-- [census_panics_plan](2026-10-03_census_panics_plan.md)
+- [census_panics_plan](archive_docs/2026-11-03/2026-10-03_census_panics_plan.md)
   (**Landed 2026-10-05**: `876c7a2cba4`
   implements R1 live canonical wrappers without author calls during GC and R2
   queued destruction after the current script. P1-P7 no longer panic on either
   engine. Six crate gates pass 936 tests; eight directory maps lose zero file
   or subtest passes. The frozen-pin receipt remains historical; separate Vano repin `d7f08fecdc7`
   passed 836 affected tests and paired WPT guards, published 2026-10-05.
-  The [census lane receipt](receipts/2026-10-04_genet_census_panics/receipt.md)
+  The [census lane receipt](../../../testing/genet/design_docs/receipts/2026-10-04_genet_census_panics/receipt.md)
   records all controls, 33 attributed movements and remaining feature forks.)
 
 - [tagname_window_globals_plan](2026-09-07_tagname_window_globals_plan.md)
@@ -433,7 +479,8 @@ completed corpus census or bounded slice does not close its enclosing feature.
   subtest passes, and `html/semantics/interfaces.html` goes 0/438 → 298/438.
   Raw maps under
   `Code/testing/genet/wpt-ledger/2026-09-07_idl_interface_table/`.)
-- [cheap_globals_plan](2026-09-07_cheap_globals_plan.md)
+- [cheap_globals_plan](archive_docs/2026-11-03/2026-09-07_cheap_globals_plan.md)
+  ([current remaining work](2026-11-03_globals_clone_timing_frontier_plan.md); dated original receipt follows)
   (**landed 2026-09-07**: the day-scale entries from the census's
   missing-globals inventory, each a JS bootstrap over the existing VM
   primitives. `performance` with hr-time, User Timing and a
@@ -492,7 +539,8 @@ completed corpus census or bounded slice does not close its enclosing feature.
   soak restated to "bounded by reachable touched nodes" and asserting both
   directions. Baselines `unexpected=0`, Ortet digest unchanged. Raw maps under
   `Code/testing/genet/wpt-ledger/2026-09-07_reflector_identity/`.)
-- [parser_script_interleaving_plan](2026-09-08_parser_script_interleaving_plan.md)
+- [parser_script_interleaving_plan](archive_docs/2026-11-03/2026-09-08_parser_script_interleaving_plan.md)
+  ([current remaining work](2026-11-03_parser_script_frontier_plan.md); dated original receipt follows)
   (**landed 2026-09-08 in the engine**: the residual the Shadow DOM lane left to
   Mark. html5ever already had the seam — `Tokenizer::feed` returns
   `TokenizerResult::Script(handle)` when the tree builder pops a `</script>`,
@@ -616,7 +664,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   cross-crate Web Annotation profile and remaining standards gates stay open;
   these preservation contracts have no native headed or browser-hosted receipt.
   Capture and custody remain caller-owned.)
-- [fleece_followthrough_plan](2026-08-26_fleece_followthrough_plan.md)
+- [fleece_followthrough_plan](archive_docs/2026-11-03/2026-08-26_fleece_followthrough_plan.md)
   (**complete 2026-08-26**: the
   `genet-extract` shim is retired; retained static/scripted hosts activate
   Fleece-generated Text Directives with element fallback, indication, scrolling,
@@ -626,6 +674,13 @@ completed corpus census or bounded slice does not close its enclosing feature.
   green.)
 
 ## layout and styling
+
+- [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md) — implemented and reviewed locally; bounded qualification shows reuse and pooled gains alongside cold and memory regressions; source-specific evidence and runtime limits remain explicit.
+- [Shaping cost reduction](2026-11-01_shaping_cost_reduction_plan.md) — source-specific follow-up, preserved controls, vector-storage budget and bounded qualification.
+- [Borrowed shaping validation](2026-11-02_borrowed_shaping_validation_plan.md) — qualified local borrowed-input validation and isolated shared-buffer diagnosis; reconciled through main 2d492f0, with fresh renderer-cohort shaping/consumer/wasm gates, final RTC compile and declared repository hooks passing for authorized main publication. Three timing cohorts remain bound to d17e53b; whole-workload cold equivalence and broader runtime remain open.
+  (**qualification, 2026-11-01**): retained exact-input shaping and optional
+  caller-supplied native pooling have separate measured gates; process
+  orchestration remains outside this plan.
 
 - [css_3d_transforms_and_first_frame_plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md)
   (**bounded Genet seam implemented; downstream native Bench B accepted 2026-09-13**:
@@ -650,7 +705,8 @@ completed corpus census or bounded slice does not close its enclosing feature.
   remain verified. Downstream product pins, upstream disposition, and other
   platforms retain separate gates.)
 
-- [livery_flex_shorthand_plan](2026-08-25_livery_flex_shorthand_plan.md)
+- [livery_flex_shorthand_plan](archive_docs/2026-11-03/2026-08-25_livery_flex_shorthand_plan.md)
+  ([current remaining work](2026-11-03_flex_grid_remaining_plan.md); dated original receipt follows)
   (**complete flex-shorthand slice; Row 18 remains in progress**: Livery now
   expands `flex` and `flex-flow` into the longhand style fields already lowered
   to Taffy. The exact 1,358-file flexbox map records 115 gains, three assigned
@@ -833,6 +889,10 @@ same session; links out of it are rewritten for its new depth.
   checks, native headed acceptance, and browser-hosted acceptance independently,
   with the source and feature scope each receipt actually exercised. A commit
   or a passing receipt on one host does not close the other gates.
+- **Enabled discovery requires a working socket route.** A caller-driven core
+  may default to multicast queries that a host's unicast adapter cannot send.
+  Disable unsupported paths explicitly and preserve their refusals; otherwise
+  one retained datagram can prevent unrelated usable routes from progressing.
 - **Freeze dependency resolution with a measured runner.** `Cargo.lock` is
   intentionally ignored here. Retain the generated lockfile, its digest,
   target/features and local-override facts with the source and binary receipt.
@@ -1053,7 +1113,7 @@ governance remain deferred under the policy's local addendum.
 
 ### Realms continuation (2026-09-09, in progress)
 
-The [realms continuation](2026-09-08_realms_plan.md#continuation-2026-09-09--in-progress)
+The [realms continuation](archive_docs/2026-11-03/2026-09-08_realms_plan.md#continuation-implementation-and-remaining-boundaries-2026-09-09)
 began from the inherited patch at `640477b6138`; `aa12e16eb7c` now contains
 phase one and in-progress continuation code. Later corrections remain in the
 working tree. The one-Runtime-per-agent ruling is active; the earlier iframes
@@ -1065,7 +1125,7 @@ pending, and no browser-hosted realm receipt is recorded.
 
 ### Realms continuation outcome (2026-09-09)
 
-The [realms continuation](2026-09-08_realms_plan.md#final-gates-repins-and-retained-failures)
+The [realms continuation](archive_docs/2026-11-03/2026-09-08_realms_plan.md#final-gates-repins-and-retained-failures)
 has measured per-realm host surfaces, real same-origin identity, cross-origin
 proxies, messaging and live child rendering. Aggregate suites passed 667 tests;
 the final localized exception correction passed its focused Boa/Nova cases.
@@ -1083,7 +1143,7 @@ The plan and continuation ledger hold exact source hashes, maps and named losses
 
 ### WindowProxy and navigation (2026-09-11)
 
-The [WindowProxy and navigation phase](2026-09-08_realms_plan.md#phase-windowproxy-and-navigation-2026-09-11)
+The [WindowProxy and navigation phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-windowproxy-and-navigation-2026-09-11)
 builds the object the lifecycle phase declined to guess at. A browsing context
 holds **one** `WindowProxy` for its life, made natively before its realm's first
 instruction over a shadow target that retains no global object, and the
@@ -1111,7 +1171,7 @@ exists, and the document URL and session history move without it.
 
 ### Browsing-context lifecycle (2026-09-10)
 
-The [browsing-context lifecycle phase](2026-09-08_realms_plan.md#phase-browsing-context-lifecycle-2026-09-10)
+The [browsing-context lifecycle phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-browsing-context-lifecycle-2026-09-10)
 implements HTML's iframe removing steps in their two halves — the container
 loses its content navigable synchronously, the document is unloaded and its
 realm discarded in a queued task — and that one mechanism carries live iframe
@@ -1131,7 +1191,7 @@ from Mark rather than partially built.
 
 ### Owner-resolved accessor and imported-identity replay (2026-09-10)
 
-The [accessor and replay phase](2026-09-08_realms_plan.md#phase-owner-resolved-accessor-and-imported-identity-replay-2026-09-10)
+The [accessor and replay phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-owner-resolved-accessor-and-imported-identity-replay-2026-09-10)
 closes the two items the ordinary-adoption lane handed on. `CallCx` now answers
 arena-local reflector data in one step and the runtime resolves every reflector
 to its owning host before a sink can dereference it: 60 native sinks migrated,
@@ -1146,7 +1206,7 @@ their inherited counts and were not repinned.
 
 ### Cross-arena adoption foundation (verified, 2026-09-09)
 
-The [realms adoption continuation](2026-09-08_realms_plan.md#cross-arena-adoption-foundation-verified-2026-09-09)
+The [realms adoption continuation](archive_docs/2026-11-03/2026-09-08_realms_plan.md#cross-arena-adoption-foundation-verified-2026-09-09)
 now implements the G5 identity prerequisite and bounded detached storage
 transfer: complete u64 identities on all targets, explicit exhaustion and
 capture translation, and preflighted transfer without reminting. All
@@ -1160,7 +1220,7 @@ and G5 headed acceptance remain open.
 
 ### Runtime adoption continuation (in verification, 2026-09-09)
 
-The [runtime adoption phase](2026-09-08_realms_plan.md#runtime-cross-arena-adoption-in-verification-2026-09-09)
+The [runtime adoption phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#runtime-cross-arena-adoption-in-verification-2026-09-09)
 implements ordinary-subtree authored adoption, canonical creation-realm wrappers,
 physical-owner routing, observer/Range coordination and mixed-realm GC groups.
 New regressions and crate gates are running; the phase carries no completed
@@ -1172,7 +1232,7 @@ remain open.
 
 ### Top-level realm (2026-09-12)
 
-The [top-level realm phase](2026-09-08_realms_plan.md#phase-top-level-realm-2026-09-12)
+The [top-level realm phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-top-level-realm-2026-09-12)
 replaces the realm the WindowProxy lane recorded as unreplaceable. `MAIN_REALM`
 now means only the agent's bootstrap realm — the timer queue, the navigation
 drive, the `WindowProxy` factory, the one realm the engine refuses to discard —
@@ -1201,7 +1261,7 @@ identical six digests, so both are properties of the base rather than of this
 lane. A discarded context's `Location` reporting `about:blank` remains open.
 ### Associated-state transfer (2026-09-12)
 
-The [associated-state transfer phase](2026-09-08_realms_plan.md#phase-associated-state-transfer-2026-09-12)
+The [associated-state transfer phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-associated-state-transfer-2026-09-12)
 replaces the last two adoption refusals that were stated by name rather than by
 fact. A shadow tree now moves with its host — nested hosts, open and closed roots
 alike, slot assignment tables and pending `slotchange` entries, `ownerDocument`
@@ -1235,7 +1295,7 @@ single digest can honestly be recorded for it.
 
 ### Headed G5 acceptance (2026-09-12)
 
-The [headed G5 acceptance phase](2026-09-08_realms_plan.md#phase-headed-g5-acceptance-2026-09-12)
+The [headed G5 acceptance phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-headed-g5-acceptance-2026-09-12)
 closes the open item every realms phase since the adoption continuation carried
 forward. The host was chosen by fact, not built: Ortet on `main` already has a
 scripted route (`--engine boa` / `--engine nova` select the scripted session
@@ -1282,7 +1342,7 @@ digest does not inherit that instability.
 
 ### Realms residual closure (2026-09-13)
 
-The [residual closure phase](2026-09-08_realms_plan.md#phase-residual-closure-2026-09-13)
+The [residual closure phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-residual-closure-2026-09-13)
 closes external classic scripts on both top and child navigation, the discarded
 Location's URL/no-op behavior, and resource teardown for retired hosts. Eight
 new runtime regressions fail before the patch and pass after it on both engines;

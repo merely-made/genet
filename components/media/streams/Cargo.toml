@@ -16,3 +16,6 @@ path = "lib.rs"
 
 [dependencies]
 uuid = { workspace = true, features = ["v4"] }
+
+[lints]
+workspace = true

@@ -17,3 +17,6 @@ serde = { workspace = true }
 servo-media = { workspace = true }
 servo-media-auto = { workspace = true }
 servo-media-dummy = { workspace = true }
+
+[lints]
+workspace = true

@@ -7,3 +7,13 @@ repository = "https://github.com/merely-made/genet"
 description = "Livery: a clean-room, generated CSS cascade engine. NAME CLAIM: the real crate is being developed in merely-made/genet; consume it as a git dependency."
 
 [workspace]
+
+[workspace.lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"
+
+[lints]
+workspace = true

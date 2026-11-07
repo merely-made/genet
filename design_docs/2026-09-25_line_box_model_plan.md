@@ -302,7 +302,7 @@ All 2026-09-25, except where an entry gives its own date.
   so only the baseline rules differ.
 - **The scripted arena had no quirks mode.** The parser recorded html5ever's
   decision in `ParserPolicy` and nothing read it
-  (`2026-09-08_parser_script_interleaving_plan.md`, residual 6;
+  (`archive_docs/2026-11-03/2026-09-08_parser_script_interleaving_plan.md`, residual 6;
   `2026-09-07_dom_node_model_plan.md`, residual 6), `compatMode` was the
   constant `'CSS1Compat'`, and `ScriptedDom` reported `NoQuirks` to layout.
   By Mark's ruling slice A wires it end to end: a per-document side table in

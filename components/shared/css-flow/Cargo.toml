@@ -10,3 +10,6 @@ description = "CSS logical axes and physical side mapping for Genet."
 [lib]
 name = "genet_css_flow"
 path = "lib.rs"
+
+[lints]
+workspace = true

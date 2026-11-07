@@ -11,7 +11,7 @@
 # found that article.html's hyperlinks advertise no UIA control patterns at
 # all under the currently accepted source, so InvokePattern is unavailable
 # and the 2026-09-05 Invoke-based receipt does not reproduce. That residual
-# is recorded separately (design_docs/receipts/2026-09-09_o2_bridge_action).
+# is recorded separately (Code/testing/genet/design_docs/receipts/2026-09-09_o2_bridge_action).
 #
 # This runner does not depend on Invoke. `AutomationElement.SetFocus()`
 # always forwards `Action::Focus` to the host through

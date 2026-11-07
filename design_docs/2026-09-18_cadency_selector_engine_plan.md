@@ -153,7 +153,7 @@ versions, the buckram drift and the yanks are under Progress.
   type's identity for anything that mixed it with upstream's, so
   `servo-malloc-size-of` takes a breaking bump when it next publishes.
   Superseded 2026-09-22: `components/malloc_size_of` was removed outright by
-  the [MallocSizeOf removal plan](2026-09-22_malloc_size_of_removal_plan.md),
+  the [MallocSizeOf removal plan](archive_docs/2026-11-03/2026-09-22_malloc_size_of_removal_plan.md),
   so there is no next publish.
 - 2026-09-18. `servo_arc` had no consumer but four `MallocSizeOf` impls and
   their compile-fail doctests.

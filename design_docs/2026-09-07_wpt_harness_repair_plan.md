@@ -351,7 +351,7 @@ belong to the engine's residual rather than the harness's.
   all four combinations on `19c206873ab` plus the exact worker/test patch,
   using `GENET_WPT_TESTS_ROOT` for the primary corpus and the reusable
   `C:/t/cargo-targets/genet` target. The collision-isolated source and archived
-  patch are identified in the [census receipt](receipts/2026-09-29_vano_wpt_census/receipt.md).
+  patch are identified in the [census receipt](../../../testing/genet/design_docs/receipts/2026-09-29_vano_wpt_census/receipt.md).
   This reporting qualification establishes neither a completed census nor
   browser-hosted conformance.
 - **2026-09-07 (residual)** — F6 closes the `css/support/*-testcommon.js`

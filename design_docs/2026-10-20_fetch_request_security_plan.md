@@ -12,13 +12,13 @@ cluster (Recommended),WebCrypto,Component model"**. This is the first of those
 lanes. Scope: `fetch`, `referrer-policy`, `mixed-content`,
 `content-security-policy`, `upgrade-insecure-requests`, on the qualified
 netfetcher wire adoption
-([plan](2026-10-14_netfetcher_wire_adoption_plan.md)) and the Streams
-reader-backed Fetch seam ([plan](2026-10-06_whatwg_streams_plan.md)). Engines:
+([plan](archive_docs/2026-11-03/2026-10-14_netfetcher_wire_adoption_plan.md)) and the Streams
+reader-backed Fetch seam ([plan](2026-11-03_streams_frontier_plan.md)). Engines:
 Boa and Vano (Nova), both gated; zero lost passes on either.
 
 Evidence lives in `Code/testing/genet/fetch-security/` (frozen runner, maps,
 logs). Census source:
-`receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`.
+`Code/testing/genet/design_docs/receipts/2026-09-29_vano_wpt_census/outcomes.json.gz`.
 
 ## Findings (2026-10-20)
 
@@ -361,7 +361,7 @@ netfetcher stays a policy-taking engine. P1 builds exactly this.
 Asked about the exact Murm diff (a `LenientEof` wrapper, `tower-service` as a direct
 dependency of `murm-wire`, a regression that fails on the unpatched source), Mark:
 **"OK, apply to Murm and repin (Recommended)"**. Applied as one commit on branch
-`fetch-close-notify` in a worktree of the Murm repository (`repos/retinue`'s remote
+`fetch-close-notify` in a worktree of the Murm repository (`repos/murm`'s remote
 `merely-made/murm`), based on the pinned `f9fe8507cf1` that Genet resolves today. Not
 pushed or merged; Mark merges as usual. Genet follows Murm by `branch = "main"` with
 its lock ignored, so the repin is the supplier resolving the merged commit; no Genet

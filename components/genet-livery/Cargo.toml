@@ -14,6 +14,7 @@ default = ["image-decode"]
 # Decodes image bytes (`src/image_decode.rs`). Without it images get no natural
 # size and are not painted, as for a failed decode.
 image-decode = ["dep:image"]
+parallel-text = ["dep:rayon"]
 
 [dependencies]
 buckram = { version = "0.0.3", path = "../buckram" }
@@ -35,6 +36,7 @@ taffy = { package = "genet-taffy", version = "0.16.0", default-features = false,
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 fontsan.workspace = true
+rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
 base64.workspace = true
@@ -53,3 +55,6 @@ postcard = { version = "1", features = ["alloc"] }
 [[test]]
 name = "replaced_image"
 required-features = ["image-decode"]
+
+[lints]
+workspace = true

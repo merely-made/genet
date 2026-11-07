@@ -16,13 +16,14 @@
 //! [`read`](Clipboard::read). A write picks one primary representation, because
 //! arboard empties the clipboard on each set and cannot hold text and image at
 //! once; html carries a plain-text alternative in the same set, so text and html
-//! do travel together. Simultaneous text+image and arbitrary [`Mime::Custom`]
-//! types are the per-platform backend's job (the plan's P3).
+//! do travel together. Arbitrary [`Mime::Custom`](crate::Mime::Custom)
+//! representations are not written; [`read_format`](Clipboard::read_format)
+//! reports them as [`ClipboardError::Unsupported`].
 
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use arboard::{Clipboard as Arboard, ClipboardData, CustomItem, ImageData};
+use arboard::{Clipboard as Arboard, ImageData};
 
 use crate::{Clipboard, ClipboardError, ClipboardItem, Image};
 
@@ -77,38 +78,35 @@ impl Clipboard for SystemClipboard {
     }
 
     fn write(&mut self, item: &ClipboardItem) -> Result<(), ClipboardError> {
-        // A uri-list is a native file-list clipboard op (CF_HDROP and its peers)
-        // that does not yet combine with other formats through the fork's
-        // `set_data`, so a uri-bearing item writes the file list on its own.
-        // Adding file-list to `set_data` is a fork follow-on.
-        if let Some(uris) = item.uris() {
-            let paths: Vec<PathBuf> = uris.iter().map(PathBuf::from).collect();
-            return self.inner.set().file_list(&paths).map_err(map_error);
-        }
-
-        // The fork writes every representation in one session, so text, html,
-        // image, and arbitrary custom formats coexist (stock arboard held one).
-        let data = ClipboardData {
-            text: item.text().map(Cow::Borrowed),
-            html: item.html().map(Cow::Borrowed),
-            image: item.image().map(|image| ImageData {
-                width: image.width,
-                height: image.height,
-                bytes: Cow::Borrowed(&image.rgba),
-            }),
-            custom: item
-                .customs()
-                .map(|(media_type, data)| CustomItem {
-                    media_type: media_type.to_string(),
-                    data: data.to_vec(),
+        // One primary representation, richest first. html carries the text as
+        // its alternative, so text+html is a single two-format set. Custom
+        // representations are not carried; an item of nothing else is refused.
+        if let Some(image) = item.image() {
+            self.inner
+                .set_image(ImageData {
+                    width: image.width,
+                    height: image.height,
+                    bytes: Cow::Borrowed(&image.rgba),
                 })
-                .collect(),
-        };
-        self.inner.set_data(&data).map_err(map_error)
+                .map_err(map_error)
+        } else if let Some(uris) = item.uris() {
+            let paths: Vec<PathBuf> = uris.iter().map(PathBuf::from).collect();
+            self.inner.set().file_list(&paths).map_err(map_error)
+        } else if let Some(html) = item.html() {
+            self.inner
+                .set_html(html.to_owned(), item.text().map(str::to_owned))
+                .map_err(map_error)
+        } else if let Some(text) = item.text() {
+            self.inner.set_text(text.to_owned()).map_err(map_error)
+        } else if let Some((media_type, _)) = item.customs().next() {
+            Err(ClipboardError::Unsupported(media_type.to_owned()))
+        } else {
+            self.inner.clear().map_err(map_error)
+        }
     }
 
     fn read_format(&mut self, media_type: &str) -> Result<Vec<u8>, ClipboardError> {
-        self.inner.get_custom(media_type).map_err(map_error)
+        Err(ClipboardError::Unsupported(media_type.to_owned()))
     }
 
     fn clear(&mut self) -> Result<(), ClipboardError> {
@@ -131,38 +129,42 @@ mod tests {
     use super::*;
     use crate::TextClipboard;
 
-    /// Writes text, html, an image, and a custom format in one `set_data`, then
-    /// reads each back from the real OS clipboard on the host running the test.
-    /// Proves the fork's gain over stock arboard: the representations coexist.
-    /// Ignored by default because it touches shared machine state and needs a
-    /// display; it restores whatever text was on the clipboard first, so a local
-    /// `--ignored` run does not clobber the user's copy buffer.
+    /// Round-trips text with html, and then an image, through the real OS
+    /// clipboard on the host running the test. Ignored by default because it
+    /// touches shared machine state and needs a display; it restores whatever
+    /// text was on the clipboard first, so a local `--ignored` run does not
+    /// clobber the user's copy buffer.
     #[test]
     #[ignore = "touches the real OS clipboard; run locally with --ignored"]
-    fn system_clipboard_round_trips_all_formats_from_one_write() {
+    fn system_clipboard_round_trips_its_primary_representation() {
         let mut clipboard = SystemClipboard::new().expect("a clipboard on this host");
         let restore = clipboard.get_text().ok();
 
-        let item = ClipboardItem::new()
-            .with_text("a loop")
-            .with_html("<b>a loop</b>")
-            .with_image(Image {
-                width: 2,
-                height: 1,
-                rgba: vec![255, 0, 0, 255, 0, 255, 0, 255],
-            })
-            .with_custom("application/x-genet-test", vec![1, 2, 3, 4]);
-        clipboard.write(&item).unwrap();
-
-        // Every representation coexists from the single write.
+        // text + html travel together (html's plain-text alternative is the text).
+        clipboard
+            .write(
+                &ClipboardItem::new()
+                    .with_text("a loop")
+                    .with_html("<b>a loop</b>")
+                    .with_custom("application/x-genet-test", vec![1, 2, 3, 4]),
+            )
+            .unwrap();
         let read = clipboard.read().unwrap();
         assert_eq!(read.text(), Some("a loop"));
         assert_eq!(read.html(), Some("<b>a loop</b>"));
-        assert_eq!(read.image().expect("an image round-trips").width, 2);
-        assert_eq!(
-            clipboard.read_format("application/x-genet-test").unwrap(),
-            vec![1, 2, 3, 4]
-        );
+        assert!(matches!(
+            clipboard.read_format("application/x-genet-test"),
+            Err(ClipboardError::Unsupported(_))
+        ));
+
+        clipboard
+            .write(&ClipboardItem::new().with_image(Image {
+                width: 2,
+                height: 1,
+                rgba: vec![255, 0, 0, 255, 0, 255, 0, 255],
+            }))
+            .unwrap();
+        assert_eq!(clipboard.read().unwrap().image().expect("an image round-trips").width, 2);
 
         match restore {
             Some(text) => clipboard.set_text(&text).unwrap(),

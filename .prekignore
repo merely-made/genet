@@ -1,0 +1,4 @@
+# Imported/generated paths declared in line-ceiling.toml are not hook projects.
+/support/patches/
+/tests/wpt/
+/tests/blink_perf_tests/

@@ -394,6 +394,16 @@ impl<Context, Source> AlgorithmTree<Context, Source> {
     pub fn context(&self, id: AlgorithmNodeId) -> Option<&Context> {
         self.contexts[id.index()].as_ref()
     }
+
+    /// Update measured contexts and invalidate cached layouts once for the tree.
+    pub fn update_contexts(&mut self, mut update: impl FnMut(AlgorithmNodeId, &mut Context)) {
+        self.clear_layout_cache();
+        for (index, context) in self.contexts.iter_mut().enumerate() {
+            if let Some(context) = context {
+                update(AlgorithmNodeId(index as u32), context);
+            }
+        }
+    }
 }
 
 impl<Context, Source> std::ops::Deref for AlgorithmTree<Context, Source> {

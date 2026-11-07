@@ -36,7 +36,6 @@ relicensed, and nothing here receives a Merely copyright line.
 |---|---|---|---|
 | `support/patches/taffy` | MIT | [DioxusLabs/taffy](https://github.com/DioxusLabs/taffy) | `LICENSE.md` in-tree |
 | `support/patches/parley` | Apache-2.0 OR MIT | [linebender/parley](https://github.com/linebender/parley) | in-tree |
-| `support/patches/ipc-channel` | MIT OR Apache-2.0 | [servo/ipc-channel](https://github.com/servo/ipc-channel) | in-tree |
 | `support/patches/gpu-allocator` | MIT OR Apache-2.0 | [Traverse-Research/gpu-allocator](https://github.com/Traverse-Research/gpu-allocator) | in-tree |
 | `support/patches/sonic-rs-0.5.8` | Apache-2.0 | [cloudwego/sonic-rs](https://github.com/cloudwego/sonic-rs) | in-tree |
 | `support/name-claims/genet-taffy` | MIT | a taffy fork's name claim; taffy's terms | its manifest |

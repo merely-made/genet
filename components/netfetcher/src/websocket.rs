@@ -35,9 +35,10 @@
 use std::fmt;
 
 use futures_util::{SinkExt, StreamExt};
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
-use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+use murm_wire::websocket::tungstenite;
+use tungstenite::Message;
+use tungstenite::protocol::frame::CloseFrame;
+use tungstenite::protocol::frame::coding::CloseCode;
 use url::{Origin, Url};
 
 use crate::context::{FetchContext, SameSiteContext};
@@ -469,10 +470,10 @@ fn build_handshake(
     request: &WsRequest,
     http_url: &Url,
     cx: &FetchContext,
-) -> Result<Option<tokio_tungstenite::tungstenite::http::Request<()>>, WsError> {
-    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-    use tokio_tungstenite::tungstenite::http::HeaderValue;
-    use tokio_tungstenite::tungstenite::http::header::{HeaderName, ORIGIN};
+) -> Result<Option<tungstenite::http::Request<()>>, WsError> {
+    use tungstenite::client::IntoClientRequest;
+    use tungstenite::http::HeaderValue;
+    use tungstenite::http::header::{HeaderName, ORIGIN};
 
     let mut req = url
         .as_str()
@@ -516,9 +517,9 @@ fn build_handshake(
 /// Map a tungstenite handshake failure onto the typed contract. A 3xx answer is
 /// a redirect, which WebSocket never follows; anything else is a handshake
 /// failure carrying whatever status the server sent.
-fn map_handshake_error(e: tokio_tungstenite::tungstenite::Error) -> WsError {
-    use tokio_tungstenite::tungstenite::Error as TErr;
-    use tokio_tungstenite::tungstenite::error::{ProtocolError, SubProtocolError};
+fn map_handshake_error(e: tungstenite::Error) -> WsError {
+    use tungstenite::Error as TErr;
+    use tungstenite::error::{ProtocolError, SubProtocolError};
     match e {
         TErr::Http(resp) => {
             let status = resp.status().as_u16();
@@ -556,6 +557,9 @@ fn map_handshake_error(e: tokio_tungstenite::tungstenite::Error) -> WsError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The loopback peer uses its own protocol types, independently of Murm.
+    use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
+    use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 
     /// Start an in-process `ws://` echo server (127.0.0.1, ephemeral port) that
     /// selects `sub` as its subprotocol when the client offers it.

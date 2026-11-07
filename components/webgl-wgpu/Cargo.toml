@@ -21,3 +21,6 @@ wgpu = { version = "30", default-features = false, features = ["std", "parking_l
 
 [dev-dependencies]
 pollster = "1.0"
+
+[lints]
+workspace = true

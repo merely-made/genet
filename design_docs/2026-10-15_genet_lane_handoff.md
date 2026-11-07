@@ -47,7 +47,7 @@ smoke uses the same sources.
 
 Fresh Windows gates pass: 746 native tests, zero failures, 13 existing ignores;
 wasm opt-out compilation; the expected native opt-out rejection; and standalone
-smoke compilation. [Source identities, locks and raw logs](receipts/2026-10-15_netrender_adoption/README.md)
+smoke compilation. [Source identities, locks and raw logs](../../../testing/genet/design_docs/receipts/2026-10-15_netrender_adoption/README.md)
 retain the actual gate basis. Browser runtime and delivery size were not rerun.
 
 Mere's receiving adoption and retirement of its four temporary bridge tables
@@ -65,7 +65,7 @@ add 'em to the handoff."
 | Commits | What | Record |
 |---|---|---|
 | `33348b8dd49`..`85252e20bee` | The accessibility projection walks the flat tree, so shadow-tree content reaches AccessKit. `aria-labelledby`, `aria-describedby` and `<label for>` resolve per tree. Scroll ancestors climb via the flat-tree parent. | [Shadow DOM plan](2026-09-07_shadow_dom_plan.md), residual 11, rulings 11.1–11.3 |
-| `297f58b9bbc`..`0ce8e65ff6f` | genet-wpt implements `test_driver.get_computed_label`. AccName goes from 0 to 352/405 subtests. | [Accessible names plan](2026-09-26_accessible_names_plan.md); `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/` |
+| `297f58b9bbc`..`0ce8e65ff6f` | genet-wpt implements `test_driver.get_computed_label`. AccName goes from 0 to 352/405 subtests. | [Accessible names plan](archive_docs/2026-11-03/2026-09-26_accessible_names_plan.md); `Code/testing/genet/wpt-ledger/2026-10-14_computed_label/` |
 | `061e54c8aa2` | Button-type inputs are named from `value`, image inputs from `alt`. AccName reaches about 356/405. | Accessible names plan |
 | `15174020fdc`, `eeb9774ada9` | Group, dialog, alertdialog, article and table stop taking names from content. The heading rule applies to roles and native elements; a table takes its caption; `abbr` is title-first. AccName reaches 365/405. genet-render passes 55/55 after rebasing onto the Netrender adoption. | Accessible names plan |
 | `cb735d928a8`, `273431eff73` | **Forms Phase C paused.** Rulings F11–F14 and the ThinkPad's R19–R26 are recorded as history. Two Boa/Nova tests for the post-redirect subresource base are `#[ignore]`d: they compile (checked) but have never run. | [Forms plan](2026-10-07_forms_value_validation_submission_plan.md), "Paused 2026-10-15" |
@@ -104,7 +104,7 @@ Also open in the remaining AccName families:
 - Empty folder `Code/worktrees/genet-input-value-names`, held open by a process.
 - Worktree `genet-value-engine`, owner unknown, superseded by the landed
   ValueEngine. `genet-dep-currency` landed 2026-10-22; see the
-  [dependency currency plan](2026-10-21_dependency_currency_plan.md).
+  [dependency currency plan](archive_docs/2026-11-03/2026-10-21_dependency_currency_plan.md).
 - Genet's `Cargo.lock` is untracked, so a pin change on main needs a local
   re-resolve without `--locked`.
 

@@ -13,3 +13,6 @@ description.workspace = true
 [dependencies]
 log = { workspace = true }
 markup5ever = { workspace = true }
+
+[lints]
+workspace = true

@@ -29,6 +29,7 @@
 #![cfg_attr(feature = "without-classic-vello", allow(unreachable_code, unused_variables))]
 
 use netrender::{ColorLoad, NetrenderOptions, Renderer, Scene};
+pub use netrender::profiling::ThreadCpuStamp as NativeThreadCpuStamp;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, Weak};
 #[cfg(test)]
@@ -55,8 +56,11 @@ pub use surface_capture_layout::{SurfaceCaptureBudget, SurfaceCaptureLayout, Sur
 #[cfg(not(target_arch = "wasm32"))]
 mod native_frame;
 #[cfg(not(target_arch = "wasm32"))]
+mod native_raster_reuse;
+#[cfg(not(target_arch = "wasm32"))]
 pub use native_frame::{
-    AcceptedNativeFrame, NativeFrameStartError, NativeFrameSubmission, PendingNativeFrame,
+    AcceptedNativeFrame, NativeFrameStartError, NativeFrameSubmission, NativeFrameTiming,
+    NativeFrameWaiter, PendingNativeFrame, NativeWorkerAttribution, NativeWorkSpan,
 };
 
 mod readback;

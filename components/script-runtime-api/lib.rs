@@ -100,6 +100,8 @@ mod text_encoding;
 mod timing;
 mod webgl;
 mod websocket;
+mod webrtc;
+pub use webrtc::{WebRtcError, WebRtcFactory, WebRtcOperation, WebRtcPeer};
 mod worker;
 #[cfg(not(target_arch = "wasm32"))]
 mod worker_process;
@@ -179,7 +181,7 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
         // These setup-only aliases are captured by trusted bootstrap and then
         // deleted. Predeclare their flags before a value-only native installer
         // can create a nonconfigurable property. A refusal aborts registration.
-        if name.starts_with("__webgl_") || matches!(
+        if name.starts_with("__webgl_") || name.starts_with("__rtc_") || matches!(
             name,
             "__formFileAllocate"
                 | "__hostFormEdit"
@@ -284,6 +286,11 @@ pub struct HostState {
     /// [`fetch`](Self::fetch) is one — the native sink clones it out from under
     /// the `HostState` borrow before calling it.
     pub websocket: Option<std::rc::Rc<dyn WebSocketHandler>>,
+    /// Per-document RTC transport capability. No socket implementation enters this crate.
+    pub webrtc_factory: Option<Rc<dyn WebRtcFactory>>,
+    pub(crate) webrtc_peers: std::collections::BTreeMap<u64, Rc<dyn WebRtcPeer>>,
+    pub(crate) webrtc_next_id: u64,
+    pub(crate) webrtc_poll_cursor: usize,
     /// The host's computed-style seam for `getComputedStyle` (e.g. pelt's
     /// `ScriptedDocument` over `IncrementalLayout`). `None` = no layout bound, so
     /// `getComputedStyle(...).<prop>` yields "". Installed by
@@ -619,7 +626,7 @@ const REALM_TASK_HOOKS: &[&str] = &[
     "__moPump", "__ioUpdate", "__websocketOpen", "__websocketMessageText",
     "__websocketMessageBinary", "__websocketFlushed", "__websocketError",
     "__websocketClose", "__websocketPending", "__websocketFailAll",
-    "__subtleExposure",
+    "__subtleExposure", "__rtcDeliver", "__rtcDiscard",
 ];
 const AGENT_TASK_HOOKS: &[&str] = &[
     "__runTimers", "__nextTimerDelay", "__runOneAnimationFrameCallback",
@@ -1205,6 +1212,9 @@ impl<E: ScriptEngine> Runtime<E> {
             if host.websocket.is_none() {
                 host.websocket = parent.websocket.clone();
             }
+            if host.webrtc_factory.is_none() {
+                host.webrtc_factory = parent.webrtc_factory.clone();
+            }
             if host.script_loader.is_none() {
                 host.script_loader = parent.script_loader.clone();
             }
@@ -1292,7 +1302,7 @@ impl<E: ScriptEngine> Runtime<E> {
             {
                 let mut agent = self.agent.borrow_mut();
                 agent.dom_adoption.remove_realm(realm);
-                agent.hosts.remove(&realm);
+                if let Some(host) = agent.hosts.remove(&realm) { webrtc::revoke(&host); }
                 agent.opaque_roots.remove(&realm);
             }
             let _ = self.engine.discard_realm(realm);
@@ -2761,6 +2771,9 @@ impl<E: ScriptEngineSnapshot> Runtime<E> {
     /// is fresh, because it is owned outside the VM heap and must not leak between
     /// tests/documents.
     pub fn snapshot_clone(&mut self) -> Result<Self, E::Error> {
+        if self.pending_webrtc() != 0 {
+            return Err(self.engine_error("Cannot snapshot a document with live RTC peers"));
+        }
         if let Some(timer_state) = self
             .agent
             .borrow()
@@ -2995,6 +3008,7 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     // sinks the constructor validates its URL on, and the `Blob` a binary
     // message is delivered as.
     websocket::install_websocket_surface(engine)?;
+    if scope == GlobalScopeKind::Window { webrtc::install(engine)?; }
     // `WebGLRenderingContext` (Triangle-class subset) over the host webgl seam.
     // Canvas `getContext('webgl')` and the bare `__createWebGLContext()` helper
     // return null when the host has no context to provide.

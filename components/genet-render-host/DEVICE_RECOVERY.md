@@ -127,7 +127,7 @@ not production serif, fixed-width or script coverage. Native shared R2 evidence
 uses the earlier G09b/Mcc65 source and does not requalify these font changes.
 
 The compact consumer record is Mere's
-`design_docs/cambium_docs/testing/receipts/2026-10-12_flattening_and_device_recovery/browser-r6/`.
+`Code/testing/mere/design_docs/cambium_docs/testing/receipts/2026-10-12_flattening_and_device_recovery/browser-r6/`.
 Its provenance retains the actual compiler cone/local override, source/package
 and driver seals, external raw hashes, numeric/visual review and owned-process
 closure. Later immutable-pin integration is a separate coherence check.

@@ -66,8 +66,8 @@ owner; Cambium's same-device producer lifecycle, resolved-style query hook,
 and application style-to-instance mapping (Mere and the wing own those);
 the browsing-context tree and the child-document loading path (the
 [iframes plan](2026-09-08_iframes_plan.md) owns those); scripted mutation semantics (the
-[parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md)
-and [Realms](2026-09-08_realms_plan.md) plans); WPT harness behaviour (the
+[parser/script interleaving](2026-11-03_parser_script_frontier_plan.md)
+and [Realms](2026-11-03_realms_frontier_plan.md) plans); WPT harness behaviour (the
 [harness repair plan](2026-09-07_wpt_harness_repair_plan.md)).
 
 **Prior art and prerequisites in this repository:**
@@ -86,7 +86,7 @@ and [Realms](2026-09-08_realms_plan.md) plans); WPT harness behaviour (the
   discipline remain owned there; the scene viewport is not a child document.
 - [Shadow DOM](2026-09-07_shadow_dom_plan.md) — the wing's L8 cites its
   declarative-attachment residual; that residual was closed by
-  [parser/script interleaving](2026-09-08_parser_script_interleaving_plan.md)
+  [parser/script interleaving](2026-11-03_parser_script_frontier_plan.md)
   part two on 2026-09-08. Recorded here so the wing plan's L8 wording can be
   corrected by its owner rather than silently disagreeing with genet.
 - [Ortet](2026-09-03_ortet_founding_plan.md) — the minimal engine host for
@@ -970,7 +970,7 @@ assembly on a development-path build: Genet
 `3961aca919f707ab09a786379eb4ce8bb121258e`, and Cambium's producer source,
 which was uncommitted at that run. Compact receipts and executable/source
 identities live at
-`isometry/mesocosm/testing/bench/receipts/2026-09-13/`; full captures live at
+`Code/testing/isocosm/mesocosm-bench-receipts/2026-09-13/`; full captures live at
 `Code/testing/specimen-bench/native-final/`.
 
 A separate Mesocosm release workspace check with all features and targets

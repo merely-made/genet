@@ -22,6 +22,7 @@ members = [
     "components/genet-scripted-dom",
     "components/genet-events",
     "components/genet-scripted",
+    "components/genet-webrtc",
     "components/genet-scripted-worker",
     # Render-free live-document extraction and structured reader shapes.
     "components/fleece",
@@ -136,7 +137,7 @@ accesskit_windows = "0.35.1"
 accesskit_macos = "0.27.1"
 accesskit_unix = "0.24.0"
 app_units = "0.7"
-arboard = { git = "https://github.com/mark-ik/arboard.git", branch = "custom-formats" }
+arboard = "3.7"
 argon2 = { version = "0.5", features = ["alloc"] }
 arrayvec = "0.7"
 async-tungstenite = { version = "0.34", features = ["tokio-rustls-webpki-roots"] }
@@ -209,7 +210,7 @@ image = { version = "0.25", default-features = false, features = ["rayon", "bmp"
 imsz = "0.4"
 indexmap = { version = "2.14.0", features = ["std"] }
 inventory = { version = "0.3.24" }
-ipc-channel = "0.22"
+ipc-channel = "0.23.1"
 itertools = "0.14"
 js = { package = "mozjs", version = "=0.15.14", default-features = false, features = ["libz-sys", "intl"] }
 keyboard-types = { version = "0.8.3", features = ["serde", "webdriver"] }
@@ -321,7 +322,7 @@ url = "2.5"
 urlpattern = "0.3"
 utf-8 = "0.7"
 uuid = { version = "1.23.1", features = ["v4", "v5"] }
-vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
+vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
 webdriver = { version = "0.53.0", default-features = false }
 webpki-roots = "1.0.10"
 web_atoms = "0.2"
@@ -480,23 +481,14 @@ genet-taffy = { path = "support/patches/taffy" }
 # git here, which the local `[patch]` redirect in `.cargo/config.toml` could
 # not layer on). Fork provenance: docs/2026-05-20_genet_script_engine_plan.md
 # and G1 in docs/2026-06-11_gc_arena_dom_plan.md.
-# ipc-channel: in-process fork, vendored at support/patches/ipc-channel (like
-# taffy + gpu-allocator). Servo's multiprocess IPC transport is vestigial in
-# genet's single-process embedding (pelt; and mere's library use), so the fork
-# defaults to ipc-channel's built-in force-inprocess backend and makes the OS deps
-# optional. That drops the windows 0.61 dependency, whose loose <=0.62 range
-# otherwise let gpu-allocator latch onto 0.61.3 while wgpu-hal forces 0.62, breaking
-# the dx12 suballocator in any build that compiles the dx12 backend (meerkat, via
-# scrying). Vendored, not a git fork, since the change is manifest-only.
-ipc-channel = { path = "support/patches/ipc-channel" }
 # Genet's own render-host tests must use the same qualified native shader
 # family as application roots. Cargo root patches are not inherited by
 # consumers: each application must restate all three rows at this revision.
 # Classic 0.11 and its encoding/shader types share the maintained release source,
 # preserving the coarse traversal, command progress and image atlas repairs.
-netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
-vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
-vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
+netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
+netrender-vello-encoding = { git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
+netrender-vello-shaders = { git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
 # For WebRender / netrender:
 # The netrender/ workspace (formerly the webrender-wgpu fork) dropped
 # webrender, webrender_api, and wr_malloc_size_of as separate crates. Local
@@ -517,3 +509,10 @@ vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f
 # [patch."https://github.com/servo/<repository>"]
 # <crate> = { path = "/path/to/local/checkout" }
 #
+
+[workspace.lints.clippy]
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+undocumented_unsafe_blocks = "warn"
+too_many_lines = "warn"

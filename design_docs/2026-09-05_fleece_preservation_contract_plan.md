@@ -179,3 +179,12 @@ normal dependency cones pass with 29 packages by default and 40 with `wire`;
 Serde/JSON is absent by default. Controls reject required Serde, unexpected
 wire dependencies, and render/network/storage dependencies. This is an automated
 dependency-boundary receipt; it does not rerun or extend the runtime receipts above.
+
+## Completed follow-through boundary (2026-11-03)
+
+The archived Fleece follow-through record completed its shim retirement,
+retained Text Directive activation and supplied-document consumer packets.
+That bounded completion does not close this preservation/selector contract,
+feed polling or reading-room composition, or Athanor/Alembic product adoption.
+Those retain their actual current product owners and gates; archival neither
+creates a new adoption mandate nor supplies a current consumer qualification.

@@ -4448,12 +4448,22 @@ fn assert_retained_text_edit_paints_like_fresh(rows: usize, row: usize) {
     retained.frame(300, 400).expect("initial retained frame");
     let local_generation = retained.retained_root_relayout_generation;
 
+    let before = retained.text_system().shaping_stats();
     retained.mutate_dom(|dom| {
         let row = by_id(dom, &format!("row{row}"));
         let text = dom.dom_children(row).next().expect("row text");
         dom.set_text(text, "changed");
     });
-    let retained_paint = retained.frame(300, 400).expect("retained frame");
+    let retained_commands = format!(
+        "{:?}",
+        retained.frame(300, 400).expect("retained frame").commands()
+    );
+    let after = retained.text_system().shaping_stats();
+    println!(
+        "retained edit rows={rows}: ready={} late={}",
+        (after.unique_jobs - before.unique_jobs) - (after.late_misses - before.late_misses),
+        after.late_misses - before.late_misses
+    );
     assert_eq!(
         retained.retained_root_relayout_generation,
         local_generation + 1,
@@ -4463,9 +4473,13 @@ fn assert_retained_text_edit_paints_like_fresh(rows: usize, row: usize) {
     let mut fresh_dom = ScriptedDom::from_serialized_document(&flex_row_list(rows, Some(row)));
     fresh_dom.drain_mutations(&mut Vec::new());
     let mut fresh = LiveryDocument::new(fresh_dom, styles(), Device::screen(300.0, 400.0));
+    let mut options = fresh.text_system().shaping_options();
+    options.retained_entries = 0;
+    options.retained_text_bytes = 0;
+    fresh.set_text_shaping_options(options);
     let fresh_paint = fresh.frame(300, 400).expect("fresh final frame");
     assert_eq!(
-        format!("{:?}", retained_paint.commands()),
+        retained_commands,
         format!("{:?}", fresh_paint.commands()),
         "retained text must paint where a fresh layout paints it",
     );
@@ -4679,5 +4693,191 @@ fn password_caret_projection_refreshes_same_mask_and_covers_partial_graphemes() 
     assert_eq!(
         plain.text, value,
         "changing type removes the password projection"
+    );
+}
+
+#[test]
+fn retained_geometry_dependent_text_edits_match_fresh_uncached() {
+    for (name, inline) in [
+        (
+            "percentage",
+            "<span id=edit style='padding-left:10%;margin-right:5%'>old text</span>",
+        ),
+        (
+            "atomic",
+            "<span id=edit style='display:inline-block;width:50%'>old text</span>",
+        ),
+        (
+            "float",
+            "<span style='float:left;width:30px;height:30px'></span><span id=edit>old text</span>",
+        ),
+        (
+            "table",
+            "<table style='display:inline-table'><tr><td><span id=edit>old text</span></td></tr></table>",
+        ),
+    ] {
+        let root_style = if name == "percentage" {
+            "display:flex;width:140px;height:40px"
+        } else {
+            "width:140px"
+        };
+        let html = |body: &str| {
+            format!("<html><body><div style='{root_style}'>before {body} after</div></body></html>")
+        };
+        let initial = html(inline);
+        let final_html = html(&inline.replace("old text", "new longer text"));
+        let styles = || StyleSet::cambium(&["html, body { margin: 0; padding: 0; }"]);
+        let mut retained = LiveryDocument::new(
+            ScriptedDom::from_serialized_document(&initial),
+            styles(),
+            Device::screen(320.0, 240.0),
+        );
+        retained.frame(320, 240).unwrap();
+        let before = retained.text_system().shaping_stats();
+        let generation = retained.retained_root_relayout_generation;
+        retained.mutate_dom(|dom| {
+            let edit = by_id(dom, "edit");
+            let text = dom.dom_children(edit).next().unwrap();
+            dom.set_text(text, "new longer text");
+        });
+        let actual = format!("{:?}", retained.frame(320, 240).unwrap().commands());
+        let after = retained.text_system().shaping_stats();
+        if name == "percentage" {
+            assert_eq!(retained.retained_root_relayout_generation, generation + 1);
+        }
+        let mut fresh = LiveryDocument::new(
+            ScriptedDom::from_serialized_document(&final_html),
+            styles(),
+            Device::screen(320.0, 240.0),
+        );
+        let mut options = fresh.text_system().shaping_options();
+        options.retained_entries = 0;
+        options.retained_text_bytes = 0;
+        fresh.set_text_shaping_options(options);
+        let expected = format!("{:?}", fresh.frame(320, 240).unwrap().commands());
+        assert_eq!(actual, expected, "{name}");
+        println!(
+            "retained {name}: selected_root={} ready={} late={}",
+            retained.retained_root_relayout_generation - generation,
+            (after.unique_jobs - before.unique_jobs) - (after.late_misses - before.late_misses),
+            after.late_misses - before.late_misses
+        );
+    }
+}
+
+#[test]
+fn shaping_benchmark_real_fixtures_are_ready_and_equivalent() {
+    mod fixture {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/examples/support/shaping_fixture.rs"
+        ));
+    }
+    for case in ["small", "article"] {
+        let html = fixture::html(case, 2048, fixture::paragraph(case));
+        let css = fixture::css("Fixture");
+        assert_eq!(
+            css,
+            "@font-face { font-family: 'Fixture'; src: url('fixture.ttf'); } body { font-family: 'Fixture'; margin: 0; } p { margin: 0 0 8px; }"
+        );
+        let dom = ScriptedDom::from_serialized_document(&html);
+        let mut document = LiveryDocument::new(
+            dom,
+            StyleSet::cambium(&[&css]),
+            Device::screen(800.0, 600.0),
+        );
+        document.set_font_resource(
+            "fixture.ttf",
+            include_bytes!("../../../../tests/wpt/tests/fonts/Ahem.ttf").to_vec(),
+        );
+        crate::layout::FIXTURE_GATE.with(|c| c.set((0, 0, 0)));
+        crate::layout::INPUT_OWNERSHIP.with(|c| c.set((0, 0)));
+        crate::text::SPAN_OWNERSHIP.with(|c| c.set((0, 0)));
+        crate::text::READY_KEY_WORK.with(|c| c.set((0, 0, 0, 0)));
+        crate::text::BORROWED_KEY_WORK.with(|c| c.set((0, 0)));
+        document.frame(800, 600).expect("fixture frame");
+        let (style_total, style_shared) = crate::layout::INPUT_OWNERSHIP.with(|c| c.get());
+        let (span_total, span_shared) = crate::text::SPAN_OWNERSHIP.with(|c| c.get());
+        assert!(style_total > 0 && span_total > 0);
+        assert_eq!(
+            span_shared, span_total,
+            "formatting borrows prepared span storage"
+        );
+        assert_eq!(
+            style_shared, style_total,
+            "eager keys borrow measured context style"
+        );
+        assert_eq!(
+            crate::layout::FIXTURE_GATE.with(|c| c.get()),
+            (2048, 2048, 2048),
+            "{case}"
+        );
+        assert_eq!(
+            crate::text::READY_KEY_WORK.with(|c| c.get().3),
+            2048,
+            "{case}: one eager key per group"
+        );
+        assert_eq!(
+            crate::text::BORROWED_KEY_WORK.with(|c| c.get()),
+            (2048, 2048),
+            "{case}"
+        );
+    }
+}
+
+#[test]
+fn later_invalid_actual_group_rejects_before_context_updates() {
+    let html = "<html><body><p>eligible one</p><p>fallback <span>inline</span></p><p>eligible three</p></body></html>";
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(html),
+        StyleSet::cambium(&["p { margin: 0; }"]),
+        Device::screen(800.0, 600.0),
+    );
+    crate::layout::FIXTURE_UPDATES.with(|c| c.set(0));
+    crate::layout::FIXTURE_FAULT.with(|c| c.set(Some(4)));
+    let error = document
+        .frame(800, 600)
+        .err()
+        .expect("invalid physical job must reject frame");
+    assert!(
+        format!("{error:?}").contains("index: 4, kind: PassGeneration"),
+        "{error:?}"
+    );
+    assert_eq!(crate::layout::FIXTURE_UPDATES.with(|c| c.get()), 0);
+    let stats = document.text_system().shaping_stats();
+    assert_eq!(
+        (stats.batches, stats.unique_jobs, stats.cache_misses),
+        (0, 0, 0)
+    );
+}
+
+#[test]
+fn late_batch_failure_does_not_publish_document_frame() {
+    let html = "<html><body><p>ready text first</p><p><span style='padding-left:10%'>deferred text second</span></p></body></html>";
+    let mut document = LiveryDocument::new(
+        ScriptedDom::from_serialized_document(html),
+        StyleSet::cambium(&["p { margin: 0; }"]),
+        Device::screen(800.0, 600.0),
+    );
+    let generation = document.generation();
+    let layout_generation = document.layout_generation();
+    crate::text::LATE_FAULT.with(|f| f.set(1));
+    let error = document
+        .frame(800, 600)
+        .err()
+        .expect("late failure rejects the frame");
+    assert!(
+        format!("{error:?}").contains("late inline batch rejected"),
+        "{error:?}"
+    );
+    assert!(!document.has_current_frame());
+    assert!(document.cached.is_none());
+    assert!(document.layout.is_none());
+    assert_eq!(document.generation(), generation);
+    assert_eq!(document.layout_generation(), layout_generation);
+    let stats = document.text_system().shaping_stats();
+    assert!(
+        stats.batches > 0 && stats.cache_misses > 0 && stats.retained_entries > 0,
+        "the earlier successful batch remains published in the shaping cache"
     );
 }

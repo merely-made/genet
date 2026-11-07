@@ -10,7 +10,7 @@ and names the proof a promoted execution plan must carry.
 **Parent:** [Web platform WPT census](2026-09-06_web_platform_wpt_census.md).
 The [harness repair](2026-09-07_wpt_harness_repair_plan.md),
 [IDL interfaces](2026-09-07_idl_interface_table_plan.md),
-[cheap globals](2026-09-07_cheap_globals_plan.md),
+[cheap globals](2026-11-03_globals_clone_timing_frontier_plan.md),
 [MutationObserver](2026-09-07_mutation_observer_plan.md),
 [XMLHttpRequest](2026-09-07_xhr_plan.md), and
 [Selection and Range](2026-09-07_selection_range_plan.md) have dated plans
@@ -362,7 +362,7 @@ a thread-confined runtime through the selected engine factory, exchanges
 messages and resource requests, and reports acknowledged idle. The S5/S6
 receipts below prove a narrow real Boa delivery path.
 
-The [cheap-globals lane](2026-09-07_cheap_globals_plan.md)'s in-agent APIs remain.
+The [cheap-globals lane](2026-11-03_globals_clone_timing_frontier_plan.md)'s in-agent APIs remain.
 `structured_clone.rs` now contains both its fused clone walk and a transportable
 tagged record through `__scSerialize`/`__scDeserialize`. Their existence does
 not close the transfer-custody gates: actual buffer detachment, receiving-port
@@ -404,9 +404,9 @@ Record unsupported worker globals and module variants as named residuals;
 retain the cheap-globals messaging regression manifest.
 
 **S5/S6 continuation, 2026-09-08.** The
-[actual Boa runtime receipt](receipts/2026-09-08_s2_s5_backend/receipt.md)
+[actual Boa runtime receipt](../../../testing/genet/design_docs/receipts/2026-09-08_s2_s5_backend/receipt.md)
 separates timer/microtask-only non-delivery from worker pumping and acknowledged
-idle. The [scripted-document receipt](receipts/2026-09-08_s6_document_workers/receipt.md)
+idle. The [scripted-document receipt](../../../testing/genet/design_docs/receipts/2026-09-08_s6_document_workers/receipt.md)
 then proves exact reply/Promise DOM changes, freeze/resume refusal and recovery,
 and missing-route error/quiescence on the real headless Boa document. Both
 scripted-document implementations now forward worker service and expose an
@@ -622,3 +622,24 @@ The dependency contracts are:
   their original route/consumer scope is retained. This document owns the
   deferred web-platform scoping; promoted plans own exact manifests, current
   code reconciliation and implementation receipts.
+
+## Completed-lane carry-forward (2026-11-03)
+
+The completed bounded migrations retain their original evidence in whole
+archives. This table records follow-on ownership and qualifications; it does
+not declare the listed historical residuals to be current reproduced defects.
+
+| Archived source | Continuing owner or qualification |
+|---|---|
+| Fleece follow-through | Fleece preservation/selector plan and the actual downstream product owners retain later preservation, polling/reading-room and distillation decisions. |
+| Servo cone retirement | The compositor and testdriver source homes remain live. The old Mere Boa patch-cleanup observation is a consumer-manifest review for Mere's current owner, not permission to remove a patch without checking its current graph. |
+| MallocSizeOf removal | Preserve its suite/native scope and explicit absence of a WPT rerun. Mere's old package-pin observation is historical; a current receiving claim needs its own cohort, not the old removal receipt. |
+| Image-decode feature | Keep the default/forwarding contract and disabled-feature behavior. Broader decoder, guest/browser and current-cohort acceptance are separate; no such gate is supplied by archiving the feature slice. |
+| Netfetcher wire adoption | Raw carriage remains beneath Genet policy. Registry packaging remains separate; HTTP/3 buffering and process-wide default pools do not prove per-persona partitioning. Explicit host pool/TLS ownership and Fetch/WebSocket security stay with the current host/request-security owners. The old macOS/WebGL limitations and named immutable supplier qualification remain scoped to that run. |
+| Dependency currency | Retain the attributed baseline failures, ignores, local ignored-lock qualifications and independent smoke-workspace exceptions. This closure runs no dependency update and claims no fresh whole-workspace acceptance. |
+| Encoding | Legacy-charset form submission belongs to the held Forms owner; legacy-charset frame navigation/parsing belongs to iframe/Realms; Encoding streams belong to the Streams frontier. The fatal-UTF-8 standard/WPT disagreement, backend capability gaps and three qualified ignores remain explicit historical limits; do not silently alter semantics or repin expectations. |
+| Census panic repair | R1/R2 and its separately qualified Vano repin remain completed bounded work. Check current XML navigable parsing/document.open behavior under parser/iframe/Realms, SVG focus under DOM/focus, ResizeObserver under observers/timing, and two stream-getter cases under Streams before assigning current defect or completion status. |
+
+The five held plans and the active RTC source/receipt remain with their current
+owners. A carry into this inventory does not close their implementation,
+conformance, runtime, human or platform checkpoints.

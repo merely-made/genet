@@ -18,3 +18,6 @@ path = "lib.rs"
 gstreamer = { workspace = true }
 gstreamer-video = { workspace = true }
 servo-media-player = { workspace = true }
+
+[lints]
+workspace = true

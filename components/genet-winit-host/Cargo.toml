@@ -44,3 +44,6 @@ accesskit_unix = { workspace = true }
 [dev-dependencies]
 # Match the Unix adapter's consumer; guest-tree update order is tested at each boundary.
 accesskit_consumer = "=0.39.1"
+
+[lints]
+workspace = true

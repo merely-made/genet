@@ -1,0 +1,690 @@
+# mere/design_docs/mere_docs/implementation_strategy/2026-10-30_house_style_plan.md (H2); all physical source lines count.
+ceiling = 600
+
+[[exclude]]
+path = "support/patches/"
+reason = "Imported upstream crates with local integration patches; retain upstream source layout."
+
+[[exclude]]
+path = "tests/wpt/"
+reason = "Imported Web Platform Tests and harness sources; preserve the upstream conformance corpus."
+
+[[exclude]]
+path = "tests/blink_perf_tests/"
+reason = "Imported Blink performance test corpus; preserve the upstream comparison fixtures."
+
+[[exclude]]
+path = "components/genet-scripted-dom/forms_directionality_data.rs"
+reason = "Generated Unicode bidi ranges; regenerate with unicode/generate_directionality.py from the pinned Unicode data."
+
+[[exclude]]
+path = "components/script-runtime-api/dom/html_interfaces_generated.rs"
+reason = "Generated IDL interface table; regenerate with genet-idl-interface-table from the declared WPT IDL inputs."
+
+[[exception]]
+path = "components/buckram/src/block.rs"
+reason = "CSS block formatting inputs and normal-flow placement. Existing source-size debt; a responsibility split must preserve FlowLength, FlowLengthAuto, BlockSizeValue and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/box_tree.rs"
+reason = "CSS box identity, roles, tree position, and source provenance. Existing source-size debt; a responsibility split must preserve BoxId, BoxOrigin, PseudoElement and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/fragment_tree.rs"
+reason = "One-to-many CSS layout fragments and their tree relationships. Existing source-size debt; a responsibility split must preserve FragmentId, StaticPositionSource, StaticPosition and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/fragmentation.rs"
+reason = "Retained fragmentation inputs and the experimental block resume kernel. Existing source-size debt; a responsibility split must preserve FragmentationContextId, FragmentainerId, FragmentainerKind and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/positioning.rs"
+reason = "CSS positioned-layout used geometry. Existing source-size debt; a responsibility split must preserve PositionedBoxInput, ReplacedSize, PositionedBoxGeometry and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table.rs"
+reason = "Table topology derived from generated CSS boxes. Existing source-size debt; a responsibility split must preserve TableGrid, TableTrack, TableTrackGroup and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table/automatic.rs"
+reason = "Automatic table column measures over K4b's normalized grid. Existing source-size debt; a responsibility split must preserve TableAutomaticColumnInput, TableAutomaticColumnGroupInput, TableAutomaticColumnMeasureInput and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table/automatic_used.rs"
+reason = "Used-width selection for automatic CSS tables. Existing source-size debt; a responsibility split must preserve TableAutomaticInlineSizingInput, TableAutomaticInlineSizingOutcome, TableAutomaticInlineSizingIndefinite and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table/borders.rs"
+reason = "K4g1: every border that can meet at every atomic table grid edge. Existing source-size debt; a responsibility split must preserve TableBorderOrigin, GridEdgeOrientation, TableGridEdge and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table/fixed.rs"
+reason = "CSS 2 fixed-table inline sizing over K4b's normalized grid. Existing source-size debt; a responsibility split must preserve TableFixedColumnInput, TableFixedColumnGroupInput, TableFixedInlineSizingInput and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table/fragments.rs"
+reason = "K4d6a: the table's own fragment subtree. Existing source-size debt; a responsibility split must preserve TableFragmentRole, TableFragment, TableFragments and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table/rows.rs"
+reason = "K4d row-layout contracts over K4b's grid and K4c's column sizes. Existing source-size debt; a responsibility split must preserve TableBlockConstraint, TableSeparatedBlockMetrics, TableCollapsedBlockMetrics and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/table/sizing.rs"
+reason = "Logical-axis table inline-sizing contracts. Existing source-size debt; a responsibility split must preserve AffineLengthPercentage, InlineSizeConstraint, TableBoxSizing and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/taffy_adapter.rs"
+reason = "Caller-owned scratch tree for Taffy's low-level layout algorithms. Existing source-size debt; a responsibility split must preserve AlgorithmKind, BlockAlgorithm, FragmentationDispatch and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/taffy_adapter/run.rs"
+reason = "One run of the layout algorithms over an [AlgorithmTree]. Existing source-size debt; a responsibility split must preserve MeasureFn, AlgorithmRun, BlockChildInput and existing module visibility."
+
+[[exception]]
+path = "components/buckram/src/taffy_adapter/tests.rs"
+reason = "Taffy adapter tests. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/cadency/tests/selectors.rs"
+reason = "Selectors. Existing source-size debt; a responsibility split must preserve State, List, Node and existing module visibility."
+
+[[exception]]
+path = "components/fleece/src/lib.rs"
+reason = "Fleece: render-free content extraction over [LayoutDom]. Existing source-size debt; a responsibility split must preserve TextNormalization, TextPositionSelector, TextQuoteSelector and existing module visibility."
+
+[[exception]]
+path = "components/fleece/src/structured.rs"
+reason = "Structured. Existing source-size debt; a responsibility split must preserve StructuredValue, EmbeddedJsonLdBlock, JsonLdParseStatus and existing module visibility."
+
+[[exception]]
+path = "components/fleece/src/table.rs"
+reason = "Table. Existing source-size debt; a responsibility split must preserve Table, TableModelError, TableRowGroup and existing module visibility."
+
+[[exception]]
+path = "components/genet-compositor/compositor.rs"
+reason = "OS presentation and master-texture capture backends. Existing source-size debt; a responsibility split must preserve PresentationRoute, PresentationStage, PresentationOutcome and existing module visibility."
+
+[[exception]]
+path = "components/genet-compositor/compositor_dxgi.rs"
+reason = "Windows DXGI Composition OsCompositorBackend impl. Existing source-size debt; a responsibility split must preserve DxgiSurface, WindowsDxgiBackend, BackendError and existing module visibility."
+
+[[exception]]
+path = "components/genet-compositor/compositor_wayland/mod.rs"
+reason = "Linux Wayland subsurface OsCompositorBackend impl. Existing source-size debt; a responsibility split must preserve WaylandSubsurfaceBackend, WaylandSurface and existing module visibility."
+
+[[exception]]
+path = "components/genet-document-resources/lib.rs"
+reason = "Engine-neutral document resource discovery. Existing source-size debt; a responsibility split must preserve ByteFetcher, ResponseFetcher, StylesheetOwner and existing module visibility."
+
+[[exception]]
+path = "components/genet-documents/src/engines/livery.rs"
+reason = "The Livery lane as an inker session engine: the clean-room static HTML route, including its retained editable controls. Existing source-size debt; a responsibility split must preserve LiverySessionEngine, LiveryResourcePreparation, LiveryDocumentSession and existing module visibility."
+
+[[exception]]
+path = "components/genet-documents/src/engines/scripted.rs"
+reason = "The scripted lane as an inker session engine: a page's DOM after its scripts ran, wrapped for the session registry. Existing source-size debt; a responsibility split must preserve ScriptedOptionsFactory, ScriptedSessionEngine, ScriptedDocumentSession and existing module visibility."
+
+[[exception]]
+path = "components/genet-documents/src/engines/tests.rs"
+reason = "Engines tests. Existing source-size debt; a responsibility split must preserve NoFetch, ImageFetch, LinkedResourceFetch and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/box_tree.rs"
+reason = "Livery computed-value and DOM adapter for Buckram's CSS box generator. Existing source-size debt; a responsibility split must preserve GeneratedBoxTree and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/document.rs"
+reason = "Retained Livery document ownership. Existing source-size debt; a responsibility split must preserve ClickOutcome, LinkTarget, LayoutDamageKind and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/document/frame.rs"
+reason = "The retained frame: layout damage tracking and the paint pipeline. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/document/tests.rs"
+reason = "Document tests. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/invalidation.rs"
+reason = "Neutral incremental style invalidation for Livery. Existing source-size debt; a responsibility split must preserve AttributeSnapshot, ElementSnapshot, RestyleStats and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout.rs"
+reason = "Layout. Existing source-size debt; a responsibility split must preserve Fragment, IntrinsicTableWrapper, StickyScrollport and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout/build_block.rs"
+reason = "The block-level builder: projects the box tree's block, flex, grid and table subtrees into Buckram's algorithm tree. Existing source-size debt; a responsibility split must preserve BuildState and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout/build_inline.rs"
+reason = "The inline builder: projects an inline group's boxes and atomics into the inline algorithm tree, tables included. Existing source-size debt; a responsibility split must preserve InlineBuildState and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout/positioned.rs"
+reason = "Out-of-flow placement: static positions, relative offsets, and the absolute/fixed containing-block and inset resolution. Existing source-size debt; a responsibility split must preserve PositionedPlacement, PositionedCandidate and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout/query.rs"
+reason = "The query plane of a finished layout: fragment and rect lookup, caret, selection and text-range geometry, the table paint queries paint reads, and the identifier reconciliation. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout/taffy_style.rs"
+reason = "Projection of computed CSS into Taffy's style vocabulary. Existing source-size debt; a responsibility split must preserve DirectBoxSource and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout/tests.rs"
+reason = "Layout tests. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/layout/transaction.rs"
+reason = "The layout transaction: the public entries, the pass that builds the block and inline algorithm trees, lays out the atomic subtrees, and folds the inline groups back into one. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/paint.rs"
+reason = "Paint-list emission for Livery's bounded structural lane. Existing source-size debt; a responsibility split must preserve LiveryPaintList, TransformGap, TransformGapKind and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/presentational_hints.rs"
+reason = "HTML presentational hints projected into the CSS cascade. Existing source-size debt; a responsibility split must preserve PresentationalHintProvider, LegacyDescendantAlignment, PresentationalHintDiagnostic and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/style.rs"
+reason = "Style. Existing source-size debt; a responsibility split must preserve UsedValueContext, AuthorStylesheet, CssomImportRule and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/table_block.rs"
+reason = "K4d6b: Buckram lays out a live table's block axis. Existing source-size debt; a responsibility split must preserve TableBlockSkip, TableBlockQuantity, TableBlockDivergence and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/table_shadow.rs"
+reason = "K4c5b: Buckram owns live table inline sizing. Existing source-size debt; a responsibility split must preserve TableSizingQuantity, TableSizingDivergence, TableShadowSkip and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/table_sizing.rs"
+reason = "Livery's non-live lowering into Buckram's table inline-sizing contracts. Existing source-size debt; a responsibility split must preserve CollapsedTableBorders, CollapsedBorderLoweringError and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/src/text.rs"
+reason = "Clean-room Parley adapter for Livery inline formatting. Existing source-size debt; a responsibility split must preserve FragmentLookup, Brush, TextRect and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/tests/cambium_lane.rs"
+reason = "Cambium lane. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/tests/css_text_lane.rs"
+reason = "css-text lane (2026-08-21) fixtures: the text properties and white-space rules genet-livery/src/text.rs carries to Parley. Existing source-size debt; a responsibility split must preserve Run, Rendered and existing module visibility."
+
+[[exception]]
+path = "components/genet-livery/tests/interaction.rs"
+reason = "Interaction. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/tests/paint.rs"
+reason = "Paint. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-livery/tests/transform_context.rs"
+reason = "Positioned descendants use the same transform context in retained layout and paint. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/genet-render-host/src/lib.rs"
+reason = "The genet present core, independent of what it presents onto. Existing source-size debt; a responsibility split must preserve RasterizeFailure, ScopedRasterResult, SurfaceAcquire and existing module visibility."
+
+[[exception]]
+path = "components/genet-render-host/src/recovery.rs"
+reason = "One recovery owner per shared core, with an explicit host-detachment barrier. Existing source-size debt; a responsibility split must preserve CoreGeneration, ReplacementFactory, ReplacementFuture and existing module visibility."
+
+[[exception]]
+path = "components/genet-render/src/a11y.rs"
+reason = "A11y. Existing source-size debt; a responsibility split must preserve AncestorScroll, A11yStyleQueries and existing module visibility."
+
+[[exception]]
+path = "components/genet-render/src/a11y/name.rs"
+reason = "Bounded DOM text alternatives, following AccName 1.2 (2026-09-23). Existing source-size debt; a responsibility split must preserve Names and existing module visibility."
+
+[[exception]]
+path = "components/genet-render/src/livery_render.rs"
+reason = "Livery document rendering and host spatial queries. Existing source-size debt; a responsibility split must preserve ScrollOffsets, VisualAffinity, VisualCaret and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted-dom/forms.rs"
+reason = "HTML input and textarea current-value state. Existing source-size debt; a responsibility split must preserve RadioAssociationSnapshot, FormControlValueError, InputValueModeForState and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted-dom/forms_submission.rs"
+reason = "Native file authority and successful-control entry snapshots. Existing source-size debt; a responsibility split must preserve FormFileId, FormFileBindingIdentity, FormFileBindingIdentityError and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted-dom/forms_validation.rs"
+reason = "Constraint-validation facts derived from the scripted DOM's current nodes. Existing source-size debt; a responsibility split must preserve ValidationMessageKind, ValidationMessageCatalog and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted-dom/html_encoding.rs"
+reason = "Byte-backed HTML input selection. Existing source-size debt; a responsibility split must preserve EncodingConfidence, DocumentEncoding, HtmlDecodeOptions and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted-dom/lib.rs"
+reason = "Mutable scripted-DOM provider. Existing source-size debt; a responsibility split must preserve NodeId, NodeIdentityError, CapturedNodeId and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted-dom/parser.rs"
+reason = "The HTML parser over the live arena, driven one pause at a time. Existing source-size debt; a responsibility split must preserve DomAccess, ParserPolicy, PolicyState and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted-dom/shadow.rs"
+reason = "Shadow trees over the scripted arena: the shadow-root records, the per-host slot assignment table, and the flat-tree children built from it. Existing source-size debt; a responsibility split must preserve ShadowRootData, AttachShadowError, FlatChildren and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted/capture.rs"
+reason = "Env-gated DOM mutation capture for the scripted tier. Existing source-size debt; a responsibility split must preserve DomCaptureRecord, DomCaptureRecorder, RecordedMutation and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted/document.rs"
+reason = "The scripted document profile (V4): a live, script-mutated document. Existing source-size debt; a responsibility split must preserve DocumentLifecycle, ScrollKey, ScriptedDocument and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted/livery.rs"
+reason = "Livery's scripted CSSOM adapter. Existing source-size debt; a responsibility split must preserve LiveryState, ScriptedClick, LiveFrame and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted/resource_bridge.rs"
+reason = "The hosted scripted resource bridge. Existing source-size debt; a responsibility split must preserve ScriptWake, ScriptWakeEvent, WakeState and existing module visibility."
+
+[[exception]]
+path = "components/genet-scripted/tests/live_resource_retention.rs"
+reason = "Live resource retention. Existing source-size debt; a responsibility split must preserve CountingFetcher, RedirectingFetcher and existing module visibility."
+
+[[exception]]
+path = "components/genet-static-dom/lib.rs"
+reason = "Genet-static-dom lib. Existing source-size debt; a responsibility split must preserve StaticNodeId, StaticDocument, StaticQuirksMode and existing module visibility."
+
+[[exception]]
+path = "components/genet-webrtc/src/lib.rs"
+reason = "Native WebRTC host for Genet's engine-neutral browser bindings. Existing source-size debt; a responsibility split must preserve Settings, NativeWebRtcFactory, Endpoint and existing module visibility."
+
+[[exception]]
+path = "components/genet-winit-host/src/a11y.rs"
+reason = "Platform AccessKit bridge for a genet-on-winit host. Existing source-size debt; a responsibility split must preserve BridgeStatus, A11yActionRequest, ActionSink and existing module visibility."
+
+[[exception]]
+path = "components/livery/build.rs"
+reason = "Build. Existing source-size debt; a responsibility split must preserve Database, Source, Shorthand and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/cascade.rs"
+reason = "DOM-neutral declaration parsing and cascade ordering. Existing source-size debt; a responsibility split must preserve ColorComputeContext, PendingSubstitution, DeclaredValue and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/media.rs"
+reason = "Genet-shaped media environment and first-lane query evaluation. Existing source-size debt; a responsibility split must preserve MediaType, SystemPalette, ReducedMotion and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/stylesheet.rs"
+reason = "Style rules joining selectors, media conditions, declarations, and cascade. Existing source-size debt; a responsibility split must preserve StylesheetDiagnostic, CssRule, CssomRuleKind and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/calc.rs"
+reason = "Dimensional parsing and reduction for CSS math expressions. Existing source-size debt; a responsibility split must preserve Numeric, MathDimension, MathBuilder and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/color/specified.rs"
+reason = "The specified-value form of a color. Existing source-size debt; a responsibility split must preserve SpecifiedColor, RelativeForm, MixForm and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/length.rs"
+reason = "Length. Existing source-size debt; a responsibility split must preserve LengthUnit, ContainerAxisSize, TreeCounts and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/mod.rs"
+reason = "Typed values used by Livery's first property lane. Existing source-size debt; a responsibility split must preserve ParseError, CssValue, ResolveViewport and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/property/animation.rs"
+reason = "Animation and transition values: durations and delays, animation names, the transition property list, and timing functions. Existing source-size debt; a responsibility split must preserve Duration, AnimationDelay, AnimationName and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/property/backgrounds.rs"
+reason = "background- values: image, position, repeat, origin/clip box, and the size components, plus the shorthand that assembles them. Existing source-size debt; a responsibility split must preserve BackgroundImage, BackgroundPosition, PositionKeyword and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/property/layout.rs"
+reason = "Box and layout values: sizing, flex and grid vocabulary, aspect ratio, radii, gaps and spacing, ordering, padding, decoration lines, border width, and stacking level. Existing source-size debt; a responsibility split must preserve GridAutoFlow, ListStyleType, BorderWidth and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/property/transforms.rs"
+reason = "Visual transform values: opacity, clip paths, rotate and scale, the transform list and its functions, and box shadows. Existing source-size debt; a responsibility split must preserve Opacity, Rotate, Scale and existing module visibility."
+
+[[exception]]
+path = "components/livery/src/values/property/typography.rs"
+reason = "Text and font values: transform, hanging punctuation, indent, tab size, vertical alignment, the font family and feature vocabulary, size, weight, and line height. Existing source-size debt; a responsibility split must preserve TextTransform, HangingPunctuation, TextIndent and existing module visibility."
+
+[[exception]]
+path = "components/livery/tests/cascade.rs"
+reason = "Cascade. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/livery/tests/color.rs"
+reason = "CSS Color 4/5 coverage: the cutover plan's F0 color slice. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/livery/tests/values.rs"
+reason = "Values. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/media/audio/block.rs"
+reason = "Block. Existing source-size debt; a responsibility split must preserve Tick, Chunk, Block and existing module visibility."
+
+[[exception]]
+path = "components/media/backends/gstreamer/player.rs"
+reason = "Player. Existing source-size debt; a responsibility split must preserve PlayerSource, PlayerInner, SeekChannel and existing module visibility."
+
+[[exception]]
+path = "components/media/backends/gstreamer/webrtc.rs"
+reason = "Webrtc. Existing source-size debt; a responsibility split must preserve MLineInfo, DataChannelEventTarget, GStreamerWebRtcController and existing module visibility."
+
+[[exception]]
+path = "components/netfetcher/src/cookie_jar.rs"
+reason = "An in-memory RFC 6265bis cookie jar. Existing source-size debt; a responsibility split must preserve StoredCookie, InMemoryCookieJar and existing module visibility."
+
+[[exception]]
+path = "components/netfetcher/src/cors.rs"
+reason = "Cross-origin policy: response tainting + CORS gating (WHATWG Fetch). Existing source-size debt; a responsibility split must preserve Taint, PreflightCache, InMemoryPreflightCache and existing module visibility."
+
+[[exception]]
+path = "components/netfetcher/src/fetch/tests.rs"
+reason = "Fetch integration tests (mockito-backed) for the public fetch() entry. Existing source-size debt; a responsibility split must preserve SpyTransport, FixedBodyTransport and existing module visibility."
+
+[[exception]]
+path = "components/netfetcher/src/websocket.rs"
+reason = "WebSocket (RFC 6455) over ws:// / wss://. Existing source-size debt; a responsibility split must preserve WsMessage, WsClose, WsIncoming and existing module visibility."
+
+[[exception]]
+path = "components/script-engine-api/lib.rs"
+reason = "Engine-neutral scripting backend contract for genet's scripted tier. Existing source-size debt; a responsibility split must preserve ReflectorData, PromiseToken, Budget and existing module visibility."
+
+[[exception]]
+path = "components/script-engine-boa/lib.rs"
+reason = "Boa fork backend for [script_engine_api]. Existing source-size debt; a responsibility split must preserve Reflector, PendingPromise, RealmRegistry and existing module visibility."
+
+[[exception]]
+path = "components/script-engine-nova/lib.rs"
+reason = "Nova backend for [script_engine_api] — the primary backend on 64-bit targets. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-engine-nova/tests/realms.rs"
+reason = "Nova's half of the realm contract's named regression set. Existing source-size debt; a responsibility split must preserve Seen, WhereAmI and existing module visibility."
+
+[[exception]]
+path = "components/script-engine-piccolo/lib.rs"
+reason = "Piccolo (stackless Lua) backend for [script_engine_api] — the seam's third backend and the piccolo fork's first in-tree consumer (G4 in docs/2026-06-11_gc_arena_dom_plan.md). Existing source-size debt; a responsibility split must preserve ReflectorCache, PromiseTokenData, HostSlot and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/dom/adoption.rs"
+reason = "Private agent coordination. Existing source-size debt; a responsibility split must preserve AgentDomState, OwnedNode, NoteCanvasContext and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/dom/bootstrap.js"
+reason = "Bootstrap. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/dom/markup_insertion.rs"
+reason = "Dynamic markup insertion and the document's readiness, as the small pieces of state a native can reach. Existing source-size debt; a responsibility split must preserve ReadyState, MarkupState, OpenStream and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/dom/mod.rs"
+reason = "The document / Node construction surface — the live-DOM rung of the host layer (pluggable_engines_testharness_plan step 2). Existing source-size debt; a responsibility split must preserve ComputedStyleHandler, InlineStyleValueResult, InlineStyleHandler and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/dom/tests.rs"
+reason = "DOM host-surface tests. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/dom/tree.rs"
+reason = "DOM creation, document-structure, attribute-write, and read command sinks. Existing source-size debt; a responsibility split must preserve NodeRealmState, DocumentRoot, ReflectNode and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/dom/xpath_eval.rs"
+reason = "Document.evaluate() native half: adapt the live ScriptedDom to the generic XPath 1.0 engine, then serialize the result for the JS XPathResult wrapper in bootstrap.js. Existing source-size debt; a responsibility split must preserve XPathTree, XPathNodeData, XPathAttrData and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/fetch.rs"
+reason = "The fetch() host seam. Existing source-size debt; a responsibility split must preserve FetchOutcome, FetchHandler, FetchStart and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/form_data.rs"
+reason = "Genuine VM extraction followed by native immutable file snapshots. Existing source-size debt; a responsibility split must preserve FormWire, FormFileAllocate, FormFilesReplace and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/frames.rs"
+reason = "Browsing contexts belonging to the runtime's single script agent. Existing source-size debt; a responsibility split must preserve FrameState, PendingNavigation, HistoryTraversal and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/lib.rs"
+reason = "Browser host surface for genet's scripted tier (the plan's Layer 1). Existing source-size debt; a responsibility split must preserve OwnerResolvedCx, ValidationReport, PendingValidationReport and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/parse.rs"
+reason = "HTML's parsing model with scripts interleaved: the drive loop that owns when a script runs, over the tree sink that owns what the tree looks like. Existing source-size debt; a responsibility split must preserve ParserScriptLoader, NoScriptLoader, ScriptTiming and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/platform.rs"
+reason = "Window platform services: location (and, as they land, localStorage / history). Existing source-size debt; a responsibility split must preserve LocationField, NodeBaseURI, EnvironmentOrigin and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/streams/piping.js"
+reason = "Piping. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/streams/readable.js"
+reason = "Readable. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/streams/writable.js"
+reason = "Writable. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/structured_clone.rs"
+reason = "The structured serialize / deserialize algorithm, and structuredClone(). Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/subtle.rs"
+reason = "Web Crypto's crypto.subtle: native key storage plus the operations, each delegated to a maintained RustCrypto crate. Existing source-size debt; a responsibility split must preserve HashAlg, KeyAlgorithm, Kdf and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/subtle/bootstrap.js"
+reason = "Bootstrap. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/tests/cheap_globals.rs"
+reason = "The \"cheap globals\" lane: performance (hr-time, user timing, the performance timeline), queueMicrotask, structuredClone, MessageChannel / MessagePort / BroadcastChannel, crypto,. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/tests/fetch_binding.rs"
+reason = "The fetch() host seam end-to-end through the JS surface, with a stub handler (no real network). Existing source-size debt; a responsibility split must preserve EchoFetch, DeferredRecorder, BinaryEcho and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/tests/forms_submission.rs"
+reason = "Semantic submission/default-action fixtures. Existing source-size debt; a responsibility split must preserve Requests and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/tests/parser_script_interleaving.rs"
+reason = "HTML's parsing model with scripts interleaved: a script sees the tree only as far as its own position, document.write re-enters the token stream at the insertion point,. Existing source-size debt; a responsibility split must preserve TableLoader and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/tests/top_level_navigation.rs"
+reason = "The top-level browsing context navigates the way a child does. Existing source-size debt; a responsibility split must preserve Journal, Pages, HistoryReply and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/tests/webgl_binding.rs"
+reason = "End-to-end smoke for the JS WebGLRenderingContext surface against a real webgl-wgpu context. Existing source-size debt; a responsibility split must preserve WgpuWebGl and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/tests/websocket_binding.rs"
+reason = "The WebSocket host object over its own host seam. Existing source-size debt; a responsibility split must preserve Op, Recorder and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/timing.rs"
+reason = "performance: High Resolution Time, User Timing and the Performance Timeline. Existing source-size debt; a responsibility split must preserve TimeResolution, Reader, ClockState and existing module visibility."
+
+[[exception]]
+path = "components/script-runtime-api/worker.rs"
+reason = "Dedicated workers: a second agent of the same engine in a supervised process on native hosts, or a thread under the explicit trusted policy. Existing source-size debt; a responsibility split must preserve WorkerPolicy, WorkerShutdownReport, ScriptResourceLoader and existing module visibility."
+
+[[exception]]
+path = "components/shared/browsing-context/lib.rs"
+reason = "The browsing-context tree: parent, children, top, the document each context currently holds, and one session history per context. Existing source-size debt; a responsibility split must preserve BrowsingContextId, Origin, SandboxFlags and existing module visibility."
+
+[[exception]]
+path = "components/shared/document-session-api/src/session_engine.rs"
+reason = "Session-engine traits and registry — the third engine kind (2026-07-10 session-engines plan). Existing source-size debt; a responsibility split must preserve SessionError, SessionSpawnRequest, SessionLink and existing module visibility."
+
+[[exception]]
+path = "components/shared/layout-dom/lib.rs"
+reason = "Profile-neutral DOM trait. Existing source-size debt; a responsibility split must preserve FormControlState, FormControlInteractionState, FormControlEditingValue and existing module visibility."
+
+[[exception]]
+path = "components/taproot/lib.rs"
+reason = "Shared automatability substrate for the genet apps. Existing source-size debt; a responsibility split must preserve ProbeSurface, Match, Selector and existing module visibility."
+
+[[exception]]
+path = "components/taproot/projection.rs"
+reason = "Projection. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/taproot/scenario.rs"
+reason = "The shared scenario driver: a generic verb loop over an [Automatable] app. Existing source-size debt; a responsibility split must preserve Cmp, Step, Driveable and existing module visibility."
+
+[[exception]]
+path = "components/webgl-essl/check.rs"
+reason = "First typecheck pass: symbol resolution, literal types, identifier types. Existing source-size debt; a responsibility split must preserve CheckResult, TypeDiagnostic, TypeDiagnosticKind and existing module visibility."
+
+[[exception]]
+path = "components/webgl-essl/lower.rs"
+reason = "Step 6 spike: lower a typechecked ESSL translation unit to WGSL via path A (ESSL → SPIR-V (rspirv) → naga IR (spv-in) → WGSL (wgsl-out)). Existing source-size debt; a responsibility split must preserve LoweringError, Ctx, StructTypeInfo and existing module visibility."
+
+[[exception]]
+path = "components/webgl-essl/tests/lower_spike.rs"
+reason = "Step 6 path-A receipt: ESSL → SPIR-V (rspirv) → naga IR (spv-in) → WGSL (wgsl-out). Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/webgl-essl/validate.rs"
+reason = "WebGL validator layer above the typecheck pass. Existing source-size debt; a responsibility split must preserve ShaderStage, ValidationResult, WebGlDiagnostic and existing module visibility."
+
+[[exception]]
+path = "components/webgl-wgpu/shader/tests.rs"
+reason = "Translation receipts after the switch-over to webgl-essl. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/webgl-wgpu/webgl.rs"
+reason = "Webgl. Existing source-size debt; a responsibility split must preserve WebGlBufferId, WebGlTextureId, WebGlFramebufferId and existing module visibility."
+
+[[exception]]
+path = "components/webgl-wgpu/webgl/tests_widened.rs"
+reason = "Receipts for the post-widening ProgramReflection surface: arbitrary attribute kinds (vec3 included), arbitrary uniform Block layouts (mat4 / multi-uniform), and end-to-end draws. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "components/xpath/src/parser.rs"
+reason = "Parser. Existing source-size debt; a responsibility split must preserve Error, Parser and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/conformance.rs"
+reason = "Absolute WPT conformance accounting. Existing source-size debt; a responsibility split must preserve StatusCounts, SubtestSummary, LaneSummary and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/expectations.rs"
+reason = "The expectation ledger: recorded and actual results, their subtest normalisation, and the compare/check/write cycle that keeps a run honest against what was previously accepted. Existing source-size debt; a responsibility split must preserve ActualSubtest, ExpectedSubtest, ActualRecord and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/harness.rs"
+reason = "Phase 3: run a testharness.js test and collect its per-subtest results. Existing source-size debt; a responsibility split must preserve WptMediaQueries, FetchCompletion, CompletionSource and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/main.rs"
+reason = "genet-native web-platform-tests runner. Existing source-size debt; a responsibility split must preserve Kind, Outcome, TestCase and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/manifest.rs"
+reason = "MANIFEST.json reader (WPT manifest v8/v9). Existing source-size debt; a responsibility split must preserve TestKind, RefMatch, ManifestTest and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/net.rs"
+reason = "Net. Existing source-size debt; a responsibility split must preserve SharedJar, LoadedHtmlDocument, Job and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/reftest.rs"
+reason = "The reftest lane: reference resolution, fuzzy-match policy, image comparison, and the table ledger a reftest run publishes. Existing source-size debt; a responsibility split must preserve ReftestRenderer, MatchKind, ReferenceVerificationFile and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/render.rs"
+reason = "HTML -> image, for reftest pixel comparison (phase 2). Existing source-size debt; a responsibility split must preserve Image, ResourceResolver, ChildRender and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/test262_cmd.rs"
+reason = "The test262 command lane: script, module and async harness modes over the runner core in [crate::test262], plus the command that walks the corpus. Existing source-size debt; a responsibility split must preserve T262 and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/testharness.rs"
+reason = "The testharness.js lane: run a subset and report per-subtest results. Existing source-size debt; a responsibility split must preserve OneOutcome, RunCtx and existing module visibility."
+
+[[exception]]
+path = "ports/genet-wpt/src/tests.rs"
+reason = "Src tests. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "ports/ortet/src/a11y.rs"
+reason = "Ortet's accessibility custody. Existing source-size debt; a responsibility split must preserve PublishedNode, RoutedAction, Accessibility and existing module visibility."
+
+[[exception]]
+path = "ports/ortet/src/fetch.rs"
+reason = "Ortet's fetch seam: two lanes and a scheme split between them. Existing source-size debt; a responsibility split must preserve FetchLane, OrtetFetcher, RemoteFetcher and existing module visibility."
+
+[[exception]]
+path = "ports/ortet/src/shell.rs"
+reason = "The window and its event loop. Existing source-size debt; a responsibility split must preserve ScriptWake, SessionDriver, DriverOutcome and existing module visibility."
+
+[[exception]]
+path = "ports/ortet/src/web.rs"
+reason = "The raw wasm32 Ortet host. Existing source-size debt; a responsibility split must preserve BrowserResourceLimits, WebOrtet, BrowserNavigation and existing module visibility."
+
+[[exception]]
+path = "ports/ortet/src/webgl.rs"
+reason = "Native WebGL contexts backed by Ortet's existing render device. Existing source-size debt; a responsibility split must preserve Context, RegisteredContext, Registry and existing module visibility."
+
+[[exception]]
+path = "resources/resource_protocol/license.html"
+reason = "License. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "support/ci/check_dependency_cones.py"
+reason = "Check dependency cones. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "support/ci/check_git_dependency_state.py"
+reason = "Check git dependency state. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "support/idl-interface-table/src/lib.rs"
+reason = "Generates components/script-runtime-api/dom/html_interfaces_generated.rs from two vendored WPT inputs: interfaces/.idl (interface shape, parents, [Exposed], [HTMLConstructor],. Existing source-size debt; a responsibility split must preserve Reflected, Op, Override and existing module visibility."
+
+[[exception]]
+path = "tests/html/perf-rainbow-hard.html"
+reason = "Perf rainbow hard. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "tests/html/perf-rainbow.html"
+reason = "Perf rainbow. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "tests/html/webvr/js/third-party/webvr-polyfill.js"
+reason = "Webvr polyfill. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "tests/html/webvr/js/third-party/wglu/wglu-stats.js"
+reason = "Wglu stats. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
+
+[[exception]]
+path = "tests/html/webvr/js/third-party/wglu/wglu-texture.js"
+reason = "Wglu texture. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."

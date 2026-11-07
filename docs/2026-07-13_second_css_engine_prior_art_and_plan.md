@@ -722,6 +722,20 @@ All `line-height-applies-to-*` probes now match. The CSS2 line-box ratchet is
 178 passed, 12 failed, 59 skipped, and 0 errored; the remaining failures are
 inline formatting floats and vertical-align baseline/negative-leading cases.
 
+### 2026-11-06 wrapped inline text paint-order receipt
+
+The 2026-07-17 deferral left a hole: a decoration that begins on a later line
+paints at its source-order walk, but the paragraph's shaped text stream drains
+whole at the first text node, so the later background painted over its own
+line's text (a wrapped `<mark>` showed an empty box on line 2 and after). The
+text frame now records each run's line key and holds back runs on or after the
+earliest still-deferred decoration's line until that decoration's walk, then
+flushes any remainder at the end of the inline group. Border bleed over the
+preceding line is unchanged. `wrapped_inline_text_paints_over_its_background_on_every_line`
+covers first, line-start and mid-line marks; `genet-livery` is green (809 pass,
+8 ignored), `css/CSS2/linebox` gains `line-height-125.xht` with no regression
+(163 to 164 pass).
+
 ## The destination, named
 
 *(Amended 2026-07-14; revised 2026-07-20 for the harvest reversal.)*

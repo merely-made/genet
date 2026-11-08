@@ -1,9 +1,9 @@
 #![cfg(feature = "host")]
 
-use murm_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
-use murm_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
-use murm_rtc::rtc::peer_connection::message::RTCMessage;
-use murm_rtc::udp::{IoLimits, Output, ReadInterest, UdpPeer};
+use genet_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
+use genet_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
+use genet_rtc::rtc::peer_connection::message::RTCMessage;
+use genet_rtc::udp::{IoLimits, Output, ReadInterest, UdpPeer};
 use std::time::{Duration, Instant};
 
 fn peer() -> UdpPeer {

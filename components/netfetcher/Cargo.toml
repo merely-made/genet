@@ -18,13 +18,13 @@ path = "src/lib.rs"
 [features]
 default = ["hyper-transport", "h3", "websocket"]
 # The default transport: hyper 1 (h1/h2) over rustls, one process-wide pool.
-hyper-transport = ["dep:murm-wire", "murm-wire/http"]
-h3 = ["hyper-transport", "murm-wire/h3"]
-websocket = ["dep:murm-wire", "murm-wire/websocket"]
+hyper-transport = ["dep:genet-wire", "genet-wire/http"]
+h3 = ["hyper-transport", "genet-wire/h3"]
+websocket = ["dep:genet-wire", "genet-wire/websocket"]
 
 [dependencies]
 genet-host-api = { path = "../genet-host-api", version = "0.2.0" }
-murm-wire = { git = "https://github.com/merely-made/murm.git", branch = "main", version = "0.1.0", default-features = false, optional = true }
+genet-wire = { path = "../genet-wire", version = "0.1.0", default-features = false, optional = true }
 url = "2.5"
 bytes = "1"
 
@@ -54,7 +54,7 @@ httpdate = "1"
 psl = "2"
 
 [dev-dependencies]
-# Independent loopback peer; production types come from Murm's connector.
+# Independent loopback peer; production types come from genet-wire's connector.
 tokio-tungstenite = "0.30"
 mockito = "1"
 # Used only to build gzip fixtures in tests; decode itself is async-compression.

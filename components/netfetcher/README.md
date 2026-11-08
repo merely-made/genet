@@ -195,7 +195,7 @@ Key pins from `Cargo.toml`:
 - Public Suffix List: `psl` 2.
 - HTTP/3: `quinn` 0.11, `h3` 0.0.8, `h3-quinn` 0.0.10, `webpki-roots` 1. h3 is
   pre-1.0; API churn is expected.
-- WebSocket: `tokio-tungstenite` 0.30, matching `murm-wire` message types;
+- WebSocket: `tokio-tungstenite` 0.30, matching `genet-wire` message types;
   the shared wire adapter owns TLS configuration.
 - Dev: `mockito` 1, `flate2` 1 (gzip test fixtures), `rcgen` 0.14 (self-signed
   cert for the in-process h3 test server).
@@ -218,7 +218,7 @@ MPL-2.0 (lineage from Servo's `net`).
 
 
 Wire ownership (2026-10-14): the default HTTP/1-2-3 and raw WebSocket
-connector delegate to `murm-wire`; Fetch and browser WebSocket policy remain
+connector delegate to `genet-wire`; Fetch and browser WebSocket policy remain
 here. `WireTransport` adapts a host-selected engine with explicit trust and
 pool partitioning. The public crate name/version, default feature names and
 Fetch/WebSocket entry points are unchanged. See

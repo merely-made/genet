@@ -5,13 +5,13 @@
 use std::net::{SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
 
-use murm_rtc::rtc::crypto::default_provider;
-use murm_rtc::rtc::ice::url::Url;
-use murm_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
-use murm_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngine;
-use murm_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
-use murm_rtc::rtc::peer_connection::message::RTCMessage;
-use murm_rtc::udp::{DiscoveryConfig, IoLimits, Output, ReadInterest, Server, UdpPeer};
+use genet_rtc::rtc::crypto::default_provider;
+use genet_rtc::rtc::ice::url::Url;
+use genet_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
+use genet_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use genet_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
+use genet_rtc::rtc::peer_connection::message::RTCMessage;
+use genet_rtc::udp::{DiscoveryConfig, IoLimits, Output, ReadInterest, Server, UdpPeer};
 
 fn server() -> SocketAddr {
     std::env::var("MURM_RTC_TEST_SERVER")
@@ -124,7 +124,7 @@ fn unavailable_relay_has_a_bounded_gathering_deadline_and_no_direct_candidate() 
 
 fn gather(
     peer: &mut UdpPeer,
-) -> Vec<murm_rtc::rtc::peer_connection::transport::RTCIceCandidateInit> {
+) -> Vec<genet_rtc::rtc::peer_connection::transport::RTCIceCandidateInit> {
     peer.finish_host_candidates().unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut candidates = Vec::new();

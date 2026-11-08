@@ -1,6 +1,6 @@
 //! Local name lifetime and web-visible projection, separate from numeric ICE routes.
 use super::*;
-use murm_rtc::registration::{Registration, candidate_name};
+use genet_rtc::registration::{Registration, candidate_name};
 
 /// Host-configurable local-address exposure.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]

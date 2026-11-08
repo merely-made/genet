@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
-//! Netfetcher's adapter to Murm's literal, policy-free wire engine.
+//! Netfetcher's adapter to the literal, policy-free `genet-wire` engine.
 use super::{RawResponse, Transport, TransportFuture, WireRequest};
 use crate::request::Method;
 use std::sync::{Arc, OnceLock};
@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 /// Compatibility knob for the process-wide test transport, called before its
 /// first request. Explicit host-owned engines never consult this setting.
 pub fn accept_invalid_certs() {
-    murm_wire::hyper::accept_invalid_certs();
+    genet_wire::hyper::accept_invalid_certs();
 }
 
 /// Preserve the public process-wide Netfetcher default and its trait identity.
@@ -22,7 +22,7 @@ impl DefaultTransport {
         SHARED
             .get_or_init(|| {
                 Arc::new(Self {
-                    engine: WireTransport::new(murm_wire::hyper::DefaultTransport::shared()),
+                    engine: WireTransport::new(genet_wire::hyper::DefaultTransport::shared()),
                 })
             })
             .clone()
@@ -33,13 +33,13 @@ impl Transport for DefaultTransport {
         self.engine.send(request)
     }
 }
-/// Adapt an explicit host-selected Murm engine without changing Fetch policy.
+/// Adapt an explicit host-selected genet-wire engine without changing Fetch policy.
 /// The engine owns its trust, pool partition, connection limits and retry policy.
 pub struct WireTransport {
-    engine: Arc<dyn murm_wire::Transport>,
+    engine: Arc<dyn genet_wire::Transport>,
 }
 impl WireTransport {
-    pub fn new(engine: Arc<dyn murm_wire::Transport>) -> Self {
+    pub fn new(engine: Arc<dyn genet_wire::Transport>) -> Self {
         Self { engine }
     }
 }
@@ -48,7 +48,7 @@ impl Transport for WireTransport {
         let Some(method) = http_method(&request.method) else {
             return Box::pin(async { None });
         };
-        let request = murm_wire::WireRequest {
+        let request = genet_wire::WireRequest {
             url: request.url,
             method,
             headers: request.headers,
@@ -64,8 +64,8 @@ impl Transport for WireTransport {
         })
     }
 }
-fn http_method(method: &Method) -> Option<murm_wire::http::Method> {
-    use murm_wire::http;
+fn http_method(method: &Method) -> Option<genet_wire::http::Method> {
+    use genet_wire::http;
     match method {
         Method::Get => Some(http::Method::GET),
         Method::Head => Some(http::Method::HEAD),

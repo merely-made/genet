@@ -1,12 +1,12 @@
 //! Synchronous resolver failure must remain observable before gathering ends.
 #![cfg(feature = "host")]
-use murm_rtc::resolve::{Family, Lookup, ResolveError, Resolver};
-use murm_rtc::rtc::crypto::default_provider;
-use murm_rtc::rtc::ice::url::Url;
-use murm_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
-use murm_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngine;
-use murm_rtc::rtc::peer_connection::event::RTCPeerConnectionEvent;
-use murm_rtc::udp::{DiscoveryConfig, IoLimits, Output, ReadInterest, UdpPeer};
+use genet_rtc::resolve::{Family, Lookup, ResolveError, Resolver};
+use genet_rtc::rtc::crypto::default_provider;
+use genet_rtc::rtc::ice::url::Url;
+use genet_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
+use genet_rtc::rtc::peer_connection::configuration::setting_engine::SettingEngine;
+use genet_rtc::rtc::peer_connection::event::RTCPeerConnectionEvent;
+use genet_rtc::udp::{DiscoveryConfig, IoLimits, Output, ReadInterest, UdpPeer};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

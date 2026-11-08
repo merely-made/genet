@@ -4,7 +4,7 @@
 // Protocol: https://www.w3.org/TR/webdriver-bidi/
 // Build (debug=0, jobs=1, stable target/build paths):
 //   cargo build -p genet-webrtc --example interop_host --locked --offline -j 1
-// Start murm/wire/crates/rtc/tests/coturn.sh in WSL, then from Genet:
+// Start components/genet-rtc/tests/coturn.sh in WSL, then from Genet:
 //   node support/ci/webrtc_interop.mjs --server NUMERIC_WSL_IP:34790
 // Add --dns controlled for explicit-port native hostname URLs, controlled A
 // replies, and interrupted-DNS cleanup. Browser peers use the numeric endpoint.

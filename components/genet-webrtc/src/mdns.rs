@@ -1,7 +1,7 @@
 //! Host-owned remote candidate resolution and success-independent observations.
 use super::*;
-use murm_rtc::resolve::{Lookup, is_mdns_candidate_name};
-use murm_rtc::rtc::ice::candidate::unmarshal_candidate;
+use genet_rtc::resolve::{Lookup, is_mdns_candidate_name};
+use genet_rtc::rtc::ice::candidate::unmarshal_candidate;
 use std::task::Poll;
 
 struct Entry {
@@ -125,7 +125,7 @@ impl Candidates {
         // Only direct UDP host candidates use this capability. Keep a stable
         // observation even when policy/capacity/lookup failure prevents routing.
         let eligible = candidate.typ
-            == murm_rtc::rtc::peer_connection::transport::RTCIceCandidateType::Host
+            == genet_rtc::rtc::peer_connection::transport::RTCIceCandidateType::Host
             && candidate.protocol.to_string() == "udp"
             && candidate.component == 1
             && candidate.port != 0;

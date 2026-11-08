@@ -11,8 +11,8 @@ description = "Caller-driven native WebRTC host for Genet documents"
 
 [dependencies]
 genet-runtime = { path = "../script-runtime-api" }
-# Independent wire leaf, not Murm's application carrier or root radio workspace.
-murm-rtc = { git = "https://github.com/merely-made/murm.git", branch = "main", default-features = false, features = ["crypto-ring", "dns"] }
+# The pinned caller-driven WebRTC protocol leaf, a Genet capability since cycle-breaks D20.
+genet-rtc = { path = "../genet-rtc", default-features = false, features = ["crypto-ring", "dns"] }
 serde_json = { workspace = true }
 bytes = "1"
 

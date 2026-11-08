@@ -57,6 +57,11 @@ members = [
     # consumers, and it must stay genet-side to keep mere's dependency direction
     # one-way.
     "components/netfetcher",
+    # The wire engines moved in from Murm on 2026-11-08 (mere cycle-breaks D20): Genet is their
+    # only consumer, so HTTP/1-3 and WebSocket carriage (genet-wire, used by netfetcher) and the
+    # WebRTC protocol leaf (genet-rtc, used by genet-webrtc) are Genet capabilities. History kept.
+    "components/genet-wire",
+    "components/genet-rtc",
     # Pelt (pelt, pelt-core, pelt-desktop) and Tabard left for mere on
     # 2026-09-03, with mere-document-lanes and knot-editor-host, under the
     # platform boundary plan's consumers-first order (mere

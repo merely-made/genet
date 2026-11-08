@@ -6,7 +6,7 @@ use std::net::UdpSocket;
 fn runtime<E: ScriptEngine>(
     fixture: &Fixture,
     settings: Settings,
-) -> (Runtime<E>, std::sync::Arc<murm_rtc::resolve::DnsResolver>) {
+) -> (Runtime<E>, std::sync::Arc<genet_rtc::resolve::DnsResolver>) {
     let resolver = fixture.resolver();
     let mut rt = Runtime::new().unwrap();
     rt.set_webrtc_factory(Rc::new(

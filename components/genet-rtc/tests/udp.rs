@@ -4,11 +4,11 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
 use bytes::BytesMut;
-use murm_rtc::rtc::data_channel::RTCDataChannelInit;
-use murm_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
-use murm_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
-use murm_rtc::rtc::peer_connection::message::RTCMessage;
-use murm_rtc::udp::{Error, IoLimits, Output, ReadInterest, UdpPeer};
+use genet_rtc::rtc::data_channel::RTCDataChannelInit;
+use genet_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
+use genet_rtc::rtc::peer_connection::event::{RTCDataChannelEvent, RTCPeerConnectionEvent};
+use genet_rtc::rtc::peer_connection::message::RTCMessage;
+use genet_rtc::udp::{Error, IoLimits, Output, ReadInterest, UdpPeer};
 use sha2::{Digest, Sha256};
 
 fn limits() -> IoLimits {
@@ -54,8 +54,8 @@ fn negotiate_modes(
 ) -> (
     usize,
     usize,
-    murm_rtc::rtc::peer_connection::sdp::RTCSessionDescription,
-    murm_rtc::rtc::peer_connection::sdp::RTCSessionDescription,
+    genet_rtc::rtc::peer_connection::sdp::RTCSessionDescription,
+    genet_rtc::rtc::peer_connection::sdp::RTCSessionDescription,
 ) {
     let ordered = left
         .core_mut()

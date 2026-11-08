@@ -7,7 +7,7 @@ Earlier rulings and qualification boundaries remain in that archive chain.
 ## Ownership and baseline
 
 Genet owns signaling, promises/events, document lifetime and web-visible privacy.
-The independent `murm-rtc` leaf owns caller-driven native resolution and I/O.
+The `genet-rtc` leaf (`components/genet-rtc`; it was Murm's `murm-rtc` until 2026-11-08, cycle-breaks D20) owns caller-driven native resolution and I/O.
 The maintained `rtc` core owns candidate identity, ICE pairing and protocol state.
 Applications retain admission, framing and trust. This continues the user's
 "Continue!" authorization; it does not create a new doctrine case.

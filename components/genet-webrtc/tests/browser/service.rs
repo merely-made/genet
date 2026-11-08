@@ -5,7 +5,7 @@ use hickory_proto::rr::{
     Name, RData, Record, RecordType,
     rdata::{NAPTR, SRV},
 };
-use murm_rtc::resolve::DnsLimits;
+use genet_rtc::resolve::DnsLimits;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 
 fn rr(name: &Name, data: RData) -> Record {
@@ -57,8 +57,8 @@ fn service_reply(q: &Message, ip: Ipv4Addr, port: u16) -> Message {
 }
 
 fn binding_reply(socket: &UdpSocket) -> bool {
-    use murm_rtc::rtc::stun::message::{BINDING_SUCCESS, Message as Stun};
-    use murm_rtc::rtc::stun::xoraddr::XorMappedAddress;
+    use genet_rtc::rtc::stun::message::{BINDING_SUCCESS, Message as Stun};
+    use genet_rtc::rtc::stun::xoraddr::XorMappedAddress;
     let mut bytes = [0; 4096];
     let Ok((n, from)) = socket.recv_from(&mut bytes) else {
         return false;

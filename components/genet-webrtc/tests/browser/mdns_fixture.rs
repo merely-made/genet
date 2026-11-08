@@ -1,6 +1,6 @@
 use hickory_proto::op::{Message, OpCode};
 use hickory_proto::rr::{RData, Record, RecordType};
-use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, MdnsConfig};
+use genet_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, MdnsConfig};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};

@@ -2,7 +2,7 @@
 use super::*;
 use hickory_proto::op::{Message, OpCode};
 use hickory_proto::rr::RecordType;
-use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver};
+use genet_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
 

@@ -2,7 +2,7 @@ use super::dns_fixture::DnsFixture;
 use super::*;
 use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{RData, Record};
-use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver};
+use genet_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
 
@@ -75,8 +75,8 @@ fn drive<E: ScriptEngine>(
 }
 
 pub(super) fn fallback<E: ScriptEngine>() {
-    use murm_rtc::rtc::stun::message::{BINDING_SUCCESS, Message as Stun};
-    use murm_rtc::rtc::stun::xoraddr::XorMappedAddress;
+    use genet_rtc::rtc::stun::message::{BINDING_SUCCESS, Message as Stun};
+    use genet_rtc::rtc::stun::xoraddr::XorMappedAddress;
     let mut dns = Dns::new(vec![Ipv4Addr::new(127, 0, 0, 2), Ipv4Addr::LOCALHOST]);
     let resolver = dns.resolver();
     let stun = UdpSocket::bind("127.0.0.1:0").unwrap();

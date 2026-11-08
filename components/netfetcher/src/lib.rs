@@ -79,7 +79,7 @@ pub use response::{BodyStream, Response, ResponseBody, ResponseType};
 #[cfg(feature = "hyper-transport")]
 pub use transport::hyper::{DefaultTransport, WireTransport, accept_invalid_certs};
 #[cfg(feature = "hyper-transport")]
-pub use murm_wire as wire;
+pub use genet_wire as wire;
 pub use transport::{NoTransport, RawResponse, Transport, TransportFuture, WireRequest};
 #[cfg(all(feature = "websocket", not(target_arch = "wasm32")))]
 pub use websocket::{

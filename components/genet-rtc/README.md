@@ -1,13 +1,15 @@
-# murm-rtc
+# genet-rtc
 
 The shared, pinned `rtc` protocol API and an optional caller-driven native UDP
-adapter. This leaf is independent of Murm's radio/native peer workspaces and
-of `murm-wire`'s HTTP/QUIC dependencies.
+adapter. This leaf is a Genet capability (moved in from Murm's `wire/crates/rtc`
+on 2026-11-08, mere cycle-breaks D20, with its history; it was `murm-rtc`) and is
+independent of Murm's radio/native peer workspaces and of `genet-wire`'s HTTP/QUIC
+dependencies.
 
-Use `murm_rtc::rtc` for the Sans-I/O connection. `crypto-ring` is the explicit
+Use `genet_rtc::rtc` for the Sans-I/O connection. `crypto-ring` is the explicit
 default provider; `crypto-aws-lc-rs` is an alternative and neither is a claim of
 a C/assembly-free build. With both disabled, the caller supplies a provider.
-Select `host` for `murm_rtc::udp::UdpPeer::bind_host`: bind a concrete local
+Select `host` for `genet_rtc::udp::UdpPeer::bind_host`: bind a concrete local
 address, choose I/O budgets, configure the peer through `core_mut()`, and call
 nonblocking `poll` from the host's event loop. This dependency graph contains
 no Tokio. `next_deadline` exposes the protocol's next wakeup. Select `udp` for
@@ -114,21 +116,21 @@ and `provider-boundaries.json`; the host-driver addition is appended to
 Failed attempts remain in their cited locations. Genet consumes this provider
 through its native host adapter; its web/API qualification is recorded in the
 receiving plan. The
-wire workspace defaults still select only `murm-wire`, so ordinary wire
+wire workspace defaults still select only `genet-wire`, so ordinary wire
 builds do not acquire RTC. Run this package explicitly:
 
 ```powershell
 $env:CARGO_TARGET_DIR = 'C:\t\cargo-targets\retinue'
 $env:CARGO_BUILD_BUILD_DIR = 'C:\t\cargo-targets\retinue\build'
 $env:CARGO_PROFILE_DEV_DEBUG = '0'
-cargo test --manifest-path wire/Cargo.toml -p murm-rtc --features dns,udp --locked -j 1
-cargo +1.97.1 test --manifest-path wire/Cargo.toml -p murm-rtc --features dns,udp --locked -j 1
+cargo test --manifest-path wire/Cargo.toml -p genet-rtc --features dns,udp --locked -j 1
+cargo +1.97.1 test --manifest-path wire/Cargo.toml -p genet-rtc --features dns,udp --locked -j 1
 ```
 
 Controlled coturn qualification: run `tests/coturn.sh` in WSL, then set its
 printed numeric endpoint as `MURM_RTC_TEST_SERVER`. The fixture contains only
 local test credentials and must be stopped after the run. Execute
-`cargo test -p murm-rtc --features dns,udp --test turn -- --ignored --test-threads=1`
+`cargo test -p genet-rtc --features dns,udp --test turn -- --ignored --test-threads=1`
 from `wire/`. These checks cover STUN, relay-only encrypted fragmentation after
 allocation refresh, authentication failure and socket release. They do not
 qualify public deployment, headed interop, cross-machine routing or packet loss.

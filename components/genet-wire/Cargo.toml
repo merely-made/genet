@@ -1,10 +1,10 @@
 [package]
-name = "murm-wire"
+name = "genet-wire"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.1"
 license = "MPL-2.0"
-repository = "https://github.com/merely-made/murm"
+repository = "https://github.com/merely-made/genet"
 description = "Host-selected one-hop HTTP and raw WebSocket wire engines"
 [features]
 default = ["http", "h3", "websocket"]

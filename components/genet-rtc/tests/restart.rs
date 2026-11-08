@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use murm_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
+use genet_rtc::rtc::peer_connection::RTCPeerConnectionBuilder;
 
 #[test]
 fn changing_the_restart_offerer_preserves_the_existing_dtls_role() {

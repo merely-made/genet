@@ -35,7 +35,7 @@
 use std::fmt;
 
 use futures_util::{SinkExt, StreamExt};
-use murm_wire::websocket::tungstenite;
+use genet_wire::websocket::tungstenite;
 use tungstenite::Message;
 use tungstenite::protocol::frame::CloseFrame;
 use tungstenite::protocol::frame::coding::CloseCode;
@@ -276,7 +276,7 @@ fn effective_port(url: &Url) -> Option<u16> {
 /// queue accounting behind `bufferedAmount`.
 #[derive(Debug)]
 pub struct WebSocket {
-    inner: murm_wire::websocket::Connection,
+    inner: genet_wire::websocket::Connection,
     protocol: String,
     extensions: String,
     /// Bytes handed to [`send`](Self::send) so far.
@@ -419,7 +419,7 @@ pub async fn connect(request: WsRequest, cx: &FetchContext) -> Result<WebSocket,
 
     let mut handshake = build_handshake(&url, &request, &http_url, cx)?;
     // `connect_async` needs the tungstenite request type; it never escapes here.
-    let (stream, response) = match murm_wire::websocket::connect(handshake.take().unwrap()).await {
+    let (stream, response) = match genet_wire::websocket::connect(handshake.take().unwrap()).await {
         Ok(pair) => pair,
         Err(e) => return Err(map_handshake_error(e)),
     };
@@ -557,7 +557,7 @@ fn map_handshake_error(e: tungstenite::Error) -> WsError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // The loopback peer uses its own protocol types, independently of Murm.
+    // The loopback peer uses its own protocol types, independently of genet-wire.
     use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
     use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 

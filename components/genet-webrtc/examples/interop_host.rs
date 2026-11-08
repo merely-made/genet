@@ -1,7 +1,7 @@
 //! Test-only JSONL host for the headed browser interoperability runner.
 //! Uses the real per-document runtime/factory, with no signaling network service.
 
-use murm_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, MdnsConfig};
+use genet_rtc::resolve::{DnsConfig, DnsLimits, DnsResolver, MdnsConfig};
 use std::io::{self, BufRead, Read, Write};
 use std::net::{IpAddr, SocketAddr};
 use std::rc::Rc;

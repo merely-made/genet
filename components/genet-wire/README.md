@@ -1,8 +1,10 @@
-# murm-wire
+# genet-wire
 
 Protocol-level HTTP/1, HTTP/2, HTTP/3 and raw WebSocket carriage, extracted
 from Genet's active Netfetcher implementation with its original source history
-retained. This workspace is independent of Murm's radio and native peer stacks.
+retained. This crate is a Genet capability (moved in from Murm's `wire/` workspace on
+2026-11-08, mere cycle-breaks D20, with its history; it was `murm-wire`) and is
+independent of Murm's radio and native peer stacks.
 
 `WireRequest` contains a URL, `http::Method`, header pairs, an optional buffered
 body and a caller-selected HTTP/3 hint. `Transport::send` performs one hop and

@@ -43,7 +43,7 @@ Notochord, Luggage, storage, the radio root, or Graphshell. Separate package
 selection must keep HTTP/QUIC and RTC dependencies independent. A crate name
 and a universal transport trait are not prerequisites for this evaluation.
 
-The provider implementation lives in `murm/wire/crates/rtc` (`murm-rtc`): a
+The provider implementation lived in `murm/wire/crates/rtc` (`murm-rtc`) and since 2026-11-08 lives in `components/genet-rtc` (`genet-rtc`, cycle-breaks D20): a
 shared protocol API plus an optional caller-owned UDP adapter. Genet's host
 binding now consumes this exact Git supplier through `components/genet-webrtc`;
 the application carrier has not changed. Host candidates and IP-literal UDP
@@ -179,7 +179,7 @@ fixture using the real factory. No microphone/camera permission is needed for
 data channels. Reuse the controlled IP-literal UDP coturn fixture. Keep the
 application carrier and browser-guest qualification separate.
 
-For a repeat run, start `murm/wire/crates/rtc/tests/coturn.sh` in WSL and use
+For a repeat run, start `components/genet-rtc/tests/coturn.sh` in WSL (formerly `murm/wire/crates/rtc/tests/coturn.sh`) and use
 its printed numeric endpoint below. The runner shuts down its own peers and
 browsers; stop the foreground coturn fixture after the run.
 

@@ -1,9 +1,10 @@
 # Fetch and request-security conformance
 
-**Status (2026-10-21): in progress. P0 and P1 landed on branch `fetch-security` (not
-merged) with matched Vano and Boa accounting, zero lost passes; the Murm fix sits on
-Murm branch `fetch-close-notify` (not merged). P2 (element loads) is next and needs no
-further ruling.** Rulings are recorded unnumbered below until Mark numbers them.
+**Status (2026-11-08): in progress.** Genet P0 and P1 are on main via
+`5ae8455ff15`. Their October branch receipts record matched Vano and Boa
+accounting with zero lost passes. The Murm fix was qualified on its
+`fetch-close-notify` branch at that checkpoint. P2 (element loads) is next
+under the rulings below.
 
 Mark's brief, 2026-10-20 (ledger, "Conformance targets, 2026-10-20"): asked
 which conformance targets get briefed next against the 2026-09-29 Vano census

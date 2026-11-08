@@ -1,9 +1,9 @@
 # Web Cryptography: `crypto.subtle` in the scripted tier
 
-**Status:** In progress, 2026-10-20. P1 (framework, digest, HMAC and Web Crypto's
-secure-context gate) and P2 (HKDF, PBKDF2, with AES keys created from raw bytes
-for `deriveKey`) are implemented and measured on branch `webcrypto-subtle`.
-They are **not merged**. P1's matched WebCryptoAPI maps lose zero passes on both
+**Status (2026-11-08): in progress.** P1 (framework, digest, HMAC and the
+secure-context gate) and P2 (HKDF, PBKDF2 and raw AES keys for `deriveKey`) are on
+main as `801f3e70db5` and `579838548a9`. The October branch receipts preserve
+the original measured scope. P1's matched WebCryptoAPI maps lose zero passes on both
 engines: Boa 81 → 5,472 and Vano 80 → 7,980 passing subtests. P2's lose zero on
 Vano (7,980 → 17,698) and two `setup` passes on Boa (5,472 → 6,909), which Mark
 waived as Boa's F11 defect. P3 (AES ciphers and wrap/unwrap) is next by the ruled

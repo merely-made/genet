@@ -1,8 +1,12 @@
 # HTML forms: value state, validation and submission
 
-**Current status, 2026-10-16:** Phases A and B are qualified and published.
-Phase C's implementation is published, including native activation; final
-acceptance remains open. F12's published redirect-base repair passes the
+**Current status (2026-11-08):** Phases A and B are qualified and published.
+[Checkpoint C was accepted on 2026-10-20](#checkpoint-c-qualification-run-on-o-pc-2026-10-18-to-2026-10-20).
+The stale form-target timeout repair (`82db3bfb5b4`), delta gate
+(`12d75bd3d2f`) and subsequent runtime repair (`1103187d162`) are on main.
+The qualification below retains its dated source and host scope.
+
+**2026-10-16 status:** F12's published redirect-base repair passes the
 original 285 affected tests on Windows as well as the earlier ThinkPad checks.
 Mark directed this continuation onto O-PC, so F11's Windows qualification
 continues there.
@@ -29,8 +33,9 @@ Wasm artifact, trusted input, request bytes, response timing and painted proof
 markers. They do not qualify general browser text rendering. See the
 [Windows host receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_native_browser_windows.json).
 
-Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
-remain open. Earlier ThinkPad receipts retain their recorded Linux scope.
+At this checkpoint the Windows covering gates, matched WPT/guard maps and
+final Checkpoint C reporting were still pending. Earlier ThinkPad receipts
+retain their recorded Linux scope.
 
 The dated status paragraphs below record earlier qualification stages.
 

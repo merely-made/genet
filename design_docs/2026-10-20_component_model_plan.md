@@ -1,7 +1,7 @@
 # The component model: custom elements, ElementInternals and shadow trees
 
-**Status:** In progress, 2026-10-21. P1 (reaction stack and timing) is
-implemented on branch `component-model` and is **not merged**. Matched maps
+**Status (2026-11-08): in progress.** P1 (reaction stack and timing) is on main
+via `0853113f75a`. Its October branch receipts show that the matched maps
 lose no previously passing subtest on either engine. `custom-elements` rises
 2,251 → 2,654 on Boa and 2,255 → 2,658 on Vano. The numbers and their
 attribution are under Progress. P2 (definition and upgrade) is next by the

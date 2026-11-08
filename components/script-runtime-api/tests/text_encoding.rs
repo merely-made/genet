@@ -390,7 +390,16 @@ fn worker_has_encoding_surfaces<E: ScriptEngine>() {
     });
     runtime.set_script_resource_loader(scripts(&[(
         "https://encoding.test/encoding-worker.js",
-        "var decoder=new TextDecoder('latin1');var bytes=new Uint8Array([0,128,0]);var view=new Uint8Array(bytes.buffer,1,1);var dest=new Uint8Array(4);var encoded=new TextEncoder().encodeInto('A😀B',dest);postMessage({encoding:decoder.encoding,text:decoder.decode(view),read:encoded.read,written:encoded.written});",
+        r#"var decoder=new TextDecoder('latin1');var bytes=new Uint8Array([0,128,0]);var view=new Uint8Array(bytes.buffer,1,1);var dest=new Uint8Array(4);var encoded=new TextEncoder().encodeInto('A😀B',dest);
+        (async function () {
+          const encoder = new TextEncoderStream();
+          const writer = encoder.writable.getWriter();
+          const reader = encoder.readable.pipeThrough(new TextDecoderStream()).getReader();
+          const output = reader.read();
+          await writer.write('worker');
+          await writer.close();
+          postMessage({encoding:decoder.encoding,text:decoder.decode(view),read:encoded.read,written:encoded.written,streamed:(await output).value});
+        })().catch(error => postMessage({error:error.name + ': ' + error.message}));"#,
     )]));
     runtime
         .eval("globalThis.encodingResult=null;var worker=new Worker('encoding-worker.js');worker.onmessage=function(event){encodingResult=event.data;};worker.onerror=function(event){encodingResult={error:event.message};};")
@@ -409,6 +418,7 @@ fn worker_has_encoding_surfaces<E: ScriptEngine>() {
     assert_eq!(read(&mut runtime, "encodingResult.text"), "€");
     assert_eq!(read(&mut runtime, "String(encodingResult.read)"), "1");
     assert_eq!(read(&mut runtime, "String(encodingResult.written)"), "1");
+    assert_eq!(read(&mut runtime, "encodingResult.streamed"), "worker");
 }
 
 fn dropped_decoder_finalizer_is_delivered_by_normal_pump<E: ScriptEngine>() {
@@ -437,6 +447,114 @@ fn dropped_decoder_finalizer_is_delivered_by_normal_pump<E: ScriptEngine>() {
     );
 }
 
+fn run_encoding_stream_control<E: ScriptEngine>(body: &str) {
+    let mut runtime = runtime::<E>();
+    let script = format!(
+        r#"var encodingStreamResult = 'pending';
+        function check(value, message) {{ if (!value) throw new Error(message); }}
+        (async function () {{{body}}})().then(
+          () => encodingStreamResult = 'ok',
+          error => encodingStreamResult = error.name + ': ' + error.message);"#
+    );
+    runtime.eval(&script).expect("stream control evaluates");
+    runtime.run_microtasks();
+    assert_eq!(read(&mut runtime, "encodingStreamResult"), "ok");
+}
+
+fn encoding_streams_join_split_input<E: ScriptEngine>() {
+    run_encoding_stream_control::<E>(
+        r#"
+        const encoder = new TextEncoderStream();
+        const writer = encoder.writable.getWriter();
+        const reader = encoder.readable.getReader();
+        const first = reader.read();
+        await writer.write('a\uD83D');
+        check(String((await first).value) === '97', 'encode only complete characters');
+        const second = reader.read();
+        await writer.write('');
+        await writer.write('\uDE00');
+        check(String((await second).value) === '240,159,152,128', 'join split surrogate');
+        const third = reader.read();
+        await writer.write('\uD83D');
+        await writer.close();
+        check(String((await third).value) === '239,191,189', 'replace dangling surrogate at EOF');
+        check((await reader.read()).done, 'encoder closes');
+
+        for (const ignoreBOM of [false, true]) {
+          const decoder = new TextDecoderStream(' UTF-8 ', {ignoreBOM});
+          const writer = decoder.writable.getWriter();
+          const reader = decoder.readable.getReader();
+          let next = reader.read();
+          await writer.write(new Uint8Array([239]));
+          await writer.write(new Uint8Array([187]));
+          await writer.write(new DataView(new Uint8Array([0, 191, 226, 0]).buffer, 1, 2));
+          if (ignoreBOM) {
+            check((await next).value === '\uFEFF', 'preserve split BOM');
+            next = reader.read();
+          }
+          await writer.write(new Uint8Array([130]));
+          await writer.write(new Uint8Array([172]));
+          check((await next).value === '€', 'join split UTF-8 character');
+          const tail = reader.read();
+          await writer.write(new Uint8Array([226]));
+          await writer.close();
+          check((await tail).value === '\uFFFD', 'decoder flushes incomplete input');
+          check((await reader.read()).done, 'decoder closes');
+        }
+        "#,
+    );
+}
+
+fn encoding_streams_propagate_cancel_and_errors<E: ScriptEngine>() {
+    run_encoding_stream_control::<E>(
+        r#"
+        const reason = {};
+        const cancel = new TextDecoderStream();
+        const cancelWriter = cancel.writable.getWriter();
+        let settled = false;
+        const waiting = cancelWriter.write(new Uint8Array([226])).then(() => settled = true, error => error);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+        check(!settled, 'backpressure keeps a write pending without a read');
+        await cancel.readable.cancel(reason);
+        check(await waiting === reason, 'cancel rejects a blocked write with the reason');
+
+        const abort = new TextDecoderStream();
+        const abortReader = abort.readable.getReader();
+        const abortWriter = abort.writable.getWriter();
+        const abortRead = abortReader.read().catch(error => error);
+        await abortWriter.write(new Uint8Array([226]));
+        await abortWriter.abort(reason);
+        check(await abortRead === reason, 'abort rejects a pending read with the reason');
+
+        const failures = [['invalid chunk', undefined], ['fatal write', new Uint8Array([255])], ['fatal flush']];
+        const resizable = new ArrayBuffer(1, {maxByteLength: 2});
+        if (resizable.resizable)
+          failures.push(['resizable buffer', resizable], ['resizable view', new DataView(resizable)]);
+        for (const [mode, input] of failures) {
+          const decoder = new TextDecoderStream('utf-8', {fatal: true});
+          const reader = decoder.readable.getReader();
+          const writer = decoder.writable.getWriter();
+          const failure = reader.read().catch(error => error);
+          let error;
+          if (mode === 'fatal flush') {
+            await writer.write(new Uint8Array([226]));
+            error = await writer.close().catch(error => error);
+          } else {
+            error = await writer.write(input).catch(error => error);
+          }
+          check(error instanceof TypeError && await failure === error, mode + ' errors both sides');
+        }
+
+        const encoder = new TextEncoderStream();
+        const reader = encoder.readable.getReader();
+        const writer = encoder.writable.getWriter();
+        const failure = reader.read().catch(error => error);
+        const error = await writer.write({toString() { throw reason; }}).catch(error => error);
+        check(error === reason && await failure === reason, 'encoder preserves conversion error');
+        "#,
+    );
+}
+
 macro_rules! both_engines {
     ($($body:ident => ($boa:ident, $vano:ident)),* $(,)?) => {
         $(
@@ -451,6 +569,8 @@ macro_rules! both_engines {
 }
 
 both_engines! {
+    encoding_streams_join_split_input => (encoding_stream_input_on_boa, encoding_stream_input_on_vano),
+    encoding_streams_propagate_cancel_and_errors => (encoding_stream_errors_on_boa, encoding_stream_errors_on_vano),
     decode_labels_and_view_offsets => (labels_and_offsets_on_boa, labels_and_offsets_on_vano),
     invalid_and_replacement_labels_throw_range_error => (label_errors_on_boa, label_errors_on_vano),
     fatal_decode_throws_type_error => (fatal_decode_on_boa, fatal_decode_on_vano),

@@ -527,14 +527,15 @@ pub(crate) fn install_fetch_surface<E: ScriptEngine>(
 /// runs through `fetch()` and a sync one through `__fetch_sync`. `responseXML`
 /// and `responseType = "document"` are always null — the scripted tier has no
 /// XML/HTML parser to build a document response from.
-const FETCH_BOOTSTRAP: &str = r#"
+const FETCH_BOOTSTRAP: &str = concat!(
+    r#"
 (function() {
   // This bridge exists only during synchronous host installation. Shared weak
   // brands preserve body identity across realms; author code never sees slots.
   var streamsBridge = globalThis.__streamsFetch;
   delete globalThis.__streamsFetch;
   var Core = streamsBridge.core, ReadableOps = streamsBridge.readable;
-  var PipingOps = streamsBridge.piping;
+  var PipingOps = streamsBridge.piping, WritableOps = streamsBridge.writable;
   var Uint8Array = Core.Uint8Array, ArrayBuffer = Core.ArrayBuffer, Promise = Core.Promise;
   var TypeError = Core.TypeError, RangeError = Core.RangeError;
   streamsBridge = undefined;
@@ -963,8 +964,8 @@ const FETCH_BOOTSTRAP: &str = r#"
     for (var i = start; i < end; i++) out += label[i];
     return out;
   }
-  function encByteSource(input, omitted) {
-    if (omitted || input === undefined) return { kind: 'empty' };
+  function encByteSource(input, optional) {
+    if (optional && input === undefined) return { kind: 'empty' };
     if (encIsView(input)) return { kind: 'view', value: input };
     // Vano has distinct shared-view variants which its isView currently omits.
     // These captured getters test intrinsic brands without author properties.
@@ -1018,7 +1019,9 @@ const FETCH_BOOTSTRAP: &str = r#"
     return result;
   }
   function encUSVString(value, defaultEmpty) {
-    var input = defaultEmpty && value === undefined ? '' : encToString(value);
+    return encScalarString(defaultEmpty && value === undefined ? '' : encToString(value));
+  }
+  function encScalarString(input) {
     var output = '';
     for (var i = 0; i < input.length; i++) {
       var c = encApply(encCharCodeAt, input, [i]);
@@ -1110,9 +1113,8 @@ const FETCH_BOOTSTRAP: &str = r#"
   if (Symbol.toStringTag) encDefine(TextEncoder.prototype, Symbol.toStringTag, { value: 'TextEncoder', configurable: true });
   defineInterface('TextEncoder', TextEncoder, 0);
 
-  function TextDecoder(label, options) {
-    if (!new.target) throw encTypeError("Constructor TextDecoder requires 'new'");
-    var convertedLabel = encAsciiTrim(arguments.length && label !== undefined ? encToString(label) : 'utf-8');
+  function encCreateDecoder(label, options) {
+    var convertedLabel = encAsciiTrim(label === undefined ? 'utf-8' : encToString(label));
     var fatal = encOptions(options, 'fatal');
     var ignoreBOM = encOptions(options, 'ignoreBOM');
     var created = encApply(nativeDecoderCreate, undefined, [convertedLabel, fatal ? '1' : '0', ignoreBOM ? '1' : '0']);
@@ -1120,52 +1122,65 @@ const FETCH_BOOTSTRAP: &str = r#"
     var separator = encApply(encStringIndexOf, created, [':', 1]);
     if (separator < 2 || separator === created.length - 1) encNativeError('H');
     var id = encApply(encStringSlice, created, [1, separator]);
-    var metadata = {
+    return {
       id: id,
       encoding: encApply(encStringSlice, created, [separator + 1]),
       fatal: fatal,
       ignoreBOM: ignoreBOM,
       decode: nativeDecoderDecode
     };
-    encSet(decoderBrands, this, metadata);
+  }
+  function encRegisterDecoder(owner, id, unregisterToken) {
     if (!encRegistry) {
       encApply(nativeDecoderRelease, undefined, [id]);
       throw encTypeError('FinalizationRegistry is unavailable');
     }
-    try { encApply(encRegister, encRegistry, [this, id]); }
+    try { encApply(encRegister, encRegistry, [owner, id, unregisterToken]); }
     catch (encRegistrationError) {
       encApply(nativeDecoderRelease, undefined, [id]);
       throw encRegistrationError;
     }
   }
-  function decoderAttribute(name) {
+  function TextDecoder(label, options) {
+    if (!new.target) throw encTypeError("Constructor TextDecoder requires 'new'");
+    var metadata = encCreateDecoder(label, options);
+    encSet(decoderBrands, this, metadata);
+    encRegisterDecoder(this, metadata.id);
+  }
+  function encAttribute(brands, name) {
     var getter = encGetDesc({ get value() {
-      var metadata = encGet(decoderBrands, this);
+      var metadata = encGet(brands, this);
       if (!metadata) throw encTypeError('Illegal invocation');
       return metadata[name];
     } }, 'value').get;
     encDefine(getter, 'name', { value: 'get ' + name, configurable: true });
     return getter;
   }
+  function encDecodeString(metadata, bytes, stream) {
+    var result = encApply(metadata.decode, undefined, [metadata.id, bytes, stream ? '1' : '0']);
+    if (result[0] !== 'S') encNativeError(result === 'F' ? 'F' : 'H');
+    return encApply(encStringSlice, result, [1]);
+  }
   var decoderOps = {
     decode(input, options) {
       var metadata = encGet(decoderBrands, this);
       if (!metadata) throw encTypeError('Illegal invocation');
-      var source = encByteSource(input, arguments.length === 0);
+      var source = encByteSource(input, true);
       var stream = encOptions(options, 'stream');
-      var result = encApply(metadata.decode, undefined, [metadata.id, encByteString(source), stream ? '1' : '0']);
-      if (result[0] !== 'S') encNativeError(result === 'F' ? 'F' : 'H');
-      return encApply(encStringSlice, result, [1]);
+      return encDecodeString(metadata, encByteString(source), stream);
     }
   };
   encDefine(decoderOps.decode, 'length', { value: 0, configurable: true });
-  encDefine(TextDecoder.prototype, 'encoding', { get: decoderAttribute('encoding'), enumerable: true, configurable: true });
-  encDefine(TextDecoder.prototype, 'fatal', { get: decoderAttribute('fatal'), enumerable: true, configurable: true });
-  encDefine(TextDecoder.prototype, 'ignoreBOM', { get: decoderAttribute('ignoreBOM'), enumerable: true, configurable: true });
+  encDefine(TextDecoder.prototype, 'encoding', { get: encAttribute(decoderBrands, 'encoding'), enumerable: true, configurable: true });
+  encDefine(TextDecoder.prototype, 'fatal', { get: encAttribute(decoderBrands, 'fatal'), enumerable: true, configurable: true });
+  encDefine(TextDecoder.prototype, 'ignoreBOM', { get: encAttribute(decoderBrands, 'ignoreBOM'), enumerable: true, configurable: true });
   encDefine(TextDecoder.prototype, 'decode', { value: decoderOps.decode, writable: true, enumerable: true, configurable: true });
   encDefine(TextDecoder.prototype, 'constructor', { value: TextDecoder, writable: true, enumerable: false, configurable: true });
   if (Symbol.toStringTag) encDefine(TextDecoder.prototype, Symbol.toStringTag, { value: 'TextDecoder', configurable: true });
   defineInterface('TextDecoder', TextDecoder, 0);
+"#,
+    include_str!("text_encoding_streams.js"),
+    r#"
 
   // ---- URLSearchParams ----
   function uspEnc(s) {
@@ -2386,4 +2401,5 @@ const FETCH_BOOTSTRAP: &str = r#"
   }
   defineInterface('XMLHttpRequest', XMLHttpRequest, 0);
 })();
-"#;
+"#
+);

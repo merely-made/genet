@@ -245,22 +245,22 @@ var ReadableOps = (function (Core) {
     var dc = mapGet(defaultControllerSlots, slot.controller);
     return slot.state === 'readable' && !dc.closeRequested;
   }
-  function callPullIfNeeded(controller, kind) {
+  function shouldCallPull(controller, kind) {
     var stream = streamSlot(controller.stream);
-    if (!stream || !stream.state || stream.state !== 'readable' || controller.closeRequested || !controller.started) return;
-    var shouldPull;
+    if (!stream || !stream.state || stream.state !== 'readable' || controller.closeRequested || !controller.started) return false;
     if (kind === 'byte') {
       var reader = stream.reader;
       var hasRead = reader && (readerIsBYOB(reader)
         ? mapGet(byobReaderSlots, reader).readIntoRequests.length > 0
         : mapGet(defaultReaderSlots, reader).readRequests.length > 0);
-      shouldPull = !!hasRead || (controller.highWaterMark > controller.queueTotalSize);
-    } else {
-      var r = stream.reader;
-      shouldPull = !!(r && mapGet(defaultReaderSlots, r) && mapGet(defaultReaderSlots, r).readRequests.length) ||
-        (controller.highWaterMark - controller.queue.totalSize > 0);
+      return !!hasRead || (controller.highWaterMark > controller.queueTotalSize);
     }
-    if (!shouldPull || !controller.pullAlgorithm) return;
+    var r = stream.reader;
+    return !!(r && mapGet(defaultReaderSlots, r) && mapGet(defaultReaderSlots, r).readRequests.length) ||
+      (controller.highWaterMark - controller.queue.totalSize > 0);
+  }
+  function callPullIfNeeded(controller, kind) {
+    if (!shouldCallPull(controller, kind) || !controller.pullAlgorithm) return;
     if (controller.pulling) { controller.pullAgain = true; return; }
     controller.pulling = true;
     var promise;
@@ -1395,6 +1395,9 @@ var ReadableOps = (function (Core) {
   ops.createDefault = createDefault; ops.createByte = createByte;
   ops.enqueue = enqueue; ops.close = close; ops.error = error;
   ops.canCloseOrEnqueue = canCloseOrEnqueue; ops.desiredSize = streamDesiredSize;
+  ops.defaultHasBackpressure = function (stream) {
+    return !shouldCallPull(defaultController(stream), 'default');
+  };
   ops.acquireReader = acquireReader; ops.readerRead = readerRead; ops.readerClosed = readerClosed;
   ops.readerCancel = readerCancel; ops.readerRelease = readerRelease; ops.cancel = cancelStream;
   ops.readRequest = readRequest; ops.readIntoRequest = readIntoRequest;

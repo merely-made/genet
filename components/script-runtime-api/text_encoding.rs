@@ -287,6 +287,78 @@ mod tests {
         );
     }
 
+    fn decoder_stream_releases_state_on_cancel<E: ScriptEngine>() {
+        let mut runtime = crate::Runtime::<E>::new().expect("runtime");
+        let existing = runtime
+            .host()
+            .borrow()
+            .text_decoders
+            .entries
+            .keys()
+            .copied()
+            .collect::<Vec<_>>();
+        runtime
+            .eval(
+                r#"var readable, writable, cancelled = false;
+                (function () {
+                  const stream = new TextDecoderStream();
+                  readable = stream.readable;
+                  writable = stream.writable;
+                })();"#,
+            )
+            .expect("create decoder stream and retain only its sides");
+        let id = {
+            let host = runtime.host().borrow();
+            let mut added = host
+                .text_decoders
+                .entries
+                .keys()
+                .copied()
+                .filter(|id| !existing.contains(id));
+            let id = added.next().expect("stream owns a native decoder");
+            assert_eq!(added.next(), None, "stream creates one native decoder");
+            id
+        };
+        runtime.collect_garbage();
+        runtime.run_event_loop(0).expect("pump cleanup jobs");
+        assert!(
+            runtime
+                .host()
+                .borrow()
+                .text_decoders
+                .entries
+                .contains_key(&id),
+            "the sides retain decoder state"
+        );
+
+        runtime
+            .eval("readable.cancel().then(() => cancelled = true)")
+            .expect("cancel decoder stream");
+        runtime.run_microtasks();
+        let cancelled = runtime.eval("cancelled").expect("read cancellation status");
+        assert_eq!(runtime.value_to_string(&cancelled).unwrap(), "true");
+        assert!(
+            !runtime
+                .host()
+                .borrow()
+                .text_decoders
+                .entries
+                .contains_key(&id),
+            "cancellation releases native state while the sides remain live"
+        );
+    }
+
+    #[test]
+    fn encoding_stream_cancel_releases_state_on_boa() {
+        decoder_stream_releases_state_on_cancel::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn encoding_stream_cancel_releases_state_on_vano() {
+        decoder_stream_releases_state_on_cancel::<script_engine_nova::NovaEngine>();
+    }
+
     fn runtime_drop_clears_native_decoder_state<E: ScriptEngine>() {
         let mut runtime = crate::Runtime::<E>::new().expect("runtime");
         runtime

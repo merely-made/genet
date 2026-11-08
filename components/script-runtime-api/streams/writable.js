@@ -833,8 +833,7 @@ var WritableOps = (function (Core, ReadableOps) {
     if (!ReadableOps.canCloseOrEnqueue(t.readable)) throw typeError('TransformStream is not enqueueable');
     try { ReadableOps.enqueue(t.readable, chunk); }
     catch (error) { transformErrorWritable(c.stream, error); throw error; }
-    var desired = ReadableOps.desiredSize(t.readable);
-    var backpressure = desired === null || desired <= 0;
+    var backpressure = ReadableOps.defaultHasBackpressure(t.readable);
     if (backpressure !== t.backpressure) setTransformBackpressure(c.stream, backpressure);
   }
   function transformTerminate(controller) {
@@ -946,10 +945,11 @@ var WritableOps = (function (Core, ReadableOps) {
     return c.finishPromise.promise;
   }
 
-  function createIdentityTransform() {
+  function createTransform(transform, flush, cancel) {
     var pair = Core.record();
     var stream = Core.record();
-    initializeTransform(stream, null, normalizeInternalStrategy(1), normalizeInternalStrategy(0));
+    initializeTransform(stream, null, normalizeInternalStrategy(1), normalizeInternalStrategy(0),
+      undefined, transform, flush, cancel);
     pair.readable = transformSlot(stream).readable;
     pair.writable = transformSlot(stream).writable;
     return pair;
@@ -996,6 +996,8 @@ var WritableOps = (function (Core, ReadableOps) {
   ops.writerAbort = writerAbort;
   ops.releaseDefaultWriter = releaseWriter;
   ops.abortWritable = abortWritable;
-  ops.createIdentityTransform = createIdentityTransform;
+  ops.createIdentityTransform = function () { return createTransform(); };
+  ops.createTransform = createTransform;
+  ops.transformEnqueue = transformEnqueue;
   return ops;
 })(Core, ReadableOps);

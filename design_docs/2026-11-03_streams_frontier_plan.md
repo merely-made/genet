@@ -24,6 +24,12 @@ Freeze matching current runners for Boa and Vano and compare Streams and relevan
 
 `TextDecoderStream` / `TextEncoderStream` were outside the Encoding and original Streams slice. Work with the existing Encoding owner to define incremental state, flush, BOM, fatal errors and boundaries. Done when streaming split-input and cancellation/error controls pass on both engines, matched Encoding/Streams cases are attributed, and ordinary TextDecoder/TextEncoder behavior stays intact.
 
+The 2026-11-08 implementation uses the existing native decoder and private TransformStream operations. It carries split UTF-16 surrogates and decoder input across writes, releases decoder state on termination, and checks for pending reads before reapplying transform backpressure.
+
+Locked, offline runtime controls passed on Boa and Vano with diagnostic Bole `ddf4e31b` and Vano `298c22b7`. They cover split input, BOM, fatal write and flush, cancellation, backpressure, Worker use, cross-realm brands and output byte ownership, and the existing Encoding integration cases. The fresh Bole `aa14721c` resolution blocks compilation because it lacks `SimpleJobExecutor::with_continue_on_error`.
+
+Matched Encoding and Streams WPT comparison remains open. A focused diagnostic also found that a borrowed reader method creates the read result object in the method realm on both engines. The endpoints and output bytes follow the constructor realm. The generic read result realm needs separate Streams work.
+
 ## Phase S4: native incremental network bodies
 
 Existing reader-based collection is not incremental network delivery. Preserve native hook and live-clone rejection until a separately scoped transport/host decision. Done when the chosen producer-to-stream path proves chunk ordering, backpressure, abort, errors, lifecycle, body disturbance and clone behavior with an actual network host and bounded memory, as well as matched Fetch tests. A new transport or additional native body change retains its original explicit checkpoint. Across all phases, new dependencies, version changes, engine revisions and copying the Streams reference implementation retain their respective original checkpoints.

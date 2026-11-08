@@ -6,6 +6,8 @@
 
 Read-only selector intake (2026-10-21): the [accessible names plan](2026-11-03_accessible_names_roles_plan.md#implemented-contracts-and-rulings) records Taproot's shared borrowed lookup, flattened traversal, explicit generated targets and supplier-owned role spelling. Mere consumer qualification remains a separate receiving gate.
 
+Selected-text query (2026-11-08): `DocumentSession::selected_text()` in `document-session-api` returns the current selection's plain text (a focused text control's range first, else the retained document range; never a password value), so Mere's cambium-rootstock egui and iced embeddings can implement Copy and Cut. The Livery and scripted lanes implement it; other sessions keep the default `None`.
+
 Rust policy (2026-10-13; configured version reconciled 2026-11-03): working toolchain 1.99.1 and shared MSRV 1.97.1, qualified separately. Canonical policy: `mere/design_docs/2026-08-12_family_composition_thesis_brief.md`, section "Shared Rust toolchain and minimum version".
 
 The canonical index for `genet/design_docs/`, per [`DOC_POLICY.md`](DOC_POLICY.md)

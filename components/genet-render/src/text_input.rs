@@ -52,3 +52,67 @@ pub fn text_input_state(
         },
     })
 }
+
+/// The non-collapsed selection of a live text control, for host Copy and Cut.
+/// Password inputs never answer, matching the platform's refusal to copy them.
+pub fn selected_text(dom: &ScriptedDom, node: NodeId) -> Option<String> {
+    if !dom.is_live(node) {
+        return None;
+    }
+    let editing = dom.form_control_editing_value(node)?;
+    if dom.element_name(node)?.local.as_str() == "input"
+        && dom.input_type_for_state(node) == "password"
+    {
+        return None;
+    }
+    let (start, end) = (editing.selection_start?, editing.selection_end?);
+    let start = genet_scripted_dom::form_edit_byte_offset_from_utf16(&editing.value, start);
+    let end = genet_scripted_dom::form_edit_byte_offset_from_utf16(&editing.value, end);
+    (start < end).then(|| editing.value[start..end].to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selected_text;
+    use genet_scripted_dom::{NodeId, ScriptedDom};
+    use layout_dom_api::{LayoutDom, LayoutDomMut, LocalName, Namespace, SelectionDirection};
+
+    fn by_id(dom: &ScriptedDom, node: NodeId, id: &str) -> Option<NodeId> {
+        if dom.attribute(node, &Namespace::default(), &LocalName::from("id")) == Some(id) {
+            return Some(node);
+        }
+        dom.dom_children(node).find_map(|child| by_id(dom, child, id))
+    }
+
+    #[test]
+    fn control_selection_reads_utf16_range_and_refuses_passwords() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        dom.set_inner_html(
+            root,
+            "<input id=field value='a😀b'><textarea id=note>cedar</textarea>\
+             <input id=secret type=password value=hunter2><p id=para>text</p>",
+        );
+        let field = by_id(&dom, root, "field").unwrap();
+        let note = by_id(&dom, root, "note").unwrap();
+        let secret = by_id(&dom, root, "secret").unwrap();
+        let para = by_id(&dom, root, "para").unwrap();
+        let select = |dom: &mut ScriptedDom, node, start, end| {
+            assert!(dom.set_form_control_editing_selection(
+                node,
+                Some(start),
+                Some(end),
+                SelectionDirection::Forward,
+            ));
+        };
+        select(&mut dom, field, 1, 4);
+        assert_eq!(selected_text(&dom, field).as_deref(), Some("😀b"));
+        select(&mut dom, note, 1, 4);
+        assert_eq!(selected_text(&dom, note).as_deref(), Some("eda"));
+        select(&mut dom, note, 2, 2);
+        assert_eq!(selected_text(&dom, note), None, "a collapsed range copies nothing");
+        select(&mut dom, secret, 0, 7);
+        assert_eq!(selected_text(&dom, secret), None, "password values never leave");
+        assert_eq!(selected_text(&dom, para), None, "not a text control");
+    }
+}

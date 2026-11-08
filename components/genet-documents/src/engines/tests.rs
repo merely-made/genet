@@ -4085,3 +4085,59 @@ fn phase_c_review_native_invalid_submission_feedback() {
         assert!(s.accessibility_projection().unwrap().nodes().iter().all(|n|n.role!=DocumentA11yRole::Alert),"valid control retires old feedback");
     }
 }
+
+/// Drag across `selected`, read it back for Copy, then click `collapse` once
+/// and expect nothing selected; repeat inside the textarea for its own range.
+fn selected_text_follows_document_and_control_selection(engine: &dyn SessionEngine<Scene>) {
+    let request = SessionSpawnRequest::new("https://example.test/copy")
+        .with_body(
+            "<html><head><style>html, body, p { margin: 0; padding: 0; } \
+             textarea { display: block; margin-top: 20px; width: 200px; height: 40px; \
+             font: 20px monospace; }</style></head><body>\
+             <p>before <a href=\"/chosen\">selected link</a> after</p>\
+             <textarea id=\"note\">cedar</textarea></body></html>",
+        )
+        .with_viewport(400, 200);
+    let mut session = engine.spawn(&request).expect("session spawns");
+    session.frame(400, 200);
+    assert_eq!(session.selected_text(), None, "nothing is selected at load");
+
+    let target = session.text_target("selected link").expect("link text endpoints");
+    assert_eq!(session.pointer_down(target.anchor[0], target.anchor[1]), SessionClick::Handled);
+    assert!(session.pointer_move(target.focus[0], target.focus[1]));
+    assert_eq!(session.pointer_up(target.focus[0], target.focus[1]), SessionClick::Handled);
+    assert_eq!(session.selected_text().as_deref(), Some("selected link"));
+    assert_eq!(session.selected_text().as_deref(), Some("selected link"), "reading is idempotent");
+
+    let before = session.text_target("before").expect("plain text endpoints");
+    session.pointer_down(before.anchor[0], before.anchor[1]);
+    session.pointer_up(before.anchor[0], before.anchor[1]);
+    session.frame(400, 200);
+    assert_eq!(session.selected_text(), None, "a click collapses the document range");
+
+    let cedar = session.text_target("cedar").expect("textarea text endpoints");
+    assert_eq!(session.pointer_down(cedar.anchor[0], cedar.anchor[1]), SessionClick::Handled);
+    assert!(session.pointer_move(cedar.focus[0], cedar.focus[1]));
+    session.pointer_up(cedar.focus[0], cedar.focus[1]);
+    assert_eq!(session.selected_text().as_deref(), Some("cedar"));
+
+    session.frame(400, 200);
+    let cedar = session.text_target("cedar").expect("textarea text endpoints");
+    session.pointer_down(cedar.anchor[0], cedar.anchor[1]);
+    session.pointer_up(cedar.anchor[0], cedar.anchor[1]);
+    assert_eq!(session.selected_text(), None, "a click collapses the control range");
+}
+
+#[cfg(feature = "livery")]
+#[test]
+fn livery_session_selected_text_serves_copy() {
+    selected_text_follows_document_and_control_selection(&LiverySessionEngine::new(NoFetch));
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn scripted_session_selected_text_serves_copy() {
+    selected_text_follows_document_and_control_selection(
+        &ScriptedSessionEngine::<script_engine_boa::BoaEngine, _>::new("genet.scripted", NoFetch),
+    );
+}

@@ -981,6 +981,15 @@ pub trait DocumentSession<F>: Any {
         None
     }
 
+    /// Plain text of the current selection, for host Copy and Cut. A focused
+    /// text control's non-collapsed selection wins over the document's
+    /// retained range; password controls never answer. `None` means nothing
+    /// is selected or this lane retains no selection. This read must not
+    /// trigger layout.
+    fn selected_text(&self) -> Option<String> {
+        None
+    }
+
     fn cursor_at(&self, _x: f32, _y: f32) -> SessionCursor {
         SessionCursor::Default
     }

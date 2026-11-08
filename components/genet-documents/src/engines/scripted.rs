@@ -496,6 +496,8 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
         self.doc.host_text_input_state()
     }
 
+    fn selected_text(&self) -> Option<String> { self.doc.host_selected_text() }
+
 
     fn text_target(&self, text: &str) -> Option<SessionTextTarget> {
         let (anchor, focus) = self.doc.text_target(text)?;

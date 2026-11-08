@@ -2238,6 +2238,12 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         ])
     }
 
+    fn selected_text(&self) -> Option<String> {
+        self.focused_node
+            .and_then(|node| genet_render::text_input::selected_text(self.doc.dom(), node))
+            .or_else(|| self.doc.text_selection().map(|selection| selection.text))
+    }
+
     fn cursor_at(&self, x: f32, y: f32) -> SessionCursor {
         let (x, y) = self.to_css_point(x, y);
         let Some(hit) = self.doc.hit_test(x, y) else {

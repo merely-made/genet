@@ -17,6 +17,12 @@ applies device scale once. Field values, password values and document identities
 are not part of this observation. Preedit selection uses the independent
 UTF-8 byte offsets specified by `SessionIme`.
 
+`DocumentSession::selected_text()` returns the plain text a host Copy or Cut
+should take: a focused text control's non-collapsed selection, else the
+retained document range. Password controls never answer, and `None` means
+nothing is selected or the session retains no selection. It is a deliberate
+host read, unlike the per-frame observation above, and must not perform layout.
+
 Webcue reexports these types as `TextInputState` and `LogicalRect`, and publishes
 changed observations as ordered, scope-bound `Event::TextInput` messages. A
 session that does not support this observation retains the default `None`.

@@ -1554,6 +1554,14 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             genet_render::text_input::text_input_state(dom, node, caret)
         })
     }
+    /// Selected text for host Copy and Cut: the focused control's range, else
+    /// the retained document range.
+    pub fn host_selected_text(&self) -> Option<String> {
+        self.host_focused_node
+            .filter(|node| self.host_focus_is_current(*node))
+            .and_then(|node| self.with_dom(|dom| genet_render::text_input::selected_text(dom, node)))
+            .or_else(|| self.text_selection().map(|selection| selection.text))
+    }
     pub fn host_has_focus(&self) -> bool { self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)) }
     pub fn host_focused_is_textarea(&self) -> bool {
         self.host_focused_node.is_some_and(|node| self.host_focus_is_current(node)

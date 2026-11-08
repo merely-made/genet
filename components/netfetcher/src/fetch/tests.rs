@@ -10,7 +10,7 @@ use crate::SameSiteContext;
 use crate::cache::{InMemoryHttpCache, NoHttpCache};
 use crate::context::{AllowAllCsp, CookieStore};
 use crate::cookie_jar::InMemoryCookieJar;
-use crate::request::RedirectMode;
+use crate::request::{Destination, RedirectMode};
 use crate::response::ResponseType;
 use std::sync::{Arc, Mutex};
 use url::Url;
@@ -49,6 +49,94 @@ async fn basic_get_returns_status_and_body() {
     assert!(!res.is_network_error());
     assert_eq!(res.status, 200);
     assert_eq!(res.bytes().await.unwrap().as_ref(), b"hi there");
+}
+
+#[tokio::test]
+async fn cross_site_iframe_does_not_send_lax_navigation_cookie() {
+    let mut server = mockito::Server::new_async().await;
+    let frame = server
+        .mock("GET", "/iframe")
+        .match_header("cookie", mockito::Matcher::Missing)
+        .create_async()
+        .await;
+    let top_level = server
+        .mock("GET", "/top")
+        .match_header("cookie", "id=lax")
+        .create_async()
+        .await;
+    let cx = FetchContext::permissive();
+    let base = Url::parse(&server.url()).unwrap();
+    cx.cookies.set_cookie(&base, "id=lax; SameSite=Lax; Path=/");
+    let origin = Url::parse("http://parent.test/").unwrap().origin();
+    for (path, destination) in [("iframe", Destination::Iframe), ("top", Destination::Document)] {
+        let mut request = Request::get(base.join(path).unwrap());
+        request.mode = RequestMode::Navigate;
+        request.origin = Some(origin.clone());
+        request.credentials = Credentials::Include;
+        request.destination = destination;
+        assert_eq!(fetch(request, &cx).await.status, 200, "{path} navigation");
+    }
+    frame.assert_async().await;
+    top_level.assert_async().await;
+}
+
+#[tokio::test]
+async fn cross_site_iframe_redirect_limits_cookies_on_every_hop() {
+    #[derive(Default)]
+    struct RedirectCookies(Mutex<Option<String>>);
+    impl crate::transport::Transport for RedirectCookies {
+        fn send(
+            &self,
+            request: crate::transport::WireRequest,
+        ) -> crate::transport::TransportFuture<'_> {
+            let mut headers = vec![
+                ("set-cookie".into(), "lax=new; SameSite=Lax; Path=/".into()),
+                ("set-cookie".into(), "strict=new; SameSite=Strict; Path=/".into()),
+                ("set-cookie".into(), "default=new; Path=/".into()),
+                ("set-cookie".into(), "insecure=new; SameSite=None; Path=/".into()),
+                ("set-cookie".into(), "secure=new; SameSite=None; Secure; Path=/".into()),
+            ];
+            let status = if request.url.path() == "/redirect" {
+                headers.push(("location".into(), "https://parent.test/target".into()));
+                302
+            } else {
+                *self.0.lock().unwrap() =
+                    super::util::header_val(&request.headers, "cookie").map(str::to_owned);
+                200
+            };
+            Box::pin(async move {
+                Some(crate::transport::RawResponse::once(
+                    status,
+                    headers,
+                    bytes::Bytes::new(),
+                ))
+            })
+        }
+    }
+
+    let start = Url::parse("https://foreign.test/redirect").unwrap();
+    let final_url = Url::parse("https://parent.test/target").unwrap();
+    let mut cx = FetchContext::permissive();
+    let transport = Arc::new(RedirectCookies::default());
+    cx.transport = transport.clone();
+    cx.cookies.set_cookie(&final_url, "existing=old; SameSite=Lax; Path=/");
+    let mut request = Request::get(start.clone()).with_origin(final_url.origin());
+    request.mode = RequestMode::Navigate;
+    request.credentials = Credentials::Include;
+    request.destination = Destination::Iframe;
+    let response = fetch(request, &cx).await;
+    assert_eq!(response.status, 200);
+    assert_eq!(response.url_list, [start.clone(), final_url.clone()]);
+    assert_eq!(cx.cookies.cookies_for(&start, SameSiteContext::same_site()), ["secure=new"]);
+    assert_eq!(
+        cx.cookies.cookies_for(&final_url, SameSiteContext::same_site()),
+        ["existing=old", "secure=new"],
+    );
+    assert_eq!(
+        *transport.0.lock().unwrap(),
+        None,
+        "cross-site redirect must not restore same-site cookies"
+    );
 }
 
 #[tokio::test]

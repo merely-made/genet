@@ -75,11 +75,11 @@ fn worker_loop(rx: std::sync::mpsc::Receiver<Job>) {
                         let _ = reply.send(do_get_document(&url, options).await);
                     });
                 },
-                Ok(Job::Fetch(key, id, req, reply)) => {
+                Ok(Job::Fetch(key, id, req, destination, reply)) => {
                     let (pull_tx, pull_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
                     pulls.insert(id, pull_tx);
-                    let h =
-                        tokio::spawn(run_fetch_streaming(id, req, reply, pull_rx)).abort_handle();
+                    let h = tokio::spawn(run_fetch_streaming(id, req, destination, reply, pull_rx))
+                        .abort_handle();
                     handles.insert(key, h);
                 },
                 Ok(Job::Pull(id)) => {
@@ -395,6 +395,7 @@ fn map_response_type(t: netfetcher::ResponseType) -> String {
 async fn run_fetch_streaming(
     id: u64,
     req: FetchRequest,
+    destination: netfetcher::Destination,
     reply: std::sync::mpsc::Sender<FetchEvent>,
     mut pull_rx: tokio::sync::mpsc::UnboundedReceiver<()>,
 ) {
@@ -436,13 +437,24 @@ async fn run_fetch_streaming(
         "navigate" => netfetcher::RequestMode::Navigate,
         _ => netfetcher::RequestMode::Cors,
     };
-    // The initiator origin (the WPT page) drives cross-origin detection. In disk
-    // mode it stays None (every fetch is same-origin).
-    request.origin = page_origin();
     // Referrer + policy drive the `Referer` header (empty referrer = none).
     request.referrer = (!req.referrer.is_empty())
         .then(|| url::Url::parse(&req.referrer).ok())
         .flatten();
+    request.destination = destination;
+    request.origin = if destination == netfetcher::Destination::Iframe {
+        // The eager iframe seam supplies the top document's current URL. It can
+        // differ from the runner's original origin after a redirect.
+        Some(
+            request
+                .referrer
+                .as_ref()
+                .map(url::Url::origin)
+                .unwrap_or_else(url::Origin::new_opaque),
+        )
+    } else {
+        page_origin()
+    };
     request.referrer_policy = match req.referrer_policy.as_str() {
         "no-referrer" => netfetcher::ReferrerPolicy::NoReferrer,
         "no-referrer-when-downgrade" => netfetcher::ReferrerPolicy::NoReferrerWhenDowngrade,
@@ -642,7 +654,13 @@ pub enum Job {
         script_runtime_api::HtmlDecodeOptions,
         std::sync::mpsc::Sender<Option<LoadedHtmlDocument>>,
     ),
-    Fetch(u64, u64, FetchRequest, std::sync::mpsc::Sender<FetchEvent>),
+    Fetch(
+        u64,
+        u64,
+        FetchRequest,
+        netfetcher::Destination,
+        std::sync::mpsc::Sender<FetchEvent>,
+    ),
     /// Demand the next body chunk for a streaming fetch, by its JS id.
     Pull(u64),
     Cancel(u64),
@@ -707,7 +725,13 @@ impl FetchHandler for NetFetchHandler {
     fn start(&self, id: u64, request: FetchRequest) -> Option<FetchOutcome> {
         let key = next_key();
         self.keys.borrow_mut().insert(id, key);
-        let _ = worker_jobs().send(Job::Fetch(key, id, request, self.reply.clone()));
+        let _ = worker_jobs().send(Job::Fetch(
+            key,
+            id,
+            request,
+            netfetcher::Destination::None,
+            self.reply.clone(),
+        ));
         None // deferred: the drive loop settles it when the reply arrives
     }
     fn cancel(&self, id: u64) {
@@ -716,55 +740,66 @@ impl FetchHandler for NetFetchHandler {
         }
     }
     fn fetch_blocking(&self, request: FetchRequest) -> FetchOutcome {
-        // Synchronous XMLHttpRequest: the whole response must be in hand before
-        // send() returns, so this drives the same worker job to Close on its own
-        // private channel instead of leaving it to the drive loop. The routing id
-        // is lifted out of the JS id space so a pull credit cannot land on a
-        // deferred fetch that is still registered.
-        let key = next_key();
-        let id = key | (1u64 << 40);
-        let (tx, rx) = std::sync::mpsc::channel::<FetchEvent>();
-        if worker_jobs()
-            .send(Job::Fetch(key, id, request, tx))
-            .is_err()
-        {
-            return FetchOutcome::network_error();
-        }
-        let deadline = std::time::Instant::now() + SYNC_FETCH_TIMEOUT;
-        let mut out: Option<FetchOutcome> = None;
-        loop {
-            let left = deadline.saturating_duration_since(std::time::Instant::now());
-            if left.is_zero() {
-                let _ = worker_jobs().send(Job::Cancel(key));
-                return FetchOutcome::network_error();
-            }
-            match rx.recv_timeout(left) {
-                Ok(FetchEvent::StartStream(_, meta)) => {
-                    out = Some(meta);
-                    let _ = worker_jobs().send(Job::Pull(id));
-                },
-                Ok(FetchEvent::Chunk(_, bytes)) => {
-                    if let Some(o) = out.as_mut() {
-                        o.body.extend_from_slice(&bytes);
-                    }
-                    let _ = worker_jobs().send(Job::Pull(id));
-                },
-                Ok(FetchEvent::Close(_)) => {
-                    return out.unwrap_or_else(FetchOutcome::network_error);
-                },
-                // Anything else on this private channel (an error, a failure, or
-                // a stray WebSocket event) ends the blocking read.
-                Ok(_) | Err(_) => {
-                    let _ = worker_jobs().send(Job::Cancel(key));
-                    return FetchOutcome::network_error();
-                },
-            }
-        }
+        fetch_blocking_with_destination(request, netfetcher::Destination::None)
+    }
+    fn fetch_iframe(&self, request: FetchRequest) -> Option<FetchOutcome> {
+        Some(fetch_blocking_with_destination(
+            request,
+            netfetcher::Destination::Iframe,
+        ))
     }
     fn request_chunk(&self, id: u64) {
         // The body's ReadableStream was read with an empty buffer: ask the worker
         // to stream one more chunk for this fetch (routed by JS id).
         let _ = worker_jobs().send(Job::Pull(id));
+    }
+}
+
+/// Drive the worker job to Close on a private channel for consumers that need
+/// a complete response. Keep its routing id outside the JS id space so its pull
+/// credits cannot land on a deferred fetch.
+fn fetch_blocking_with_destination(
+    request: FetchRequest,
+    destination: netfetcher::Destination,
+) -> FetchOutcome {
+    let key = next_key();
+    let id = key | (1u64 << 40);
+    let (tx, rx) = std::sync::mpsc::channel::<FetchEvent>();
+    if worker_jobs()
+        .send(Job::Fetch(key, id, request, destination, tx))
+        .is_err()
+    {
+        return FetchOutcome::network_error();
+    }
+    let deadline = std::time::Instant::now() + SYNC_FETCH_TIMEOUT;
+    let mut out: Option<FetchOutcome> = None;
+    loop {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            let _ = worker_jobs().send(Job::Cancel(key));
+            return FetchOutcome::network_error();
+        }
+        match rx.recv_timeout(left) {
+            Ok(FetchEvent::StartStream(_, meta)) => {
+                out = Some(meta);
+                let _ = worker_jobs().send(Job::Pull(id));
+            },
+            Ok(FetchEvent::Chunk(_, bytes)) => {
+                if let Some(o) = out.as_mut() {
+                    o.body.extend_from_slice(&bytes);
+                }
+                let _ = worker_jobs().send(Job::Pull(id));
+            },
+            Ok(FetchEvent::Close(_)) => {
+                return out.unwrap_or_else(FetchOutcome::network_error);
+            },
+            // Anything else on this private channel (an error, a failure, or
+            // a stray WebSocket event) ends the blocking read.
+            Ok(_) | Err(_) => {
+                let _ = worker_jobs().send(Job::Cancel(key));
+                return FetchOutcome::network_error();
+            },
+        }
     }
 }
 

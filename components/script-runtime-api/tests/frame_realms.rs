@@ -7,8 +7,12 @@
 //! Browsing-context acceptance through observable iframe APIs on both engines.
 //! These tests do not manually create realms or install child globals.
 
+use std::{cell::RefCell, rc::Rc};
+
 use script_engine_api::ScriptEngine;
-use script_runtime_api::{NoScriptLoader, Runtime, ScriptResourceLoader};
+use script_runtime_api::{
+    FetchHandler, FetchOutcome, FetchRequest, NoScriptLoader, Runtime, ScriptResourceLoader,
+};
 
 struct Documents;
 
@@ -296,6 +300,128 @@ fn parser_only_frame_loads_without_window_access<E: ScriptEngine>() {
     check(&mut runtime, "parentLoads === 1");
 }
 
+fn eager_iframe_carries_document_policy<E: ScriptEngine>() {
+    #[derive(Clone, Default)]
+    struct Requests(Rc<RefCell<Vec<FetchRequest>>>);
+
+    impl FetchHandler for Requests {
+        fn fetch_iframe(&self, request: FetchRequest) -> Option<FetchOutcome> {
+            Some(self.fetch(request))
+        }
+
+        fn fetch(&self, request: FetchRequest) -> FetchOutcome {
+            let body = if request.mode == "navigate" {
+                br#"<script>
+                  parent.loadedFrames++;
+                  var xhr = new XMLHttpRequest();
+                  xhr.open('GET', '/probe', false);
+                  xhr.send();
+                </script><iframe src="/nested"></iframe>"#.to_vec()
+            } else {
+                Vec::new()
+            };
+            let url = request.url.clone();
+            self.0.borrow_mut().push(request);
+            FetchOutcome {
+                network_error: false,
+                status: 200,
+                status_text: "OK".into(),
+                response_type: "basic".into(),
+                url,
+                redirected: false,
+                headers: vec![
+                    ("Content-Type".into(), "text/html; charset=utf-8".into()),
+                    ("Referrer-Policy".into(), "same-origin".into()),
+                ],
+                body,
+            }
+        }
+    }
+
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime
+        .set_base_url("https://parent.test/page.html")
+        .expect("base URL");
+    let requests = Requests::default();
+    runtime.set_fetch_handler(Box::new(requests.clone()));
+    run(&mut runtime, "var loadedFrames = 0, dynamicLoads = 0;");
+    runtime.parse_document_interleaved(
+        r#"<head><base href="https://parent.test/assets/">
+        <meta name="referrer" content="origin">
+        <meta http-equiv="Content-Security-Policy"
+              content="upgrade-insecure-requests; block-all-mixed-content"></head>
+        <body><iframe src="parser" referrerpolicy="No-Referrer"></iframe>
+        <iframe loading="lazy" src="/lazy"></iframe>
+        <iframe srcdoc="" src="/srcdoc-fallback"></iframe>
+        <script>
+          var dynamic = document.createElement('iframe');
+          dynamic.setAttribute('src', 'dynamic');
+          dynamic.setAttribute('referrerpolicy', 'unsafe-url, no-referrer');
+          dynamic.onload = function() { dynamicLoads++; };
+          document.body.appendChild(dynamic);
+        </script></body>"#,
+        &NoScriptLoader,
+    );
+    drain(&mut runtime);
+    let requests = requests.0.borrow();
+    let navigations: Vec<_> = requests.iter().filter(|r| r.mode == "navigate").collect();
+    assert_eq!(navigations.len(), 2);
+    for (path, policy) in [("parser", "no-referrer"), ("dynamic", "origin")] {
+        let request = navigations
+            .iter()
+            .find(|r| r.url == format!("https://parent.test/assets/{path}"))
+            .expect("frame navigates relative to the base element");
+        assert_eq!(request.referrer, "https://parent.test/page.html");
+        assert_eq!(request.referrer_policy, policy);
+        assert_eq!(request.credentials, "include");
+        assert!(request.upgrade_insecure_requests);
+        assert!(request.block_all_mixed_content);
+    }
+    let probes: Vec<_> = requests.iter().filter(|r| r.url.ends_with("/probe")).collect();
+    assert_eq!(probes.len(), 2);
+    assert!(probes.iter().all(|r| r.referrer_policy == "same-origin"));
+    check(&mut runtime, "loadedFrames === 2 && dynamicLoads === 1");
+}
+
+fn eager_iframe_failure_does_not_fall_back_to_url_loader<E: ScriptEngine>() {
+    struct FailedRequest;
+    impl FetchHandler for FailedRequest {
+        fn fetch_iframe(&self, _: FetchRequest) -> Option<FetchOutcome> {
+            Some(FetchOutcome::network_error())
+        }
+    }
+
+    struct Legacy;
+    impl ScriptResourceLoader for Legacy {
+        fn load(&self, _: &str) -> Option<String> {
+            Some("<script>parent.usedLegacyLoader = true;</script>".into())
+        }
+    }
+
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime
+        .set_base_url("https://parent.test/page.html")
+        .expect("base URL");
+    runtime.set_fetch_handler(Box::new(FailedRequest));
+    runtime.set_script_resource_loader(Box::new(Legacy));
+    runtime.parse_document_interleaved("<body></body>", &NoScriptLoader);
+    run(
+        &mut runtime,
+        r#"
+        var loads = 0;
+        var frame = document.createElement('iframe');
+        frame.src = '/blocked';
+        frame.onload = function() { loads++; };
+        document.body.appendChild(frame);
+        "#,
+    );
+    drain(&mut runtime);
+    check(
+        &mut runtime,
+        "loads === 1 && globalThis.usedLegacyLoader === undefined",
+    );
+}
+
 fn removed_pending_frame_releases_parent_load<E: ScriptEngine>() {
     let mut runtime = runtime::<E>();
     run(
@@ -359,6 +485,14 @@ macro_rules! backend {
             #[test]
             fn parser_only_frame_loads_without_window_access() {
                 super::parser_only_frame_loads_without_window_access::<$engine>();
+            }
+            #[test]
+            fn eager_iframe_carries_document_policy() {
+                super::eager_iframe_carries_document_policy::<$engine>();
+            }
+            #[test]
+            fn eager_iframe_failure_does_not_fall_back_to_url_loader() {
+                super::eager_iframe_failure_does_not_fall_back_to_url_loader::<$engine>();
             }
             #[test]
             fn descendant_load_precedes_ancestor_load() {

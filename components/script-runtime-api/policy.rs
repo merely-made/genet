@@ -34,8 +34,15 @@ const POLICIES: [&str; 8] = [
 ];
 
 fn keyword(token: &str) -> Option<&'static str> {
-    let token = token.trim().to_ascii_lowercase();
-    POLICIES.iter().copied().find(|p| *p == token)
+    parse_attribute(token.trim())
+}
+
+/// A referrerpolicy attribute accepts one enumerated keyword.
+pub(crate) fn parse_attribute(value: &str) -> Option<&'static str> {
+    POLICIES
+        .iter()
+        .copied()
+        .find(|policy| value.eq_ignore_ascii_case(policy))
 }
 
 /// `Referrer-Policy` header value: a comma-separated list, the last token that is a

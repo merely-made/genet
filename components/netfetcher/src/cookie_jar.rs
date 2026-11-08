@@ -23,6 +23,15 @@ use url::{Host, Url};
 
 use crate::context::{CookieRecord, CookieStore, SameSiteContext};
 
+/// A cross-site iframe response may only create a Secure SameSite=None cookie.
+/// Fetch applies this admission rule before sending the header to any jar.
+pub(crate) fn accepts_cross_site_iframe_cookie(url: &Url, header: &str) -> bool {
+    url.scheme() == "https"
+        && Cookie::parse(header).is_ok_and(|cookie| {
+            cookie.same_site() == Some(SameSite::None) && cookie.secure() == Some(true)
+        })
+}
+
 #[derive(Clone)]
 struct StoredCookie {
     name: String,
@@ -148,7 +157,7 @@ impl InMemoryCookieJar {
                 let samesite_ok = match c.same_site.unwrap_or(SameSite::Lax) {
                     SameSite::Strict => ctx.same_site,
                     SameSite::Lax => ctx.same_site || ctx.top_level_navigation,
-                    SameSite::None => true,
+                    SameSite::None => c.secure || ctx.same_site,
                 };
                 domain_ok
                     && valid_stored_prefix(c)
@@ -708,5 +717,28 @@ mod tests {
         let nav = jar.cookies_for(&u, cross_nav);
         assert!(nav.contains(&"lax=1".to_string()) && nav.contains(&"none=1".to_string()));
         assert!(!nav.contains(&"strict=1".to_string()));
+    }
+
+    #[test]
+    fn insecure_none_cookie_never_crosses_sites() {
+        let u = url("https://example.org/");
+        let jar = InMemoryCookieJar::new();
+        jar.set_cookie(&u, "legacy=1; SameSite=None");
+        let restored = InMemoryCookieJar::new();
+        restored.load_records(jar.all_records());
+        let cross_site = SameSiteContext {
+            same_site: false,
+            top_level_navigation: false,
+        };
+        let cross_site_navigation = SameSiteContext {
+            top_level_navigation: true,
+            ..cross_site
+        };
+        for jar in [&jar, &restored] {
+            assert_eq!(jar.cookies_for(&u, ss()), ["legacy=1"]);
+            assert!(jar.cookies_for(&u, cross_site).is_empty());
+            assert!(jar.records_for(&u, cross_site).is_empty());
+            assert!(jar.cookies_for(&u, cross_site_navigation).is_empty());
+        }
     }
 }

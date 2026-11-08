@@ -12,6 +12,7 @@ use bytes::BytesMut;
 use url::Url;
 
 use crate::cache;
+use crate::cookie_jar::accepts_cross_site_iframe_cookie;
 use crate::cors;
 use crate::decode::decode_stream;
 use crate::response::{ResponseBody, ResponseType};
@@ -29,13 +30,16 @@ pub(super) fn record_response_metadata(
     cx: &FetchContext,
     current_url: &Url,
     use_credentials: bool,
+    cross_site_iframe: bool,
     raw_headers: &[(String, String)],
 ) {
     // Record any Set-Cookie headers against the URL that produced them — only
     // when this hop uses credentials (an `omit` fetch stores nothing).
     if use_credentials {
         for (name, value) in raw_headers {
-            if name.eq_ignore_ascii_case("set-cookie") {
+            if name.eq_ignore_ascii_case("set-cookie")
+                && (!cross_site_iframe || accepts_cross_site_iframe_cookie(current_url, value))
+            {
                 cx.cookies.set_cookie(current_url, value);
             }
         }

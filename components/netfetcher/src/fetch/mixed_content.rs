@@ -77,6 +77,13 @@ pub(super) fn is_same_site(origin: Option<&url::Origin>, target: &Url) -> bool {
     }
 }
 
+/// Schemeful SameSite for iframe navigation. An absent or opaque initiator
+/// cannot establish that the iframe request is same-site.
+pub(super) fn is_iframe_same_site(origin: Option<&url::Origin>, target: &Url) -> bool {
+    matches!(origin, Some(url::Origin::Tuple(scheme, _, _)) if scheme == target.scheme())
+        && is_same_site(origin, target)
+}
+
 fn origin_host(origin: &url::Origin) -> Option<String> {
     match origin {
         url::Origin::Tuple(_, host, _) => Some(host.to_string()),

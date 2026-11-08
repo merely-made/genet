@@ -11,11 +11,10 @@ use url::Url;
 
 use crate::cache::{self, StoredResponse};
 use crate::referrer;
-use crate::request::{CacheMode, Method, ReferrerPolicy, RequestMode};
+use crate::request::{CacheMode, Method, ReferrerPolicy};
 use crate::{FetchContext, Request, SameSiteContext};
 
 use super::USER_AGENT;
-use super::mixed_content::is_same_site;
 use super::util::header_val;
 
 /// Build the header list for one hop. `base_headers` is the loop's current base
@@ -31,7 +30,7 @@ pub(super) fn assemble_request_headers(
     method: &Method,
     body: Option<&Bytes>,
     mode: CacheMode,
-    use_credentials: bool,
+    cookie_context: Option<SameSiteContext>,
     first_hop: bool,
     revalidate: &Option<StoredResponse>,
     origin_tainted: bool,
@@ -40,19 +39,11 @@ pub(super) fn assemble_request_headers(
 ) -> Vec<(String, String)> {
     // Assemble request headers: base + cookies + (initial-only) conditional.
     let mut req_headers = base_headers.to_vec();
-    let cookies = if use_credentials {
-        cx.cookies.cookies_for(
-            current_url,
-            SameSiteContext {
-                same_site: is_same_site(request.origin.as_ref(), current_url),
-                top_level_navigation: matches!(request.mode, RequestMode::Navigate),
-            },
-        )
-    } else {
-        Vec::new()
-    };
-    if !cookies.is_empty() {
-        req_headers.push(("cookie".to_owned(), cookies.join("; ")));
+    if let Some(context) = cookie_context {
+        let cookies = cx.cookies.cookies_for(current_url, context);
+        if !cookies.is_empty() {
+            req_headers.push(("cookie".to_owned(), cookies.join("; ")));
+        }
     }
     if first_hop {
         if let Some(entry) = revalidate {

@@ -1113,14 +1113,32 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             && url::Url::parse(&url)
                 .is_ok_and(|url| url.scheme() == "about" && url.path() == "blank");
         let lazy = lazy && !initial_blank;
+        let referrer_policy = iframe_referrer_policy(&agent.borrow(), parent, node);
+        let top_parent = agent.borrow().frames.top_realm() == parent;
         let mut encoding = DocumentEncoding::default();
+        let mut response_headers = Vec::new();
         let source = if source.is_some() || lazy {
             source
         } else if initial_blank {
             Some(String::new())
-        } else if let Some(response) = loader
+        } else if let Some(response) = fetch
             .as_ref()
-            .and_then(|loader| loader.load_document(&url))
+            .filter(|_| top_parent)
+            .and_then(|handler| {
+                let mut request = navigation_get(&url);
+                {
+                    let host = parent_host.borrow();
+                    let policy = crate::policy::document_policy(&host);
+                    request.referrer = host.base_url.clone().unwrap_or_default();
+                    request.referrer_policy = crate::policy::parse_attribute(&referrer_policy)
+                        .map(str::to_owned)
+                        .unwrap_or(policy.referrer_policy);
+                    request.upgrade_insecure_requests = policy.upgrade_insecure_requests;
+                    request.block_all_mixed_content = policy.block_all_mixed_content;
+                }
+                handler.fetch_iframe(request)
+            })
+            .or_else(|| loader.as_ref().and_then(|loader| loader.load_document(&url)))
         {
             if response.network_error
                 || matches!(response.status, 204 | 205)
@@ -1154,6 +1172,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
                     options,
                 );
                 encoding = decoded.encoding;
+                response_headers = response.headers;
                 Some(decoded.source)
             }
         } else {
@@ -1228,7 +1247,6 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
         };
         let viewport_size = (dimension("width", 300.0), dimension("height", 150.0));
         drop(raw);
-        let referrer_policy = iframe_referrer_policy(&agent.borrow(), parent, node);
         let plan = DocumentPlan {
             encoding,
             decode_options,
@@ -1247,6 +1265,7 @@ impl<E: ScriptEngine> NativeFn<E> for FrameWindow {
             lazy,
             initial_blank,
             referrer_policy,
+            response_headers,
             viewport_size,
             seams: HostSeams {
                 fetch,
@@ -1334,6 +1353,7 @@ struct DocumentPlan {
     /// realm construction returns.
     initial_blank: bool,
     referrer_policy: String,
+    response_headers: Vec<(String, String)>,
     viewport_size: (f32, f32),
     seams: HostSeams,
 }
@@ -1366,6 +1386,7 @@ fn open_document_realm<E: ScriptEngine>(
         lazy,
         initial_blank,
         referrer_policy,
+        response_headers,
         viewport_size,
         seams,
     } = plan;
@@ -1387,6 +1408,7 @@ fn open_document_realm<E: ScriptEngine>(
         ),
         base_url: Some(document_url),
         about_base_url,
+        document_response_headers: response_headers,
         fetch: seams.fetch,
         script_loader: seams.script_loader,
         websocket: seams.websocket,
@@ -2732,6 +2754,7 @@ fn perform_navigation<E: ScriptEngine>(
         lazy: false,
         initial_blank: false,
         referrer_policy,
+        response_headers: Vec::new(),
         viewport_size,
         seams,
     };

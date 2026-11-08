@@ -95,6 +95,12 @@ pub trait FetchHandler {
     fn fetch_blocking(&self, request: FetchRequest) -> FetchOutcome {
         self.fetch(request)
     }
+    /// Opt in to loading an eager iframe in the top document. Hosts that accept
+    /// must treat it as a nested navigation and return an outcome even on failure.
+    /// Declining leaves the existing document loader in charge.
+    fn fetch_iframe(&self, _request: FetchRequest) -> Option<FetchOutcome> {
+        None
+    }
     /// Demand the next body chunk for a streaming response `id` (the response's
     /// `ReadableStream` was read and its buffer is empty). A deferred host streams
     /// the body lazily: one chunk per request, so a body the script never reads is

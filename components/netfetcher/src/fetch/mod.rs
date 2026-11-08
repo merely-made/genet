@@ -31,11 +31,11 @@ use crate::cache;
 use crate::cors;
 use crate::request::{CacheMode, Credentials, Method, RequestMode};
 use crate::transport::WireRequest;
-use crate::{FetchContext, Request, Response};
+use crate::{Destination, FetchContext, Request, Response, SameSiteContext};
 
 use cache_phase::{CacheProbe, probe_cache};
 use finalize::{finalize_response, record_response_metadata};
-use mixed_content::resolve_mixed_content;
+use mixed_content::{is_iframe_same_site, is_same_site, resolve_mixed_content};
 use redirect::{RedirectStep, process_redirect};
 use request_headers::assemble_request_headers;
 
@@ -118,6 +118,8 @@ async fn fetch_inner(request: Request, cx: &FetchContext) -> Response {
     // cors mode, and sticky thereafter (so an unsafe request that redirects back
     // to the origin is still preflighted).
     let mut tainting_cors = false;
+    let iframe = request.destination == Destination::Iframe;
+    let mut cross_site_iframe = false;
 
     // HTTP cache (RFC 9111 + request cache mode): only for GET, only when a real
     // cache is wired, and never for `no-store`.
@@ -182,6 +184,17 @@ async fn fetch_inner(request: Request, cx: &FetchContext) -> Response {
             Credentials::Omit => false,
             Credentials::SameOrigin => same_origin,
         };
+        // Once an iframe crosses sites, returning to the initiating site in
+        // the same redirect chain does not restore SameSite cookie access.
+        cross_site_iframe |= iframe && !is_iframe_same_site(request.origin.as_ref(), &current_url);
+        let cookie_context = use_credentials.then(|| SameSiteContext {
+            same_site: if iframe {
+                !cross_site_iframe
+            } else {
+                is_same_site(request.origin.as_ref(), &current_url)
+            },
+            top_level_navigation: !iframe && matches!(request.mode, RequestMode::Navigate),
+        });
 
         // Assemble the hop's request headers (also reduces `referrer` in place
         // under the active policy, so the reduction carries to later hops).
@@ -193,7 +206,7 @@ async fn fetch_inner(request: Request, cx: &FetchContext) -> Response {
             &method,
             body.as_ref(),
             mode,
-            use_credentials,
+            cookie_context,
             url_list.len() == 1,
             &revalidate,
             origin_tainted,
@@ -225,7 +238,13 @@ async fn fetch_inner(request: Request, cx: &FetchContext) -> Response {
         let status = raw.status;
 
         // Record the response-derived state this hop leaves behind.
-        record_response_metadata(cx, &current_url, use_credentials, &raw.headers);
+        record_response_metadata(
+            cx,
+            &current_url,
+            use_credentials,
+            cross_site_iframe,
+            &raw.headers,
+        );
 
         // Redirect handling (advances the per-hop state in place when followed).
         match process_redirect(

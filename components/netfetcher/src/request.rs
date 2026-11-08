@@ -288,8 +288,10 @@ pub enum Destination {
     Audio,
     /// `video` — optionally-blockable.
     Video,
-    /// `document` (a nested navigable) — blockable.
+    /// `document` — blockable.
     Document,
+    /// `iframe` (a nested navigable) — blockable.
+    Iframe,
     /// Any other destination (script, style, font, worker, …) — blockable.
     Other,
 }

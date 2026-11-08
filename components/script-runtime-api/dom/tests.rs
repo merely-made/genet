@@ -669,7 +669,7 @@ fn custom_elements_registry_contract_works<E: ScriptEngine>() {
             "NotSupportedError",
             "outer:prototype",
             "named-builtin",
-            "async:proto:connectedCallback|proto:disconnectedCallback|proto:adoptedCallback|proto:attributeChangedCallback|invalid:SyntaxError|resolved:true|later:true",
+            "async:proto:connectedCallback|proto:disconnectedCallback|proto:connectedMoveCallback|proto:adoptedCallback|proto:attributeChangedCallback|invalid:SyntaxError|resolved:true|later:true",
         ],
     );
 }

@@ -25,6 +25,120 @@ fn loaded<E: ScriptEngine>() -> Runtime<E> {
     rt
 }
 
+fn define_reads_options_and_lifecycle_properties_in_order<E: ScriptEngine>() {
+    let mut rt = loaded::<E>();
+    assert_eq!(
+        read(
+            &mut rt,
+            r#"(() => {
+                const log = [];
+                function Button() {}
+                Button.prototype = new Proxy(Button.prototype, {
+                    get(target, key) {
+                        log.push(key);
+                        return key === 'attributeChangedCallback' ? () => {} : undefined;
+                    }
+                });
+                const constructor = new Proxy(Button, {
+                    get(target, key) {
+                        log.push(key);
+                        return target[key];
+                    }
+                });
+                customElements.define('x-button', constructor, {
+                    get extends() { log.push('extends'); return 'button'; }
+                });
+                log.push(customElements.get('x-button') === constructor);
+                return log.join('|');
+            })()"#,
+        ),
+        "extends|prototype|connectedCallback|disconnectedCallback|connectedMoveCallback|\
+         adoptedCallback|attributeChangedCallback|observedAttributes|disabledFeatures|formAssociated|true"
+    );
+}
+
+fn define_rejects_unknown_extensions<E: ScriptEngine>() {
+    let mut rt = loaded::<E>();
+    assert_eq!(
+        read(
+            &mut rt,
+            r#"(() => {
+                const log = [];
+                const constructor = new Proxy(class extends HTMLElement {}, {
+                    get(target, key) { log.push(key); return target[key]; }
+                });
+                for (const tag of ['BUTTON', 'bgsound', '?', 'x-custom']) {
+                    try {
+                        customElements.define('x-invalid', constructor, { extends: tag });
+                        log.push('accepted');
+                    } catch (error) {
+                        log.push(error.name);
+                    }
+                }
+                return log.join('|');
+            })()"#,
+        ),
+        "NotSupportedError|NotSupportedError|NotSupportedError|NotSupportedError"
+    );
+}
+
+fn define_rejects_null_callbacks_and_releases_guard<E: ScriptEngine>() {
+    let mut rt = loaded::<E>();
+    assert_eq!(
+        read(
+            &mut rt,
+            r#"(() => {
+                class ElementWithCallback extends HTMLElement {}
+                ElementWithCallback.prototype.connectedCallback = null;
+                let result = 'accepted';
+                try {
+                    customElements.define('x-callback', ElementWithCallback);
+                } catch (error) {
+                    result = error.name;
+                }
+                if (result !== 'TypeError') return result;
+                delete ElementWithCallback.prototype.connectedCallback;
+                customElements.define('x-callback', ElementWithCallback);
+                return result + '|' + (customElements.get('x-callback') === ElementWithCallback);
+            })()"#,
+        ),
+        "TypeError|true"
+    );
+}
+
+#[test]
+fn define_property_order_on_boa() {
+    define_reads_options_and_lifecycle_properties_in_order::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn define_property_order_on_nova() {
+    define_reads_options_and_lifecycle_properties_in_order::<script_engine_nova::NovaEngine>();
+}
+
+#[test]
+fn define_unknown_extensions_on_boa() {
+    define_rejects_unknown_extensions::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn define_unknown_extensions_on_nova() {
+    define_rejects_unknown_extensions::<script_engine_nova::NovaEngine>();
+}
+
+#[test]
+fn define_null_callback_on_boa() {
+    define_rejects_null_callbacks_and_releases_guard::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn define_null_callback_on_nova() {
+    define_rejects_null_callbacks_and_releases_guard::<script_engine_nova::NovaEngine>();
+}
+
 fn reactions_run_before_the_member_returns<E: ScriptEngine>() {
     let mut rt = loaded::<E>();
     rt.eval(

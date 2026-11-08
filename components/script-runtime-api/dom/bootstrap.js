@@ -299,6 +299,7 @@
   // case-sensitively. A null prototype, so a local name like `constructor`
   // cannot reach `Object.prototype`.
   var elementSubclassProto = Object.create(null);
+  var htmlUnknownElementPrototype;
   function unknownElementProto(local) {
     var HTMLEl = globalThis.HTMLElement;
     var base = HTMLEl ? HTMLEl.prototype : Element.prototype;
@@ -938,8 +939,8 @@
     if (thisTop !== treeTopOf(node)) {
       throw new DOMException("moveBefore does not adopt: both nodes must share a root.", "HierarchyRequestError");
     }
-    // Custom elements: the arena records the disconnected + connected fallback
-    // pair for a connected move; connectedMoveCallback is not captured yet.
+    // The arena currently records the disconnected + connected fallback pair
+    // for a connected move. Dispatch of connectedMoveCallback belongs to move reactions.
     moMoveBefore(this.__ref, node.__ref, ref ? ref.__ref : undefined);
     return node;
   };
@@ -2469,7 +2470,7 @@
 
   function customElementCallback(holder, name) {
     var value = holder[name];
-    if (value !== undefined && value !== null && typeof value !== 'function') {
+    if (value !== undefined && typeof value !== 'function') {
       throw new TypeError(name + ' must be a function');
     }
     return value || null;
@@ -3715,6 +3716,7 @@
       setClassString(Ctor.prototype, def.name);
       globalThis[def.name] = Ctor;
       htmlInterfaceConstructors[def.name] = Ctor;
+      if (def.name === 'HTMLUnknownElement') htmlUnknownElementPrototype = Ctor.prototype;
       installReflectedAttributes(Ctor.prototype, def.reflected || []);
       installHtmlInterfaceMembers(def.name, Ctor.prototype);
 
@@ -6418,19 +6420,27 @@
         throw new TypeError('constructor must be a function');
       }
       name = String(name);
+      var extension = options == null ? undefined : options.extends;
+      if (extension !== undefined) extension = String(extension);
       if (!isValidCustomElementName(name)) {
         throw customElementSyntaxError(name);
       }
       if (name in customElementDefinitions || customElementDefinitionsByCtor.has(ctor)) {
         throw new (globalThis.DOMException || TypeError)('name already defined', 'NotSupportedError');
       }
+      var isCustomizedBuiltIn = extension !== undefined;
+      var localName = isCustomizedBuiltIn ? extension : name;
+      var builtInPrototype = elementSubclassProto[localName];
+      if (isCustomizedBuiltIn &&
+          (isValidCustomElementName(localName) || !builtInPrototype ||
+           builtInPrototype === htmlUnknownElementPrototype)) {
+        throw new (globalThis.DOMException || TypeError)('unknown built-in extension target', 'NotSupportedError');
+      }
       if (definitionRunning) {
         throw new (globalThis.DOMException || TypeError)('definition already running', 'NotSupportedError');
       }
       definitionRunning = true;
       var def;
-      var localName;
-      var isCustomizedBuiltIn = false;
       try {
         var prototype = ctor.prototype;
         if (!prototype || (typeof prototype !== 'object' && typeof prototype !== 'function')) {
@@ -6439,6 +6449,7 @@
         var callbacks = {
           connectedCallback: customElementCallback(prototype, 'connectedCallback'),
           disconnectedCallback: customElementCallback(prototype, 'disconnectedCallback'),
+          connectedMoveCallback: customElementCallback(prototype, 'connectedMoveCallback'),
           adoptedCallback: customElementCallback(prototype, 'adoptedCallback'),
           attributeChangedCallback: customElementCallback(prototype, 'attributeChangedCallback')
         };
@@ -6453,15 +6464,6 @@
           callbacks.formResetCallback = customElementCallback(prototype, 'formResetCallback');
           callbacks.formDisabledCallback = customElementCallback(prototype, 'formDisabledCallback');
           callbacks.formStateRestoreCallback = customElementCallback(prototype, 'formStateRestoreCallback');
-        }
-        localName = name;
-        if (options && options.extends !== undefined) {
-          localName = String(options.extends).toLowerCase();
-          validateName(localName);
-          if (localName.indexOf('-') !== -1 || !elementSubclassProto[localName]) {
-            throw new (globalThis.DOMException || TypeError)('unknown built-in extension target', 'NotSupportedError');
-          }
-          isCustomizedBuiltIn = true;
         }
         def = {
           name: name,

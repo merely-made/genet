@@ -101,6 +101,18 @@ the failed state, `:defined`, customized built-ins on `HTMLElement`-interface
 tags, clone and import upgrades, and the order in which `define` reads the
 constructor's properties.
 
+- 2026-11-08: `define()` reads `options.extends` once and checks the exact
+  built-in tag before reading the constructor prototype and callbacks. It
+  rejects null callbacks and captures `connectedMoveCallback` in lifecycle
+  order. Six new cases failed on the baseline. All 16 reaction integration
+  tests and eight filtered custom-element unit tests passed on Boa and Vano
+  with the diagnostic Bole lock at `ddf4e31b`. The current Bole main revision
+  failed to compile Genet's existing job executor setup. Logs are under
+  `Code/testing/genet/priorities-20261108/elements/`.
+  Open work includes constructibility for proxies in Vano, primitive options
+  and Symbol conversion, move callback delivery, the other P2 items above,
+  and matched WPT maps.
+
 **P3. ARIA reflection, then ElementInternals.** ARIA reflection from
 `wai-aria.idl` through the interface table, then form-associated custom
 elements as a native listed-control kind, then CustomStateSet with `:state()`.

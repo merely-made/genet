@@ -487,3 +487,18 @@ become the default.
   workers and nested contexts inherit nothing yet (`srcdoc`/`about:blank` children and
   `Worker`/`SharedWorker` start with the default policy); WebSocket has the mixed-content
   check but not UIR; Mere's `ResourceRequest` literals.
+- **2026-11-08** P2 eager iframe slice at `bd363dac818`. The runtime offers an
+  opt-in request path for parser-created and script-created eager iframes in the
+  top document. It carries the parent's request policy, accepts a valid
+  `referrerpolicy` attribute override, and hands response headers to the child.
+  The server-mode WPT adapter uses the nested iframe destination. Netfetcher
+  applies cross-site cookie restrictions to every hop in an iframe redirect chain.
+  Focused runtime tests passed 4/4 across Boa and Vano. Netfetcher passed 101/101.
+  A localhost HTTP test passed 3/3 on each engine and verified the server's
+  received referrers. Runtime and runner builds used diagnostic Bole
+  `ddf4e31b`. The HTTP runner used `netfetch,image-decode` without default
+  features because the resolved Murm RTC crate failed to compile.
+  Receipts are in `Code/testing/genet/priorities-20261108/fetch/`.
+  Open P2 work includes production host adoption, asynchronous iframe
+  acquisition, nested and lazy iframes, later iframe navigations, the other
+  element destinations, and matched generated WPT server-mode accounting.

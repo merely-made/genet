@@ -119,8 +119,10 @@ version = "2.1.2"
 features = ["compiled_data"]
 default-features = false
 
+# icu_segmenter 2.4 moved the dictionary provider to DictionaryBreakData (V2 markers), and
+# Bole's Boa pins the ICU 2.3 line, so one ICU copy means staying below 2.4 until Bole moves.
 [dependencies.icu_segmenter]
-version = "2.1.2"
+version = ">=2.1.2, <2.4"
 features = ["compiled_data"]
 default-features = false
 

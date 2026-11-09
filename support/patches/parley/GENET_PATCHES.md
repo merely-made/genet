@@ -108,12 +108,16 @@ share it), `LayoutContext::load_segmenter_dictionaries` loads it, and
 `LayoutContext::wanted_segmenter_dictionaries` names the groups text has met
 without them. Until a group loads, its scripts break by the plain rules.
 
-Blobs are `GSEGDIC1` followed by `[group][name length][name][u16 count LE][u16 LE…]`
-entries, read by a crate-local ICU data provider that projects each trie out of
-the shared bytes (no `icu_provider_blob`). `cargo run -p genet-parley --features
+Blobs are `GSEGDIC2` followed by `[group][name length][name][kind]` entries, the
+kind being a Char16 trie (`[u16 count LE][u16 LE…]`) or, since ICU 2.4 moved
+Thai, Lao, Khmer and Burmese to `DictionaryBreakData::ZeroTrie`, an alphabet and
+a zero trie (`[u32 count LE][u32 LE…][byte count LE][bytes]`). They are read by a
+crate-local ICU data provider for the V2 dictionary markers that projects each
+trie out of the shared bytes (no `icu_provider_blob`). `GSEGDIC1` blobs (Char16
+tries only, written against ICU 2.3) still load. `cargo run -p genet-parley --features
 complex-scripts --example export_segmenter_dictionaries -- <dir>` writes
-`segmenter-southeast-asian.dict` (1,773,143 B) and
-`segmenter-chinese-japanese.dict` (2,007,130 B) from ICU's baked data; the
+`segmenter-southeast-asian.dict` and
+`segmenter-chinese-japanese.dict` from ICU's baked data; the
 `dictionaries` tests check that loaded blobs break all six scripts exactly as
 the baked dictionaries do. `icu_provider`'s `sync` feature keeps
 `LayoutContext` `Send`.

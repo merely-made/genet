@@ -16,19 +16,18 @@ path = "lib.rs"
 
 [dependencies]
 script-engine-api = { path = "../script-engine-api" }
-# bole main aa14721 lacks SimpleJobExecutor::with_continue_on_error; this pin leaves when bole main has it.
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "ddf4e31b0d6cf86c11ea8907b0d07e4799d62368", features = ["array-buffer-transfer"] }
-boa_gc = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "ddf4e31b0d6cf86c11ea8907b0d07e4799d62368" }
-# Pin caller provenance and standard buffer transfer so fresh clones share the
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", branch = "main", features = ["array-buffer-transfer"] }
+boa_gc = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", branch = "main" }
+# Track Bole main for caller provenance and standard buffer transfer so fresh clones share the
 # same realm and detachment rules. Transfer support does not enable Boa's broad
 # experimental feature. The gitignored local config may
 # redirect these sources to crates/boa; it is not part of the public contract.
 # The maintained fork retains its 1.0.0-dev identity while incorporating stable
-# v0.22. The exact prerelease version and revision define the host contract.
+# v0.22. The prerelease version on Bole main defines the host contract.
 
 [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dependencies]
 # Browser host glue provides randomness and time on wasm32-unknown-unknown.
-boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", rev = "ddf4e31b0d6cf86c11ea8907b0d07e4799d62368", features = ["js"] }
+boa_engine = { version = "=1.0.0-dev", git = "https://github.com/merely-made/bole.git", branch = "main", features = ["js"] }
 
 [lints]
 workspace = true

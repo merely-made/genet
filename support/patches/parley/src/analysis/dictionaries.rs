@@ -9,9 +9,14 @@
 //! text asks for them; until then those scripts break by the plain rules.
 //!
 //! A blob is [`MAGIC`] followed by entries of
-//! `[group: u8][name length: u8][name][trie length in u16s: u32 LE][trie: u16 LE…]`,
-//! the group being [`SOUTHEAST_ASIAN`] or [`CHINESE_JAPANESE`] and the name
-//! ICU's dictionary attribute (`thaidict`, `cjdict`, …).
+//! `[group: u8][name length: u8][name][kind: u8][trie…]`, the group being
+//! [`SOUTHEAST_ASIAN`] or [`CHINESE_JAPANESE`] and the name ICU's dictionary
+//! attribute (`thaidict`, `cjdict`, …). The kind is [`KIND_CHAR16_TRIE`], then
+//! `[length in u16s: u32 LE][u16 LE…]`, or [`KIND_ZERO_TRIE`], then
+//! `[alphabet length in u32s: u32 LE][u32 LE…][trie length: u32 LE][trie bytes]`,
+//! the alphabet being the inversion list of the trie's code points. Blobs
+//! starting with [`MAGIC_V1`], from before ICU 2.4, hold only Char16 tries and
+//! no kind byte; they still load.
 
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -19,15 +24,24 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::ops::Range;
 
+use icu_collections::char16trie::Char16Trie;
+use icu_collections::codepointinvlist::CodePointInversionList;
 use icu_provider::buf::BufferMarker;
 use icu_provider::prelude::*;
 use icu_segmenter::provider::{
-    SegmenterDictionaryAutoV1, SegmenterDictionaryExtendedV1, UCharDictionaryBreakData,
+    DictionaryBreakData, SegmenterDictionaryAutoV2, SegmenterDictionaryExtendedV2,
 };
+use zerotrie::ZeroTrieSimpleAscii;
 use zerovec::ZeroVec;
 
-/// The first bytes of every dictionary blob.
-pub const MAGIC: &[u8; 8] = b"GSEGDIC1";
+/// The first bytes of every dictionary blob this crate writes.
+pub const MAGIC: &[u8; 8] = b"GSEGDIC2";
+/// The first bytes of a blob from before ICU 2.4, which holds Char16 tries only.
+pub const MAGIC_V1: &[u8; 8] = b"GSEGDIC1";
+/// The kind byte of a dictionary stored as a Char16 trie.
+pub const KIND_CHAR16_TRIE: u8 = 0;
+/// The kind byte of a dictionary stored as an alphabet and a zero trie.
+pub const KIND_ZERO_TRIE: u8 = 1;
 /// The group byte of a Thai, Lao, Khmer or Burmese dictionary.
 pub const SOUTHEAST_ASIAN: u8 = 0;
 /// The group byte of the Chinese and Japanese dictionary.
@@ -108,6 +122,10 @@ pub enum DictionaryBlobError {
     UnknownGroup(u8),
     /// An entry's name is not UTF-8.
     BadName,
+    /// An entry names a trie kind other than the two known ones.
+    UnknownKind(u8),
+    /// An entry's trie does not parse.
+    BadTrie,
 }
 
 impl fmt::Display for DictionaryBlobError {
@@ -117,32 +135,114 @@ impl fmt::Display for DictionaryBlobError {
             Self::Truncated => write!(f, "the segmenter dictionary blob is truncated"),
             Self::UnknownGroup(group) => write!(f, "unknown segmenter dictionary group {group}"),
             Self::BadName => write!(f, "a segmenter dictionary name is not UTF-8"),
+            Self::UnknownKind(kind) => write!(f, "unknown segmenter dictionary trie kind {kind}"),
+            Self::BadTrie => write!(f, "a segmenter dictionary trie is malformed"),
         }
     }
 }
 
 impl core::error::Error for DictionaryBlobError {}
 
+/// One dictionary's trie, as a blob stores it.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum DictionaryTrie<'a> {
+    /// A Char16 trie's `u16` units.
+    Char16(&'a [u16]),
+    /// A zero trie's bytes, and the inversion list of the code points it is indexed by.
+    ZeroTrie {
+        /// The alphabet's inversion list.
+        alphabet: &'a [u32],
+        /// The trie's bytes.
+        trie: &'a [u8],
+    },
+}
+
+/// The trie of an ICU dictionary payload, owned, for [`encode_blob`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum OwnedDictionaryTrie {
+    /// A Char16 trie's `u16` units.
+    Char16(Vec<u16>),
+    /// A zero trie's alphabet inversion list and bytes.
+    ZeroTrie {
+        /// The alphabet's inversion list.
+        alphabet: Vec<u32>,
+        /// The trie's bytes.
+        trie: Vec<u8>,
+    },
+}
+
+impl OwnedDictionaryTrie {
+    /// Take the trie out of an ICU dictionary payload.
+    pub fn from_data(data: &DictionaryBreakData<'_>) -> Self {
+        match data {
+            DictionaryBreakData::Char16Trie(trie) => Self::Char16(trie.data.to_vec()),
+            DictionaryBreakData::ZeroTrie { alphabet, trie } => Self::ZeroTrie {
+                alphabet: alphabet.get_inversion_list_vec(),
+                trie: trie.as_bytes().to_vec(),
+            },
+            // The enum is not exhaustive in ICU's eyes; a new kind needs a new blob kind.
+            #[allow(unreachable_patterns)]
+            _ => panic!("a dictionary kind this blob format does not carry"),
+        }
+    }
+
+    /// Borrow as a [`DictionaryTrie`].
+    pub fn as_trie(&self) -> DictionaryTrie<'_> {
+        match self {
+            Self::Char16(units) => DictionaryTrie::Char16(units),
+            Self::ZeroTrie { alphabet, trie } => DictionaryTrie::ZeroTrie { alphabet, trie },
+        }
+    }
+}
+
+fn push_len(blob: &mut Vec<u8>, len: usize) {
+    let len = u32::try_from(len).expect("a dictionary fits in u32 units");
+    blob.extend_from_slice(&len.to_le_bytes());
+}
+
 /// Write a blob from `(group, name, trie)` entries.
-pub fn encode_blob<'a>(entries: impl IntoIterator<Item = (u8, &'a str, &'a [u16])>) -> Vec<u8> {
+pub fn encode_blob<'a>(
+    entries: impl IntoIterator<Item = (u8, &'a str, DictionaryTrie<'a>)>,
+) -> Vec<u8> {
     let mut blob = MAGIC.to_vec();
     for (group, name, trie) in entries {
         blob.push(group);
         blob.push(u8::try_from(name.len()).expect("dictionary names are short"));
         blob.extend_from_slice(name.as_bytes());
-        let len = u32::try_from(trie.len()).expect("a dictionary fits in u32 units");
-        blob.extend_from_slice(&len.to_le_bytes());
-        for unit in trie {
-            blob.extend_from_slice(&unit.to_le_bytes());
+        match trie {
+            DictionaryTrie::Char16(units) => {
+                blob.push(KIND_CHAR16_TRIE);
+                push_len(&mut blob, units.len());
+                for unit in units {
+                    blob.extend_from_slice(&unit.to_le_bytes());
+                }
+            },
+            DictionaryTrie::ZeroTrie { alphabet, trie } => {
+                blob.push(KIND_ZERO_TRIE);
+                push_len(&mut blob, alphabet.len());
+                for point in alphabet {
+                    blob.extend_from_slice(&point.to_le_bytes());
+                }
+                push_len(&mut blob, trie.len());
+                blob.extend_from_slice(trie);
+            },
         }
     }
     blob
 }
 
+enum Trie {
+    Char16(Range<usize>),
+    ZeroTrie {
+        alphabet: Vec<u32>,
+        trie: Range<usize>,
+    },
+}
+
 struct Entry {
     group: u8,
     name: String,
-    trie: Range<usize>,
+    trie: Trie,
 }
 
 /// A checked dictionary blob. Cloning shares the bytes, so a host parses a
@@ -218,7 +318,7 @@ impl DictionaryProvider {
 
     fn load<M>(&self, group: u8, req: DataRequest<'_>) -> Result<DataResponse<M>, DataError>
     where
-        M: DataMarker<DataStruct = UCharDictionaryBreakData<'static>>,
+        M: DataMarker<DataStruct = DictionaryBreakData<'static>>,
     {
         let wanted = req.id.marker_attributes.as_str();
         // The newest blob wins when two carry the same dictionary.
@@ -234,13 +334,30 @@ impl DictionaryProvider {
                 Some((blob, entry))
             })
             .ok_or_else(|| DataErrorKind::IdentifierNotFound.with_req(M::INFO, req))?;
-        let range = entry.trie.clone();
-        let payload = blob.bytes.clone().map_project(move |bytes, _| {
-            UCharDictionaryBreakData {
-                // Lengths were checked when the blob was made.
-                trie_data: ZeroVec::parse_bytes(&bytes[range]).expect("checked u16 trie"),
-            }
-        });
+        let payload = match &entry.trie {
+            Trie::Char16(range) => {
+                let range = range.clone();
+                blob.bytes.clone().map_project(move |bytes, _| {
+                    DictionaryBreakData::Char16Trie(Char16Trie::new(
+                        // Lengths were checked when the blob was made.
+                        ZeroVec::parse_bytes(&bytes[range]).expect("checked u16 trie"),
+                    ))
+                })
+            },
+            Trie::ZeroTrie { alphabet, trie } => {
+                let (alphabet, trie) = (alphabet.clone(), trie.clone());
+                blob.bytes.clone().map_project(move |bytes, _| {
+                    DictionaryBreakData::ZeroTrie {
+                        // The alphabet was checked when the blob was made.
+                        alphabet: CodePointInversionList::try_from_u32_inversion_list_slice(
+                            &alphabet,
+                        )
+                        .expect("checked alphabet"),
+                        trie: ZeroTrieSimpleAscii::from_store(ZeroVec::new_borrowed(&bytes[trie])),
+                    }
+                })
+            },
+        };
         Ok(DataResponse {
             metadata: DataResponseMetadata::default(),
             payload,
@@ -248,26 +365,27 @@ impl DictionaryProvider {
     }
 }
 
-impl DataProvider<SegmenterDictionaryExtendedV1> for DictionaryProvider {
+impl DataProvider<SegmenterDictionaryExtendedV2> for DictionaryProvider {
     fn load(
         &self,
         req: DataRequest<'_>,
-    ) -> Result<DataResponse<SegmenterDictionaryExtendedV1>, DataError> {
+    ) -> Result<DataResponse<SegmenterDictionaryExtendedV2>, DataError> {
         self.load(SOUTHEAST_ASIAN, req)
     }
 }
 
-impl DataProvider<SegmenterDictionaryAutoV1> for DictionaryProvider {
+impl DataProvider<SegmenterDictionaryAutoV2> for DictionaryProvider {
     fn load(
         &self,
         req: DataRequest<'_>,
-    ) -> Result<DataResponse<SegmenterDictionaryAutoV1>, DataError> {
+    ) -> Result<DataResponse<SegmenterDictionaryAutoV2>, DataError> {
         self.load(CHINESE_JAPANESE, req)
     }
 }
 
 fn parse(blob: &[u8]) -> Result<Vec<Entry>, DictionaryBlobError> {
-    if !blob.starts_with(MAGIC) {
+    let v1 = blob.starts_with(MAGIC_V1);
+    if !v1 && !blob.starts_with(MAGIC) {
         return Err(DictionaryBlobError::NotADictionaryBlob);
     }
     let mut at = MAGIC.len();
@@ -279,6 +397,10 @@ fn parse(blob: &[u8]) -> Result<Vec<Entry>, DictionaryBlobError> {
         *at = end;
         Ok(range)
     };
+    let take_len = |at: &mut usize| -> Result<usize, DictionaryBlobError> {
+        let len = &blob[take(at, 4)?];
+        Ok(u32::from_le_bytes([len[0], len[1], len[2], len[3]]) as usize)
+    };
     while at < blob.len() {
         let group = blob[take(&mut at, 1)?.start];
         if group != SOUTHEAST_ASIAN && group != CHINESE_JAPANESE {
@@ -288,12 +410,41 @@ fn parse(blob: &[u8]) -> Result<Vec<Entry>, DictionaryBlobError> {
         let name = core::str::from_utf8(&blob[take(&mut at, name_len)?])
             .map_err(|_| DictionaryBlobError::BadName)?
             .into();
-        let len = &blob[take(&mut at, 4)?];
-        let units = u32::from_le_bytes([len[0], len[1], len[2], len[3]]) as usize;
-        let trie = take(
-            &mut at,
-            units.checked_mul(2).ok_or(DictionaryBlobError::Truncated)?,
-        )?;
+        let kind = if v1 {
+            KIND_CHAR16_TRIE
+        } else {
+            blob[take(&mut at, 1)?.start]
+        };
+        let trie = match kind {
+            KIND_CHAR16_TRIE => {
+                let units = take_len(&mut at)?;
+                Trie::Char16(take(
+                    &mut at,
+                    units.checked_mul(2).ok_or(DictionaryBlobError::Truncated)?,
+                )?)
+            },
+            KIND_ZERO_TRIE => {
+                let points = take_len(&mut at)?;
+                let bytes = take(
+                    &mut at,
+                    points
+                        .checked_mul(4)
+                        .ok_or(DictionaryBlobError::Truncated)?,
+                )?;
+                let alphabet: Vec<u32> = blob[bytes]
+                    .chunks_exact(4)
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect();
+                CodePointInversionList::try_from_u32_inversion_list_slice(&alphabet)
+                    .map_err(|_| DictionaryBlobError::BadTrie)?;
+                let len = take_len(&mut at)?;
+                Trie::ZeroTrie {
+                    alphabet,
+                    trie: take(&mut at, len)?,
+                }
+            },
+            kind => return Err(DictionaryBlobError::UnknownKind(kind)),
+        };
         entries.push(Entry { group, name, trie });
     }
     Ok(entries)
@@ -308,9 +459,9 @@ mod tests {
 
     /// The baked dictionaries, as a host's blobs would carry them.
     pub(crate) fn baked_blobs() -> (Vec<u8>, Vec<u8>) {
-        fn trie<M>(name: &str) -> Vec<u16>
+        fn trie<M>(name: &str) -> OwnedDictionaryTrie
         where
-            M: DataMarker<DataStruct = UCharDictionaryBreakData<'static>>,
+            M: DataMarker<DataStruct = DictionaryBreakData<'static>>,
             Baked: DataProvider<M>,
         {
             let attributes = DataMarkerAttributes::try_from_str(name).unwrap();
@@ -320,15 +471,15 @@ mod tests {
                     ..Default::default()
                 })
                 .unwrap();
-            response.payload.get().trie_data.to_vec()
+            OwnedDictionaryTrie::from_data(response.payload.get())
         }
         let sea: Vec<_> = ["burmesedict", "khmerdict", "laodict", "thaidict"]
-            .map(|name| (name, trie::<SegmenterDictionaryExtendedV1>(name)))
+            .map(|name| (name, trie::<SegmenterDictionaryExtendedV2>(name)))
             .into();
-        let cj = trie::<SegmenterDictionaryAutoV1>("cjdict");
+        let cj = trie::<SegmenterDictionaryAutoV2>("cjdict");
         (
-            encode_blob(sea.iter().map(|(n, t)| (SOUTHEAST_ASIAN, *n, t.as_slice()))),
-            encode_blob([(CHINESE_JAPANESE, "cjdict", cj.as_slice())]),
+            encode_blob(sea.iter().map(|(n, t)| (SOUTHEAST_ASIAN, *n, t.as_trie()))),
+            encode_blob([(CHINESE_JAPANESE, "cjdict", cj.as_trie())]),
         )
     }
 
@@ -440,17 +591,51 @@ mod tests {
             DictionaryBlob::new(b"not a blob".to_vec()).unwrap_err(),
             DictionaryBlobError::NotADictionaryBlob
         );
-        let mut blob = encode_blob([(SOUTHEAST_ASIAN, "thaidict", [1_u16, 2, 3].as_slice())]);
+        let mut blob = encode_blob([(
+            SOUTHEAST_ASIAN,
+            "thaidict",
+            DictionaryTrie::Char16(&[1, 2, 3]),
+        )]);
         blob.pop();
         assert_eq!(
             DictionaryBlob::new(blob).unwrap_err(),
             DictionaryBlobError::Truncated
         );
-        let mut blob = encode_blob([(SOUTHEAST_ASIAN, "thaidict", [1_u16].as_slice())]);
+        let mut blob = encode_blob([(SOUTHEAST_ASIAN, "thaidict", DictionaryTrie::Char16(&[1]))]);
         blob[MAGIC.len()] = 9;
         assert_eq!(
             DictionaryBlob::new(blob).unwrap_err(),
             DictionaryBlobError::UnknownGroup(9)
         );
+    }
+
+    #[test]
+    fn blobs_from_before_icu_2_4_still_load() {
+        let units = [0x30_u16, 0x61, 0xb0, 0x62, 0x8064];
+        let mut v1 = MAGIC_V1.to_vec();
+        v1.extend_from_slice(&[CHINESE_JAPANESE, 6]);
+        v1.extend_from_slice(b"cjdict");
+        v1.extend_from_slice(&(units.len() as u32).to_le_bytes());
+        for unit in units {
+            v1.extend_from_slice(&unit.to_le_bytes());
+        }
+        let blob = DictionaryBlob::new(v1).unwrap();
+        assert!(blob.dictionaries().chinese_japanese);
+        let mut provider = DictionaryProvider::default();
+        assert!(provider.add(&blob));
+        let attributes = DataMarkerAttributes::try_from_str("cjdict").unwrap();
+        let response: DataResponse<SegmenterDictionaryAutoV2> =
+            DataProvider::<SegmenterDictionaryAutoV2>::load(
+                &provider,
+                DataRequest {
+                    id: DataIdentifierBorrowed::for_marker_attributes(attributes),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert!(matches!(
+            response.payload.get(),
+            DictionaryBreakData::Char16Trie(trie) if trie.data.len() == units.len()
+        ));
     }
 }

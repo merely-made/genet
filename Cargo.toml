@@ -326,7 +326,7 @@ url = "2.5"
 urlpattern = "0.3"
 utf-8 = "0.7"
 uuid = { version = "1.23.1", features = ["v4", "v5"] }
-vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
+vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", branch = "mark-ik/all-vellos" }
 webdriver = { version = "0.53.0", default-features = false }
 webpki-roots = "1.0.10"
 web_atoms = "0.2"
@@ -485,14 +485,6 @@ genet-taffy = { path = "support/patches/taffy" }
 # git here, which the local `[patch]` redirect in `.cargo/config.toml` could
 # not layer on). Fork provenance: docs/2026-05-20_genet_script_engine_plan.md
 # and G1 in docs/2026-06-11_gc_arena_dom_plan.md.
-# Genet's own render-host tests must use the same qualified native shader
-# family as application roots. Cargo root patches are not inherited by
-# consumers: each application must restate all three rows at this revision.
-# Classic 0.11 and its encoding/shader types share the maintained release source,
-# preserving the coarse traversal, command progress and image atlas repairs.
-netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
-netrender-vello-encoding = { git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
-netrender-vello-shaders = { git = "https://github.com/mark-ik/vello", rev = "dfb9b53b315561887761deff319afed08cc33ff0" }
 # For WebRender / netrender:
 # The netrender/ workspace (formerly the webrender-wgpu fork) dropped
 # webrender, webrender_api, and wr_malloc_size_of as separate crates. Local

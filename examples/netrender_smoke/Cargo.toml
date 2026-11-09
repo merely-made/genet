@@ -7,7 +7,6 @@ publish = false
 
 # Standalone project — intentionally NOT a genet workspace member.
 # This example exercises the current Scene renderer without the Genet runtime.
-# Its independent root must restate the maintained Classic source patches.
 #
 # Build:
 #   cargo run --manifest-path examples/netrender_smoke/Cargo.toml
@@ -26,13 +25,6 @@ path = "src/main.rs"
 netrender = { git = "https://github.com/merely-made/netrender.git", branch = "main" }
 wgpu = "30"
 pollster = "0.4"
-
-# Match the root's Classic 0.11 provider and encoding/shader source. Patches
-# are per-workspace-root and are not inherited from the Netrender dependency.
-[patch.crates-io]
-netrender-vello = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
-vello_encoding = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
-vello_shaders = { git = "https://github.com/mark-ik/vello", rev = "276b46648c08f3d2062e70559afa999842e1873c" }
 
 [workspace.package]
 rust-version = "1.97.1"

@@ -1741,6 +1741,9 @@ pub fn cascade_with_custom_context_and_image_resolver(
                 if let PropertyValue::BackgroundImage(BackgroundImage::Url(url)) = &mut value {
                     *url = resolve_image_url(url, source_url.as_deref()).into_boxed_str();
                 }
+                if let PropertyValue::Content(content) = &mut value {
+                    content.map_image_urls(|url| resolve_image_url(url, source_url.as_deref()));
+                }
                 result
                     .set(property, value)
                     .unwrap_or_else(|_| panic!("generated value type mismatch for {property:?}"));

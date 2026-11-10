@@ -602,7 +602,7 @@ impl LiveryPaintList {
 
 /// The source lookup is borrowed only while emitting. The finished list owns
 /// shared decoded pixels, never a copy of the document's encoded byte ledger.
-struct PaintBuilder<'a> {
+pub(crate) struct PaintBuilder<'a> {
     list: LiveryPaintList,
     image_keys: HashMap<String, ImageKey>,
     image_sources: &'a dyn crate::ImageSourceLookup,
@@ -650,8 +650,18 @@ impl PaintBuilder<'_> {
         self.image_key_for(&key).map(ReplacedSource::Raster)
     }
 
+    /// What a CSS-declared image URL paints (no document base: computed CSS
+    /// URLs already carry their sheet's): a registered vector image, else
+    /// its decoded raster.
+    pub(crate) fn replaced_for(&mut self, url: &str) -> Option<ReplacedSource> {
+        if let Some(vector) = self.image_sources.vector(url) {
+            return Some(ReplacedSource::Vector(vector));
+        }
+        self.image_key_for(url).map(ReplacedSource::Raster)
+    }
+
     /// Paint `source` filling `rect`.
-    fn push_replaced(&mut self, source: &ReplacedSource, rect: LayoutRect) {
+    pub(crate) fn push_replaced(&mut self, source: &ReplacedSource, rect: LayoutRect) {
         match source {
             ReplacedSource::Vector(vector) => self.commands.extend(vector.paint(rect)),
             ReplacedSource::Raster(image_key) => {
@@ -668,7 +678,7 @@ impl PaintBuilder<'_> {
 }
 
 /// A replaced `<img>`'s content: the embedder's paths or decoded pixels.
-enum ReplacedSource {
+pub(crate) enum ReplacedSource {
     Vector(std::sync::Arc<dyn crate::VectorImage>),
     Raster(ImageKey),
 }
@@ -1386,6 +1396,7 @@ where
                     list.commands.push(PaintCmd::PopClip);
                 }
             }
+            crate::generated_image::paint::<D>(styles, fragments, id, list);
             if style.display == Display::ListItem
                 || styles
                     .generated_text(id, buckram::PseudoElement::Before)

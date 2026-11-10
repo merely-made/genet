@@ -53,7 +53,26 @@ pub struct LiverySessionEngine<Fetch> {
     resource_limits: ResourceLimits,
     decode_options: HtmlDecodeOptions,
     validation_message_catalog: genet_scripted_dom::ValidationMessageCatalog,
+    host_layer: Option<LiveryHostLayerFn>,
 }
+
+/// What a host adds to one document at spawn, outside the guest's DOM: sheets
+/// cascaded after the engine's own host sheets and before the document's, and
+/// vector images under the URLs those sheets name. The guest's scripts and
+/// selectors never see either.
+#[cfg(feature = "livery")]
+#[derive(Default)]
+pub struct LiveryHostLayer {
+    pub css: Vec<String>,
+    pub vectors: Vec<(String, std::sync::Arc<dyn genet_livery::VectorImage>)>,
+}
+
+/// Builds a document's [`LiveryHostLayer`] from its parsed DOM and resolved
+/// document URL, once per spawn (a reload or navigation spawns again).
+#[cfg(feature = "livery")]
+pub type LiveryHostLayerFn = std::sync::Arc<
+    dyn Fn(&genet_scripted_dom::ScriptedDom, Option<&str>) -> LiveryHostLayer + Send + Sync,
+>;
 
 /// One browser-host preparation for a Livery session.  It owns the exact DOM
 /// which will become the session, so URL discovery and layout cannot diverge
@@ -160,6 +179,7 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             resource_limits: ResourceLimits::default(),
             decode_options: HtmlDecodeOptions::default(),
             validation_message_catalog: Default::default(),
+            host_layer: None,
         }
     }
 
@@ -175,7 +195,14 @@ impl<Fetch> LiverySessionEngine<Fetch> {
             resource_limits: ResourceLimits::default(),
             decode_options: HtmlDecodeOptions::default(),
             validation_message_catalog: Default::default(),
+            host_layer: None,
         }
+    }
+
+    /// Ask `layer` for each top-level document's host layer at spawn.
+    pub fn with_host_layer(mut self, layer: LiveryHostLayerFn) -> Self {
+        self.host_layer = Some(layer);
+        self
     }
 
     pub fn with_html_decode_options(mut self, options: HtmlDecodeOptions) -> Self {
@@ -423,9 +450,15 @@ impl<Fetch> LiverySessionEngine<Fetch> {
     ) -> Result<Box<dyn DocumentSession<Scene>>, SessionError> {
         let encoding = dom.document_encoding(dom.document()).unwrap_or_default();
         let decode_options = dom.html_decode_options();
+        let layer = self
+            .host_layer
+            .as_ref()
+            .map(|layer| layer(&dom, resources.document_url.as_deref()))
+            .unwrap_or_default();
         let mut sheets = self
             .author_css
             .iter()
+            .chain(&layer.css)
             .enumerate()
             .map(|(document_order, text)| ResolvedStylesheet {
                 // Resource-resolved sheet ids begin at zero. Keep injected
@@ -454,6 +487,9 @@ impl<Fetch> LiverySessionEngine<Fetch> {
         );
         // A top-level page owns its canvas; child frames stay transparent.
         doc.set_opaque_canvas(true);
+        for (url, image) in layer.vectors {
+            doc.set_vector_image(url, Some(image));
+        }
         for resource in &resources.resources {
             match resource.kind {
                 ResourceKind::Image => {
@@ -3002,6 +3038,54 @@ mod phase_c_t5_editor_clip_fix2_controls {
         assert_eq!(after_blur.text, initial.text);
         assert_eq!(after_blur.links, initial.links);
         assert_eq!(after_blur.artifacts[0].bytes, body.as_bytes());
+    }
+
+    use std::sync::{Arc, Mutex};
+
+    /// A vector image that counts the boxes it is asked to fill.
+    #[derive(Debug, Default)]
+    struct Counted(Mutex<usize>);
+
+    impl genet_livery::VectorImage for Counted {
+        fn intrinsic_size(&self) -> (f32, f32) {
+            (16.0, 16.0)
+        }
+
+        fn paint(&self, _: paint_list_api::LayoutRect) -> Vec<paint_list_api::PaintCmd> {
+            *self.0.lock().unwrap() += 1;
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn a_host_layer_puts_a_face_before_a_link_without_touching_the_guest_dom() {
+        let body = r#"<html><body><p><a href="notes">Notes</a> and <a href="other">other</a></p></body></html>"#;
+        let face = Arc::new(Counted::default());
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let layer: LiveryHostLayerFn = {
+            let (face, seen) = (face.clone(), seen.clone());
+            Arc::new(move |dom, base| {
+                seen.lock().unwrap().push(base.map(str::to_owned));
+                LiveryHostLayer {
+                    css: vec![r#"a[href="notes"]::before { content: url("face:6e"); width: 20px; height: 20px; }"#.into()],
+                    vectors: vec![("face:6e".into(), face.clone() as Arc<dyn genet_livery::VectorImage>)],
+                }
+            })
+        };
+        let request = SessionSpawnRequest::new("https://clip.test/page")
+            .with_body(body)
+            .with_viewport(400, 240);
+        let mut boxed = LiverySessionEngine::new(NoFetch).with_host_layer(layer).spawn(&request).unwrap();
+        let session = boxed.as_any().downcast_mut::<LiveryDocumentSession>().unwrap();
+        session.frame(400, 240);
+        assert_eq!(*face.0.lock().unwrap(), 1, "the face paints once, beside one link");
+        assert_eq!(seen.lock().unwrap()[0].as_deref(), Some("https://clip.test/page"));
+        let dom = session.doc.dom();
+        assert!(dom.first_tag(dom.document(), "img").is_none(), "the guest DOM gains nothing");
+        let links = session.links();
+        let notes = links.iter().find(|link| link.url.ends_with("/notes")).unwrap();
+        let other = links.iter().find(|link| link.url.ends_with("/other")).unwrap();
+        assert!(notes.rect[2] > other.rect[2], "the faced link is wider: {notes:?} {other:?}");
     }
 
     #[test]

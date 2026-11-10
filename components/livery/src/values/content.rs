@@ -21,6 +21,10 @@ pub enum ContentItem {
         name: String,
         separator: Option<String>,
     },
+    /// `url(...)`: an image. Alone, it makes the generated box a replaced
+    /// element (css-content-3 section 1.2); beside other items it generates
+    /// no text, and `Content::resolve` skips it.
+    Image(String),
 }
 
 impl Content {
@@ -28,6 +32,28 @@ impl Content {
     /// zero). A document with counter state uses `resolve_with_counters`.
     pub fn resolve(&self, attribute: impl FnMut(&str) -> Option<String>) -> Option<String> {
         self.resolve_with_counters(attribute, |_, _| "0".into())
+    }
+
+    /// The URL when the whole value is one `url(...)` image.
+    pub fn single_image(&self) -> Option<&str> {
+        match self {
+            Self::Items(items) => match items.as_slice() {
+                [ContentItem::Image(url)] => Some(url),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Resolve each image URL through `resolve` (the declaring sheet's base).
+    pub fn map_image_urls(&mut self, mut resolve: impl FnMut(&str) -> String) {
+        if let Self::Items(items) = self {
+            for item in items {
+                if let ContentItem::Image(url) = item {
+                    *url = resolve(url);
+                }
+            }
+        }
     }
 
     pub fn has_counters(&self) -> bool {
@@ -49,6 +75,7 @@ impl Content {
                     ContentItem::Text(text) => text.clone(),
                     ContentItem::Attribute(name) => attribute(name).unwrap_or_default(),
                     ContentItem::Counter { name, separator } => counter(name, separator.as_deref()),
+                    ContentItem::Image(_) => String::new(),
                 })
                 .collect(),
         )
@@ -79,6 +106,17 @@ impl FromStr for Content {
                 .clone()
             {
                 Token::QuotedString(text) => items.push(ContentItem::Text(text.to_string())),
+                Token::UnquotedUrl(url) => items.push(ContentItem::Image(url.to_string())),
+                Token::Function(name) if name.eq_ignore_ascii_case("url") => {
+                    let url = parser
+                        .parse_nested_block(|p| {
+                            let url = p.expect_string_cloned()?;
+                            p.expect_exhausted()?;
+                            Ok::<_, cssparser::ParseError<()>>(url.to_string())
+                        })
+                        .map_err(|_| ParseError::expected("url(string)"))?;
+                    items.push(ContentItem::Image(url));
+                },
                 Token::Function(name) if name.eq_ignore_ascii_case("attr") => {
                     let name = parser
                         .parse_nested_block(|p| {
@@ -149,6 +187,11 @@ impl fmt::Display for Content {
                             cssparser::serialize_identifier(name, f)?;
                             f.write_str(")")?;
                         },
+                        ContentItem::Image(url) => {
+                            f.write_str("url(")?;
+                            Token::QuotedString(url.as_str().into()).to_css(f)?;
+                            f.write_str(")")?;
+                        },
                         ContentItem::Counter { name, separator } => {
                             f.write_str(if separator.is_some() {
                                 "counters("
@@ -174,6 +217,20 @@ impl fmt::Display for Content {
 mod tests {
     use super::*;
     #[test]
+    fn url_content_is_an_image_item() {
+        for source in ["url(face:6162)", r#"url("face:6162")"#] {
+            let value: Content = source.parse().unwrap();
+            assert_eq!(value.single_image(), Some("face:6162"), "{source}");
+            assert_eq!(value.resolve(|_| None), Some(String::new()));
+            assert_eq!(value.to_string().parse::<Content>().unwrap(), value);
+        }
+        let mixed: Content = r#""a" url(x) "b""#.parse().unwrap();
+        assert_eq!(mixed.single_image(), None);
+        assert_eq!(mixed.resolve(|_| None), Some("ab".into()));
+        assert!("url(a b)".parse::<Content>().is_err());
+    }
+
+    #[test]
     fn text_content_is_tokenized_and_round_trips() {
         let value: Content = r#""A\41 " attr(data-label) "!""#.parse().unwrap();
         assert_eq!(
@@ -192,7 +249,6 @@ mod tests {
             "",
             "none 'x'",
             "counter(foo, upper-roman)",
-            "'x' url(a)",
             "attr(x, y)",
         ] {
             assert!(invalid.parse::<Content>().is_err(), "{invalid}");

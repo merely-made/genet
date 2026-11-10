@@ -795,6 +795,12 @@ where
             .map(|(_, text)| text.as_str())
     }
 
+    /// The image URL of an admitted pseudo whose `content` is a single
+    /// `url(...)`: that pseudo is a replaced inline box, not text.
+    pub(crate) fn generated_image(&self, id: Id, pseudo: buckram::PseudoElement) -> Option<&str> {
+        self.generated_style(id, pseudo)?.content.single_image()
+    }
+
     pub(crate) fn generated_style(
         &self,
         id: Id,
@@ -1184,7 +1190,9 @@ where
         viewport: ViewportSizes,
     ) {
         self.invalidate_used_colors();
-        for computed in self.values.values_mut() {
+        // Generated boxes too: a `content: url()` image is sized in `cap`.
+        let generated = self.generated.values_mut().map(|(style, _)| style);
+        for computed in self.values.values_mut().chain(generated) {
             let environment = livery::values::RelativeLengthEnvironment::viewport(viewport)
                 .with_vertical_writing(computed.writing_mode.is_vertical())
                 .with_ch_advance(text.ch_advance(computed))

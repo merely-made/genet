@@ -79,6 +79,7 @@ use crate::{
 };
 
 mod atomic_basis;
+mod generated_image;
 mod build_block;
 mod build_inline;
 mod hit_testing;
@@ -2204,7 +2205,7 @@ where
             text_frame,
             styles,
             boxes.origin_node(context.formatting_owner),
-            |box_id| boxes.origin_node(box_id),
+            |box_id| crate::generated_image::inline_node(boxes, box_id),
             (origin.x, origin.y),
             computed.width,
         ))
@@ -2809,6 +2810,26 @@ where
         return Some(DEFAULT_OBJECT_SIZE);
     }
     let intrinsic = replaced_intrinsic_size(dom, id, image_sources);
+    apply_natural_replaced_size(
+        style,
+        intrinsic,
+        computed,
+        font_size,
+        block_level_flow,
+        containing_width,
+    )
+}
+
+/// The sizing rules shared by every replaced box once its natural size is
+/// known: an `<img>`, a canvas, or a generated `content: url()` image.
+fn apply_natural_replaced_size(
+    style: &mut Style,
+    intrinsic: Option<(f32, f32)>,
+    computed: &ComputedValues,
+    font_size: f32,
+    block_level_flow: bool,
+    containing_width: f32,
+) -> Option<(f32, f32)> {
     let natural_ratio = intrinsic
         .filter(|(width, height)| *width > 0.0 && *height > 0.0)
         .map(|(width, height)| width / height);

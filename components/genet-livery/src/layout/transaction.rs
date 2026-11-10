@@ -492,6 +492,11 @@ where
     let roots = boxes
         .iter()
         .filter_map(|(box_id, css_box)| {
+            if generated_image::is_generated_image(css_box) {
+                // The box tree admits only owners outside any atomic inline.
+                return (css_box.display.outside == Some(DisplayOutside::Inline))
+                    .then_some(box_id);
+            }
             let BoxOrigin::Element(node) = css_box.origin else {
                 return None;
             };
@@ -583,10 +588,11 @@ where
         // Formatting it against the viewport first turns an auto canvas into
         // a viewport-wide atomic fragment, and that stale rectangle is then
         // also reused by flex-basis: content's max-content query.
-        let replaced_atomic_root = matches!(
-            boxes[box_id].origin,
-            BoxOrigin::Element(node) if is_replaced_element(dom, node)
-        );
+        let replaced_atomic_root = generated_image::is_generated_image(&boxes[box_id])
+            || matches!(
+                boxes[box_id].origin,
+                BoxOrigin::Element(node) if is_replaced_element(dom, node)
+            );
         // An admitted atomic inline root needs a containing block so its
         // shrink-to-fit query runs as a child formatting context. Keep the
         // established direct-root path for the deferred cases, whose inline

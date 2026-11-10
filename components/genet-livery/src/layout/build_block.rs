@@ -1166,6 +1166,9 @@ where
                 );
                 Ok(Some(node))
             },
+            BoxOrigin::Pseudo { owner, pseudo } if generated_image::is_generated_image(&self.boxes[box_id]) => {
+                self.build_generated_image(box_id, owner, pseudo, parent_font_size, containing_size)
+            },
             BoxOrigin::Pseudo { .. } | BoxOrigin::Anonymous { .. } => {
                 if let Some(grid) = (self.boxes[box_id].display.internal_table
                     == Some(InternalTableRole::Wrapper))

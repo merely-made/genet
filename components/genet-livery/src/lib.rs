@@ -15,6 +15,7 @@
 mod box_tree;
 mod document;
 mod dom;
+mod generated_image;
 mod image_decode;
 mod image_resources;
 mod intersection;

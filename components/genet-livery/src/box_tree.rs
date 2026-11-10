@@ -107,6 +107,7 @@ where
                             .or(formatting_parent);
                         if !is_replaced_element(dom, node) {
                             generated_text_input(
+                                dom,
                                 styles,
                                 node,
                                 buckram::PseudoElement::Before,
@@ -125,6 +126,7 @@ where
                         }
                         if !is_replaced_element(dom, node) {
                             generated_text_input(
+                                dom,
                                 styles,
                                 node,
                                 buckram::PseudoElement::After,
@@ -189,15 +191,37 @@ where
     }
 }
 
-fn generated_text_input<Id: Copy + Eq + Hash>(
-    styles: &StylePlane<Id>,
-    owner: Id,
+fn generated_text_input<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    owner: D::NodeId,
     pseudo: buckram::PseudoElement,
-    children: &mut Vec<BoxTreeInput<Id>>,
-) {
+    children: &mut Vec<BoxTreeInput<D::NodeId>>,
+) where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
     let Some(style) = styles.generated_style(owner, pseudo) else {
         return;
     };
+    if styles.generated_image(owner, pseudo).is_some() && image_pseudo_supported(dom, styles, owner)
+    {
+        // css-content-3 1.2: a lone image makes the pseudo a replaced element.
+        children.push(
+            BoxTreeInput::new(
+                BoxOrigin::Pseudo { owner, pseudo },
+                DisplayRole::INLINE_FLOW,
+                flow_axes(style),
+                PositioningScheme::Static,
+                true,
+                Vec::new(),
+            )
+            .with_containing_block_establishment(containing_block_establishment(
+                style, true, false,
+            )),
+        );
+        return;
+    }
     // The pseudo retains its own provenance. It is not inserted into the DOM,
     // and its text is resolved by the same style-plane consumer as AccName.
     children.push(BoxTreeInput::text(
@@ -206,6 +230,34 @@ fn generated_text_input<Id: Copy + Eq + Hash>(
         false,
         false,
     ));
+}
+
+/// A generated image rides the atomic-inline lane, which supports an owner
+/// that lays its inline content out as an ordinary block or inline: not one
+/// inside an inline-block or inline-table, and not a table part or flex/grid
+/// container. Other owners generate no image (the pseudo stays empty text).
+fn image_pseudo_supported<D>(dom: &D, styles: &StylePlane<D::NodeId>, owner: D::NodeId) -> bool
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let plain = |id| {
+        styles.get(id).is_none_or(|style| {
+            !matches!(
+                style.display,
+                ComputedDisplay::InlineBlock | ComputedDisplay::InlineTable
+            )
+        })
+    };
+    styles.get(owner).is_some_and(|style| {
+        matches!(
+            style.display,
+            ComputedDisplay::Inline
+                | ComputedDisplay::Block
+                | ComputedDisplay::FlowRoot
+                | ComputedDisplay::ListItem
+        )
+    }) && std::iter::successors(Some(owner), |id| dom.parent(*id)).all(plain)
 }
 
 /// CSS 2.1 17.2.1 and css-display-3: a replaced element cannot become an

@@ -1397,7 +1397,7 @@ impl TextSystem {
                     frame,
                     styles,
                     Some(parent),
-                    |box_id| fragments.boxes().origin_node(box_id),
+                    |box_id| crate::generated_image::inline_node(fragments.boxes(), box_id),
                     (origin_x, anchor_fragment.y),
                     width,
                 );
@@ -1458,7 +1458,7 @@ impl TextSystem {
                     frame,
                     styles,
                     Some(parent),
-                    |box_id| fragments.boxes().origin_node(box_id),
+                    |box_id| crate::generated_image::inline_node(fragments.boxes(), box_id),
                     origin,
                     width,
                 );
@@ -5723,6 +5723,19 @@ where
                 };
                 // Marker pseudo-elements preserve an authored string verbatim.
                 append_generated_marker(self.text, self.spans, box_id, self.owners, style, &marker);
+            },
+            BoxOrigin::Pseudo { owner, pseudo } if crate::generated_image::is_generated_image(css_box) => {
+                // A lone `content: url()` image is one atom on the line; its
+                // geometry comes from the atomic plane like any replaced root.
+                let Some(style) = self.styles.generated_style(owner, pseudo) else {
+                    return;
+                };
+                self.events.push(prepared::GeometryEvent::Atomic {
+                    source: box_id,
+                    style: style.clone(),
+                    owners: self.owners.clone(),
+                    index: self.text.len(),
+                });
             },
             BoxOrigin::Pseudo { owner, pseudo } => {
                 let Some(style) = self.styles.generated_style(owner, pseudo) else {

@@ -3059,7 +3059,7 @@ mod phase_c_t5_editor_clip_fix2_controls {
 
     #[test]
     fn a_host_layer_puts_a_face_before_a_link_without_touching_the_guest_dom() {
-        let body = r#"<html><body><p><a href="notes">Notes</a> and <a href="other">other</a></p></body></html>"#;
+        let body = r#"<!doctype html><html><body><p><a href="notes">Same words</a></p><p><a href="other">Same words</a></p></body></html>"#;
         let face = Arc::new(Counted::default());
         let seen = Arc::new(Mutex::new(Vec::new()));
         let layer: LiveryHostLayerFn = {
@@ -3067,7 +3067,7 @@ mod phase_c_t5_editor_clip_fix2_controls {
             Arc::new(move |dom, base| {
                 seen.lock().unwrap().push(base.map(str::to_owned));
                 LiveryHostLayer {
-                    css: vec![r#"a[href="notes"]::before { content: url("face:6e"); width: 20px; height: 20px; }"#.into()],
+                    css: vec![r#"a[href="notes"]::before { content: url("face:6e") !important; height: round(nearest, max(8px, 1cap), 1px); width: auto; vertical-align: baseline; }"#.into()],
                     vectors: vec![("face:6e".into(), face.clone() as Arc<dyn genet_livery::VectorImage>)],
                 }
             })

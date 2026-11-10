@@ -640,10 +640,37 @@ impl PaintBuilder<'_> {
         Some(key)
     }
 
-    fn document_image_key_for(&mut self, authored: &str) -> Option<ImageKey> {
+    /// What an `<img>` naming `authored` paints: a registered vector image,
+    /// else its decoded raster.
+    fn document_replaced_for(&mut self, authored: &str) -> Option<ReplacedSource> {
         let key = crate::image_resources::document_image_key(self.document_base_url, authored);
-        self.image_key_for(&key)
+        if let Some(vector) = self.image_sources.vector(&key) {
+            return Some(ReplacedSource::Vector(vector));
+        }
+        self.image_key_for(&key).map(ReplacedSource::Raster)
     }
+
+    /// Paint `source` filling `rect`.
+    fn push_replaced(&mut self, source: &ReplacedSource, rect: LayoutRect) {
+        match source {
+            ReplacedSource::Vector(vector) => self.commands.extend(vector.paint(rect)),
+            ReplacedSource::Raster(image_key) => {
+                self.commands.push(PaintCmd::DrawImage(ImageItem {
+                    placement: CommonPlacement::new(rect),
+                    image_key: *image_key,
+                    image_rendering: ImageRendering::Auto,
+                    alpha_type: AlphaType::Alpha,
+                    color: ColorF::WHITE,
+                }))
+            },
+        }
+    }
+}
+
+/// A replaced `<img>`'s content: the embedder's paths or decoded pixels.
+enum ReplacedSource {
+    Vector(std::sync::Arc<dyn crate::VectorImage>),
+    Raster(ImageKey),
 }
 
 impl PaintList for LiveryPaintList {
@@ -3976,7 +4003,7 @@ fn emit_inline_replaced_image<D>(
     let Some(url) = replaced_image_url(dom, id) else {
         return;
     };
-    let Some(image_key) = list.document_image_key_for(&url) else {
+    let Some(source) = list.document_replaced_for(&url) else {
         return;
     };
     let paintable = frame
@@ -3992,13 +4019,7 @@ fn emit_inline_replaced_image<D>(
         .iter()
         .filter(|fragment| paintable_fragment(fragment))
     {
-        list.commands.push(PaintCmd::DrawImage(ImageItem {
-            placement: CommonPlacement::new(bounds(fragment)),
-            image_key,
-            image_rendering: ImageRendering::Auto,
-            alpha_type: AlphaType::Alpha,
-            color: ColorF::WHITE,
-        }));
+        list.push_replaced(&source, bounds(fragment));
     }
 }
 
@@ -4015,7 +4036,7 @@ fn emit_replaced_image<D>(
     let Some(url) = replaced_image_url(dom, id) else {
         return;
     };
-    let Some(image_key) = list.document_image_key_for(&url) else {
+    let Some(source) = list.document_replaced_for(&url) else {
         return;
     };
     let radius = border_radius(style, fragment);
@@ -4028,13 +4049,7 @@ fn emit_replaced_image<D>(
             },
         }));
     }
-    list.commands.push(PaintCmd::DrawImage(ImageItem {
-        placement: CommonPlacement::new(bounds(fragment)),
-        image_key,
-        image_rendering: ImageRendering::Auto,
-        alpha_type: AlphaType::Alpha,
-        color: ColorF::WHITE,
-    }));
+    list.push_replaced(&source, bounds(fragment));
     if !radius.is_zero() {
         list.commands.push(PaintCmd::PopClip);
     }

@@ -1175,7 +1175,7 @@ where
             .is_some_and(|computed| resolve_relative_lengths(computed, environment))
     }
 
-    /// Resolve `ch` after the retained text owner has the document's complete
+    /// Resolve `ch` and `cap` after the retained text owner has the document's complete
     /// font ledger. Earlier cascade passes deliberately leave this metric
     /// deferred because `Device` does not own font resources.
     pub(crate) fn resolve_ch_lengths(
@@ -1187,7 +1187,8 @@ where
         for computed in self.values.values_mut() {
             let environment = livery::values::RelativeLengthEnvironment::viewport(viewport)
                 .with_vertical_writing(computed.writing_mode.is_vertical())
-                .with_ch_advance(text.ch_advance(computed));
+                .with_ch_advance(text.ch_advance(computed))
+                .with_cap_height(text.cap_height(computed));
             let _ = resolve_relative_lengths(computed, environment);
         }
     }

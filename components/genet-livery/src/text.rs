@@ -330,6 +330,9 @@ struct FontBoxMetrics {
     descent: f32,
     line_gap: f32,
     x_height: f32,
+    /// The font's cap height, or its ascent where the font gives none (CSS
+    /// Values 4, `cap`).
+    cap_height: f32,
 }
 
 fn metric_key(style: &ComputedValues, font_size: f32) -> ChMetricKey {
@@ -589,6 +592,12 @@ impl TextSystem {
         advance
     }
 
+    /// Resolve one CSS `cap` unit: the cap height of `style`'s first
+    /// available font, or its ascent where the font gives none.
+    pub(crate) fn cap_height(&mut self, style: &ComputedValues) -> f32 {
+        self.box_metrics(style).cap_height
+    }
+
     /// `style`'s first available font's box metrics, probed once per font.
     fn box_metrics(&mut self, style: &ComputedValues) -> FontBoxMetrics {
         let font_size = super::paint::used_font_size(style);
@@ -626,6 +635,10 @@ impl TextSystem {
                             descent: metrics.descent,
                             line_gap: metrics.leading,
                             x_height: metrics.x_height.unwrap_or(font_size * 0.5),
+                            cap_height: metrics
+                                .cap_height
+                                .filter(|height| height.is_finite() && *height > 0.0)
+                                .unwrap_or(metrics.ascent),
                         })
                     },
                     PositionedLayoutItem::InlineBox(_) => None,
@@ -637,6 +650,7 @@ impl TextSystem {
                 descent: font_size * 0.2,
                 line_gap: 0.0,
                 x_height: font_size * 0.5,
+                cap_height: font_size * 0.8,
             });
         self.box_metrics.insert(key, metrics);
         metrics

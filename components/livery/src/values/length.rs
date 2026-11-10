@@ -10,7 +10,7 @@ use crate::media::ViewportSizes;
 
 use super::{ParseError, format_number};
 
-const RELATIVE_UNIT_COUNT: usize = 31;
+const RELATIVE_UNIT_COUNT: usize = 32;
 const MAX_CALC_RELATIVE_TERMS: usize = 8;
 const RELATIVE_INDEX_BITS: usize = 5;
 const RELATIVE_LEN_SHIFT: usize = MAX_CALC_RELATIVE_TERMS * RELATIVE_INDEX_BITS;
@@ -61,6 +61,8 @@ pub enum LengthUnit {
     Cqmax,
     /// Advance measure of the `0` glyph in the element's resolved font.
     Ch,
+    /// Cap height of the element's resolved font (CSS Values 4).
+    Cap,
 }
 
 const RELATIVE_UNITS: [LengthUnit; RELATIVE_UNIT_COUNT] = [
@@ -95,6 +97,7 @@ const RELATIVE_UNITS: [LengthUnit; RELATIVE_UNIT_COUNT] = [
     LengthUnit::Vmin,
     LengthUnit::Vw,
     LengthUnit::Ch,
+    LengthUnit::Cap,
 ];
 
 /// Whether a container-relative axis should remain deferred, use the small
@@ -150,6 +153,9 @@ pub struct RelativeLengthEnvironment {
     /// Used advance of the `0` glyph. This is supplied by the shaping owner,
     /// after cascade has selected the element's font.
     pub ch_advance: Option<f32>,
+    /// Cap height of the element's resolved font, supplied like
+    /// [`ch_advance`](Self::ch_advance).
+    pub cap_height: Option<f32>,
 }
 
 impl RelativeLengthEnvironment {
@@ -165,6 +171,7 @@ impl RelativeLengthEnvironment {
             vertical_writing: false,
             tree_counts: TreeCounts::Deferred,
             ch_advance: None,
+            cap_height: None,
         }
     }
 
@@ -179,6 +186,7 @@ impl RelativeLengthEnvironment {
             vertical_writing: false,
             tree_counts: TreeCounts::Deferred,
             ch_advance: None,
+            cap_height: None,
         }
     }
 
@@ -202,6 +210,7 @@ impl RelativeLengthEnvironment {
             vertical_writing: false,
             tree_counts: TreeCounts::Deferred,
             ch_advance: None,
+            cap_height: None,
         }
     }
 
@@ -227,6 +236,7 @@ impl RelativeLengthEnvironment {
             vertical_writing,
             tree_counts: TreeCounts::Deferred,
             ch_advance: None,
+            cap_height: None,
         }
     }
 
@@ -246,6 +256,13 @@ impl RelativeLengthEnvironment {
     /// length basis carried by this environment.
     pub const fn with_ch_advance(mut self, advance: f32) -> Self {
         self.ch_advance = Some(advance);
+        self
+    }
+
+    /// Supply the resolved `cap` metric without changing any other relative
+    /// length basis carried by this environment.
+    pub const fn with_cap_height(mut self, height: f32) -> Self {
+        self.cap_height = Some(height);
         self
     }
 
@@ -297,6 +314,7 @@ impl LengthUnit {
             Self::Cqmin => "cqmin",
             Self::Cqmax => "cqmax",
             Self::Ch => "ch",
+            Self::Cap => "cap",
         }
     }
 
@@ -313,6 +331,8 @@ impl LengthUnit {
                 // through `RelativeLengthEnvironment`. Stateless consumers
                 // use the CSS fallback when that metric is unavailable.
                 Self::Ch => em * 0.5,
+                // As `ch`; 0.7em is a typical Latin cap height.
+                Self::Cap => em * 0.7,
                 Self::In => 96.0,
                 Self::Cm => 96.0 / 2.54,
                 Self::Mm => 96.0 / 25.4,
@@ -364,7 +384,9 @@ impl LengthUnit {
     }
 
     pub const fn is_relative(self) -> bool {
-        self.is_viewport_relative() || self.is_container_relative() || matches!(self, Self::Ch)
+        self.is_viewport_relative()
+            || self.is_container_relative()
+            || matches!(self, Self::Ch | Self::Cap)
     }
 
     const fn relative_index(self) -> Option<usize> {
@@ -435,6 +457,7 @@ impl LengthUnit {
             // consume every basis as one percent of the stored value. Scale
             // the per-character advance into that common representation.
             Self::Ch => environment.ch_advance.map(|advance| advance * 100.0),
+            Self::Cap => environment.cap_height.map(|height| height * 100.0),
             _ => None,
         }
     }
@@ -580,6 +603,7 @@ impl FromStr for Length {
             ("px", LengthUnit::Px),
             ("em", LengthUnit::Em),
             ("ch", LengthUnit::Ch),
+            ("cap", LengthUnit::Cap),
             ("in", LengthUnit::In),
             ("cm", LengthUnit::Cm),
             ("mm", LengthUnit::Mm),
@@ -802,7 +826,7 @@ impl fmt::Display for CalcLengthPercentage {
 pub(crate) const MAX_MATH_LEAVES: usize = 8;
 pub(crate) const MAX_MATH_TOKENS: usize = 24;
 const MATH_LEAF_BITS: usize = 6;
-// Leaf codes 0..=39 are `LengthUnit as u8`, decoded through
+// Leaf codes 0..=40 are `LengthUnit as u8`, decoded through
 // `RELATIVE_AND_ABSOLUTE_UNITS`. Everything from 55 up is a sentinel operand.
 const MATH_TIME: u8 = 55;
 const MATH_SIBLING_INDEX: u8 = 56;
@@ -1465,7 +1489,7 @@ fn evaluated_bound(value: EvaluatedMath, none: f32) -> Option<f32> {
     }
 }
 
-const RELATIVE_AND_ABSOLUTE_UNITS: [LengthUnit; 40] = [
+const RELATIVE_AND_ABSOLUTE_UNITS: [LengthUnit; 41] = [
     LengthUnit::Px,
     LengthUnit::Em,
     LengthUnit::Rem,
@@ -1506,6 +1530,7 @@ const RELATIVE_AND_ABSOLUTE_UNITS: [LengthUnit; 40] = [
     LengthUnit::Cqmin,
     LengthUnit::Cqmax,
     LengthUnit::Ch,
+    LengthUnit::Cap,
 ];
 
 fn packed_value(words: &[u32], bit: usize, width: usize) -> u8 {

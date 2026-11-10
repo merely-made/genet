@@ -102,7 +102,7 @@ pub use document::{
     rendered_generated_text, rendered_visible,
 };
 pub use dom::{ElementRef, InteractionStates, SelectorTree};
-pub use image_resources::{DocumentImageSources, ImagePixels, ImageSourceLookup};
+pub use image_resources::{DocumentImageSources, ImagePixels, ImageSourceLookup, VectorImage};
 pub use intersection::{Intersection, IntersectionFrame, MarginValue, Margins, ZERO_MARGINS};
 pub use invalidation::{AttributeSnapshot, ElementSnapshot, IncrementalStyle, RestyleStats};
 pub use layout::{

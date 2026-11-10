@@ -3078,6 +3078,9 @@ where
             && attribute.name.local.as_str().eq_ignore_ascii_case("src"))
         .then_some(attribute.value)
     })?;
+    if let Some(vector) = image_sources.vector_document(source) {
+        return Some(vector.intrinsic_size());
+    }
     let image = image_sources.decoded_document(source)?;
     Some((image.width as f32, image.height as f32))
 }

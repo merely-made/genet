@@ -13,6 +13,7 @@ use std::{
 };
 
 use genet_document_resources::resolve_url;
+use paint_list_api::{LayoutRect, PaintCmd};
 
 /// One immutable decoded raster. Cloning it shares the pixel allocation.
 #[derive(Clone, Debug)]
@@ -45,8 +46,32 @@ pub(crate) fn is_data_url(url: &str) -> bool {
         .is_some_and(|scheme| scheme.eq_ignore_ascii_case("data:"))
 }
 
+/// A picture the embedder draws as paths rather than pixels: an `<img>` whose
+/// source names one is laid out like any image and painted by
+/// [`paint`](Self::paint) at its used size, so it stays sharp at any scale
+/// and may draw differently by size.
+pub trait VectorImage: std::fmt::Debug + Send + Sync {
+    /// The natural width and height in CSS pixels; their ratio is the image's
+    /// natural aspect ratio.
+    fn intrinsic_size(&self) -> (f32, f32);
+
+    /// Paint commands filling `rect`, the used content box in CSS pixels. An
+    /// embedder drawing for a device scale other than 1 knows it and chooses
+    /// detail for `rect`'s height times that scale.
+    fn paint(&self, rect: LayoutRect) -> Vec<PaintCmd>;
+}
+
 /// Image lookup used by layout and paint. A plain host map remains usable.
 pub trait ImageSourceLookup {
+    /// A vector image registered under `key`. Checked before raster bytes.
+    fn vector(&self, _key: &str) -> Option<Arc<dyn VectorImage>> {
+        None
+    }
+
+    fn vector_document(&self, authored: &str) -> Option<Arc<dyn VectorImage>> {
+        self.vector(authored)
+    }
+
     fn get(&self, key: &str) -> Option<&Vec<u8>>;
 
     fn get_document(&self, authored: &str) -> Option<&Vec<u8>> {
@@ -106,6 +131,7 @@ impl ImageEntry {
 #[derive(Default)]
 pub(crate) struct ImageResources {
     sources: HashMap<String, ImageEntry>,
+    vectors: HashMap<String, Arc<dyn VectorImage>>,
     data_urls: RefCell<HashMap<String, Option<ImagePixels>>>,
 }
 
@@ -146,6 +172,25 @@ impl ImageResources {
         true
     }
 
+    /// Register `image` under `url`, or remove the entry with `None`. Returns
+    /// whether anything changed; the same `Arc` again changes nothing.
+    pub(crate) fn set_vector(&mut self, url: String, image: Option<Arc<dyn VectorImage>>) -> bool {
+        match image {
+            Some(image) => {
+                if self
+                    .vectors
+                    .get(&url)
+                    .is_some_and(|old| Arc::ptr_eq(old, &image))
+                {
+                    return false;
+                }
+                self.vectors.insert(url, image);
+                true
+            },
+            None => self.vectors.remove(&url).is_some(),
+        }
+    }
+
     pub(crate) fn has_data_urls(&self) -> bool {
         !self.data_urls.borrow().is_empty()
     }
@@ -178,6 +223,10 @@ impl ImageResources {
 impl ImageSourceLookup for ImageResources {
     fn get(&self, key: &str) -> Option<&Vec<u8>> {
         self.sources.get(key).map(|entry| &entry.bytes)
+    }
+
+    fn vector(&self, key: &str) -> Option<Arc<dyn VectorImage>> {
+        self.vectors.get(key).cloned()
     }
 
     fn decoded(&self, key: &str) -> Option<ImagePixels> {
@@ -217,6 +266,15 @@ impl ImageSourceLookup for DocumentImageSources<'_> {
     fn get_document(&self, authored: &str) -> Option<&Vec<u8>> {
         self.sources
             .get(&document_image_key(self.document_base_url, authored))
+    }
+
+    fn vector(&self, key: &str) -> Option<Arc<dyn VectorImage>> {
+        self.sources.vector(key)
+    }
+
+    fn vector_document(&self, authored: &str) -> Option<Arc<dyn VectorImage>> {
+        self.sources
+            .vector(&document_image_key(self.document_base_url, authored))
     }
 
     fn decoded(&self, key: &str) -> Option<ImagePixels> {

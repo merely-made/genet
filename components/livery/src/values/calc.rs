@@ -146,6 +146,8 @@ fn match_ignore_ascii_case(unit: &str) -> Option<LengthUnit> {
         Some(LengthUnit::Rem)
     } else if unit.eq_ignore_ascii_case("ch") {
         Some(LengthUnit::Ch)
+    } else if unit.eq_ignore_ascii_case("cap") {
+        Some(LengthUnit::Cap)
     } else if unit.eq_ignore_ascii_case("in") {
         Some(LengthUnit::In)
     } else if unit.eq_ignore_ascii_case("cm") {

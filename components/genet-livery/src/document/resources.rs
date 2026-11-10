@@ -27,6 +27,21 @@ where
         self.invalidate_with_layout_damage(LayoutDamageKind::Resource);
     }
 
+    /// Register a vector image under `url`, or remove it with `None`. An
+    /// `<img>` naming `url` is laid out at the image's natural size and ratio
+    /// and painted by the image itself; a vector entry wins over raster bytes
+    /// under the same URL.
+    pub fn set_vector_image(
+        &mut self,
+        url: impl Into<String>,
+        image: Option<std::sync::Arc<dyn crate::VectorImage>>,
+    ) {
+        if !self.image_sources.set_vector(url.into(), image) {
+            return;
+        }
+        self.invalidate_with_layout_damage(LayoutDamageKind::Resource);
+    }
+
     /// Supply host-resolved font bytes for a non-data URL. The host owns URL
     /// resolution and fetching. A source identity replaces prior bytes rather
     /// than registering another competing face in Parley's collection.

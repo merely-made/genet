@@ -238,7 +238,7 @@ crates) and can land incrementally ahead of it.
 Driven from the Woodshed cross-platform question ("would Woodshed-on-xilem_serval
 render in a browser?"), a spike now exercises the full engine-core chain on
 `wasm32-unknown-unknown` at `examples/genet_web_smoke/` (standalone workspace,
-netrender_smoke pattern):
+netrender_smoke pattern; that example was removed on 2026-11-13):
 
 - **Wasm-green on main, verified 2026-07-04:** `xilem-serval`,
   `genet-scripted-dom`, `genet-layout` all `cargo check` clean for wasm32 with

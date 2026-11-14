@@ -32,9 +32,9 @@ bytes = "1"
 # (meerkat) installs the subscriber. The library never depends on the app.
 tracing = "0.1"
 
-# Subresource Integrity: SHA-2 digests + base64 of the expected hashes. ring is
-# a crypto primitive, not a transport, so it stays with the semantics.
-ring = "0.17"
+# Subresource Integrity: the one routine fetch and `<script integrity>` share.
+genet-sri = { path = "../genet-sri", version = "0.1.0" }
+# Forgiving-base64 for `data:` URLs.
 base64 = "0.22"
 
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", "time", "macros"] }

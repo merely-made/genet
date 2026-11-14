@@ -2205,7 +2205,7 @@ impl script_runtime_api::ParserScriptLoader for DocumentScriptLoader<'_> {
         );
         let response = fetcher.fetch_response(&requested)?;
         if let Some(metadata) = integrity {
-            if !integrity_matches(metadata, &response.bytes) {
+            if !genet_sri::matches(metadata, &response.bytes) {
                 eprintln!("[pelt-scripted] integrity mismatch for {requested}; script blocked");
                 return None;
             }
@@ -2236,61 +2236,12 @@ pub(crate) fn fetch_external(
         },
     };
     if let Some(metadata) = integrity {
-        if !integrity_matches(metadata, &bytes) {
+        if !genet_sri::matches(metadata, &bytes) {
             eprintln!("[pelt-scripted] integrity mismatch for {url}; script blocked");
             return None;
         }
     }
     Some(decode_script_bytes(&bytes, charset))
-}
-
-/// Whether `bytes` satisfy a Subresource-Integrity `integrity` attribute. Per SRI:
-/// parse the space-separated `alg-base64hash[?opts]` tokens, take the **strongest**
-/// algorithm present (sha512 > sha384 > sha256), and accept if the digest matches
-/// **any** of that algorithm's hashes. Unrecognized/empty metadata imposes no
-/// requirement (returns `true`). Compares raw digest bytes, so base64 padding
-/// variance does not matter.
-fn integrity_matches(metadata: &str, bytes: &[u8]) -> bool {
-    use base64::Engine as _;
-    use sha2::Digest as _;
-
-    let mut strongest = 0u8; // 1 = sha256, 2 = sha384, 3 = sha512
-    let mut expected: Vec<&str> = Vec::new();
-    for token in metadata.split_whitespace() {
-        let Some((alg, rest)) = token.split_once('-') else {
-            continue;
-        };
-        let strength = match alg {
-            "sha256" => 1u8,
-            "sha384" => 2,
-            "sha512" => 3,
-            _ => continue,
-        };
-        let hash = rest.split('?').next().unwrap_or(rest); // drop any `?options`
-        if strength > strongest {
-            strongest = strength;
-            expected.clear();
-            expected.push(hash);
-        } else if strength == strongest {
-            expected.push(hash);
-        }
-    }
-    if strongest == 0 {
-        return true; // no valid metadata → no integrity requirement
-    }
-    let digest: Vec<u8> = match strongest {
-        1 => sha2::Sha256::digest(bytes).to_vec(),
-        2 => sha2::Sha384::digest(bytes).to_vec(),
-        _ => sha2::Sha512::digest(bytes).to_vec(),
-    };
-    let std = base64::engine::general_purpose::STANDARD;
-    let nopad = base64::engine::general_purpose::STANDARD_NO_PAD;
-    expected.iter().any(|h| {
-        std.decode(h)
-            .or_else(|_| nopad.decode(h))
-            .map(|d| d == digest)
-            .unwrap_or(false)
-    })
 }
 
 /// Decode fetched script bytes into source text using the `<script charset>`

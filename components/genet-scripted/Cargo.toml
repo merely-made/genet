@@ -53,8 +53,8 @@ netrender = { workspace = true, optional = true }
 encoding_rs = { workspace = true }
 postcard = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-sha2 = { workspace = true }
-base64 = { workspace = true }
+# Subresource Integrity for `<script integrity>`: the routine fetch shares.
+genet-sri = { path = "../genet-sri" }
 url = { workspace = true }
 engine_observables_api = { workspace = true }
 # Engine-neutral scripting contract (the native-callback + host-data surface).
@@ -64,6 +64,9 @@ script-engine-api = { path = "../script-engine-api" }
 # Boa backs the in-crate tests only. A host picks one engine crate itself:
 # script-engine-boa or script-engine-nova, never both by way of this crate.
 genet-bole = { path = "../script-engine-boa" }
+# Test fixtures hash and encode their own `integrity` values.
+sha2 = { workspace = true }
+base64 = { workspace = true }
 
 [target.'cfg(target_pointer_width = "64")'.dependencies]
 # Nova backend on all 64-bit targets, including wasm64. Optional, gated by

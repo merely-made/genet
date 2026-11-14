@@ -66,8 +66,9 @@ landed since the original increment work. The module-level doc comment in
 Refinements landed since the increment ladder (from git history):
 
 - `data:` URL processor (WHATWG) with a minimal MIME parser/serializer.
-- Subresource Integrity verification (sha256 / sha384 / sha512, strongest-present
-  wins; standard or URL-safe base64).
+- Subresource Integrity verification through `genet-sri`, the routine
+  `<script integrity>` shares (sha256 / sha384 / sha512, strongest-present wins;
+  standard or URL-safe base64).
 - Referrer engine: `Referer` header computation under W3C Referrer Policy,
   recomputed per redirect hop.
 - Default `User-Agent`; `Content-Length: 0` for bodyless POST/PUT; `Origin` on
@@ -158,7 +159,6 @@ All source lives under `src/` (single-crate library, no workspace members).
 | `hsts.rs` | HSTS store and upgrade logic. |
 | `referrer.rs` | `Referer` computation under W3C Referrer Policy. |
 | `decode.rs` | On-the-fly `Content-Encoding` decode stream. |
-| `sri.rs` | Subresource Integrity verification. |
 | `data_url.rs` | `data:` URL processing + minimal MIME parser. |
 | `altsvc.rs` | Alt-Svc store for HTTP/3 discovery. |
 | `h3_client.rs` | HTTP/3 transport over QUIC (quinn + h3); native-only. |
@@ -189,7 +189,7 @@ Key pins from `Cargo.toml`:
   `http-body-util` 0.1.
 - TLS (same feature): `hyper-rustls` 0.27 (webpki-roots, ring, tls12), `rustls`
   0.23 (ring, std, tls12).
-- Crypto for SRI: `ring` 0.17, `base64` 0.22.
+- Subresource Integrity: `genet-sri` (sha2, base64); `base64` 0.22 for `data:` URLs.
 - Async: `tokio` 1 (multi-thread runtime), `futures-util` 0.3, `tokio-util` 0.7.
 - Body decode: `async-compression` 0.4 (gzip, zlib, brotli, zstd).
 - Cookies and dates: `cookie` 0.18, `time` 0.3, `httpdate` 1.

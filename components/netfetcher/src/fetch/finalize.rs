@@ -15,7 +15,6 @@ use crate::cache;
 use crate::cors;
 use crate::decode::decode_stream;
 use crate::response::{ResponseBody, ResponseType};
-use crate::sri;
 use crate::{FetchContext, Request, Response};
 use crate::{altsvc, hsts};
 
@@ -95,7 +94,7 @@ pub(super) async fn finalize_response(
     // no exposed body — and never cached.
     if matches!(response_type, ResponseType::Opaque) {
         // An opaque body can't be read, so an enforced integrity check fails.
-        if sri::is_enforced(&request.integrity) {
+        if genet_sri::is_enforced(&request.integrity) {
             return Response::network_error();
         }
         return Response {
@@ -116,7 +115,7 @@ pub(super) async fn finalize_response(
     // Subresource Integrity: buffer the body and verify it against the metadata; a
     // mismatch is a network error. (Bypasses the streaming/cache paths — an
     // integrity request needs the whole body anyway.)
-    if sri::is_enforced(&request.integrity) {
+    if genet_sri::is_enforced(&request.integrity) {
         let mut body = ResponseBody::new(body);
         let mut bytes = BytesMut::new();
         while let Some(chunk) = body.next_chunk().await {
@@ -131,7 +130,7 @@ pub(super) async fn finalize_response(
             bytes.extend_from_slice(&chunk);
         }
         let bytes = bytes.freeze();
-        if !sri::verify(&request.integrity, &bytes) {
+        if !genet_sri::matches(&request.integrity, &bytes) {
             return Response::network_error();
         }
         return Response {

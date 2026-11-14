@@ -151,10 +151,64 @@ impl netfetcher::CookieStore for SharedJar {
     }
 }
 
+/// The runner's transport, set by [`trust_wpt_ca`] before the first fetch.
+/// Unset (disk mode), contexts keep netfetcher's default transport.
+static TRANSPORT: OnceLock<std::sync::Arc<dyn netfetcher::Transport>> = OnceLock::new();
+
+/// Trust `wpt serve`'s https and h2 origins: the runner fetches through its own
+/// pool whose roots are the webpki roots the default transport uses plus the
+/// WPT test CA read from `ca_pem` (`<tests root>/tools/certs/cacert.pem`).
+/// Certificates are verified as usual; nothing outside the runner sees this CA.
+pub fn trust_wpt_ca(ca_pem: &Path) -> Result<(), String> {
+    use rustls::pki_types::CertificateDer;
+    use rustls::pki_types::pem::PemObject;
+
+    let mut roots = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    let certs = CertificateDer::pem_file_iter(ca_pem)
+        .map_err(|e| format!("reading {}: {e}", ca_pem.display()))?;
+    let mut added = 0usize;
+    for cert in certs {
+        let cert = cert.map_err(|e| format!("parsing {}: {e}", ca_pem.display()))?;
+        roots
+            .add(cert)
+            .map_err(|e| format!("trusting {}: {e}", ca_pem.display()))?;
+        added += 1;
+    }
+    if added == 0 {
+        return Err(format!("no certificate in {}", ca_pem.display()));
+    }
+    let tls = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .map_err(|e| format!("TLS configuration: {e}"))?
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    // Retrying canceled requests matches the default transport's pool.
+    let engine = netfetcher::wire::hyper::HttpTransport::new(tls, true);
+    let transport: std::sync::Arc<dyn netfetcher::Transport> = std::sync::Arc::new(
+        netfetcher::WireTransport::new(std::sync::Arc::new(engine)),
+    );
+    TRANSPORT
+        .set(transport)
+        .map_err(|_| "the runner's transport was already set".to_owned())
+}
+
+/// A permissive context on the runner's transport (see [`trust_wpt_ca`]).
+fn base_context() -> netfetcher::FetchContext {
+    let cx = netfetcher::FetchContext::permissive();
+    match TRANSPORT.get() {
+        Some(transport) => cx.with_transport(transport.clone()),
+        None => cx,
+    }
+}
+
 /// A fetch context with the shared HTTP cache + cookie jar wired in (the
 /// `fetch()` path).
 fn fetch_context() -> netfetcher::FetchContext {
-    let mut cx = netfetcher::FetchContext::permissive();
+    let mut cx = base_context();
     cx.cache = shared_cache();
     cx.cookies = Box::new(SharedJar(shared_cookies()));
     cx
@@ -221,7 +275,7 @@ async fn do_get_document(
     options: script_runtime_api::HtmlDecodeOptions,
 ) -> Option<LoadedHtmlDocument> {
     let req = netfetcher::Request::get(url::Url::parse(url).ok()?);
-    let cx = netfetcher::FetchContext::permissive();
+    let cx = base_context();
     let response = netfetcher::fetch(req, &cx).await;
     if response.is_network_error()
         || response.status < 200
@@ -255,7 +309,7 @@ async fn do_get_document(
 async fn do_get(url: &str) -> Option<String> {
     let u = url::Url::parse(url).ok()?;
     let req = netfetcher::Request::get(u);
-    let cx = netfetcher::FetchContext::permissive();
+    let cx = base_context();
     let resp = netfetcher::fetch(req, &cx).await;
     if resp.is_network_error() || resp.status < 200 || resp.status >= 300 {
         return None;

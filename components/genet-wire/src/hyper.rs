@@ -13,7 +13,6 @@
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll};
 use std::sync::{Arc, OnceLock};
 
@@ -24,7 +23,6 @@ use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::{Connected, Connection, HttpConnector};
 use hyper_util::rt::TokioExecutor;
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 
 use super::{RawResponse, Transport, TransportFuture, WireRequest};
 
@@ -113,18 +111,6 @@ where
 static CLIENT: OnceLock<HttpClient> = OnceLock::new();
 static SHARED: OnceLock<Arc<DefaultTransport>> = OnceLock::new();
 
-/// Whether the shared client should trust any server certificate. Set before the
-/// first fetch (the client is built once, lazily).
-static ACCEPT_INVALID_CERTS: AtomicBool = AtomicBool::new(false);
-
-/// Make the default transport trust any server certificate, for a local test
-/// harness driving a self-signed server (WPT). Must be called before the first
-/// request; production never calls it. This is a knob on the default
-/// transport only: a host-supplied [`Transport`] owns its own trust.
-pub fn accept_invalid_certs() {
-    ACCEPT_INVALID_CERTS.store(true, Ordering::Relaxed);
-}
-
 /// The default [`Transport`]. Obtain it through [`DefaultTransport::shared`];
 /// hosts may choose this compatibility default or an isolated `HttpTransport`.
 pub struct DefaultTransport {
@@ -147,8 +133,7 @@ impl Transport for DefaultTransport {
     }
 }
 
-/// A host-owned connection pool with explicit trust and retry policy. It never
-/// reads the compatibility default's process-wide insecure-test switch.
+/// A host-owned connection pool with explicit trust and retry policy.
 /// Create one per host-selected partition; cloning the host's Arc shares only
 /// that partition. Response/body policy remains with the caller.
 pub struct HttpTransport {
@@ -290,20 +275,7 @@ fn build_client() -> HttpClient {
     // if one is already installed, which we ignore.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    let builder = hyper_rustls::HttpsConnectorBuilder::new();
-    // Escape hatch for local test harnesses (WPT's self-signed server): when
-    // [`accept_invalid_certs`] was called, trust any server certificate. Off by
-    // default; production uses the webpki trust anchors.
-    let connector = if ACCEPT_INVALID_CERTS.load(Ordering::Relaxed) {
-        let config = rustls::ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(NoVerify))
-            .with_no_client_auth();
-        // ALPN is set by enable_http1()/enable_http2() below; don't pre-define it.
-        builder.with_tls_config(config)
-    } else {
-        builder.with_webpki_roots()
-    };
+    let connector = hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots();
 
     let https = connector
         .https_or_http() // allow plaintext http:// too (local/dev, smolweb)
@@ -322,43 +294,4 @@ fn collect_headers(map: &http::HeaderMap) -> Vec<(String, String)> {
                 .map(|s| (k.as_str().to_owned(), s.to_owned()))
         })
         .collect()
-}
-
-/// Accept any server certificate; armed by [`accept_invalid_certs`] for test
-/// harnesses driving a self-signed local server only.
-#[derive(Debug)]
-struct NoVerify;
-
-impl rustls::client::danger::ServerCertVerifier for NoVerify {
-    fn verify_server_cert(
-        &self,
-        _: &CertificateDer,
-        _: &[CertificateDer],
-        _: &ServerName,
-        _: &[u8],
-        _: UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-    fn verify_tls12_signature(
-        &self,
-        _: &[u8],
-        _: &CertificateDer,
-        _: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-    fn verify_tls13_signature(
-        &self,
-        _: &[u8],
-        _: &CertificateDer,
-        _: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::crypto::ring::default_provider()
-            .signature_verification_algorithms
-            .supported_schemes()
-    }
 }

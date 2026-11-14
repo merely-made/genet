@@ -77,7 +77,7 @@ pub use request::{
 };
 pub use response::{BodyStream, Response, ResponseBody, ResponseType};
 #[cfg(feature = "hyper-transport")]
-pub use transport::hyper::{DefaultTransport, WireTransport, accept_invalid_certs};
+pub use transport::hyper::{DefaultTransport, WireTransport};
 #[cfg(feature = "hyper-transport")]
 pub use genet_wire as wire;
 pub use transport::{NoTransport, RawResponse, Transport, TransportFuture, WireRequest};

@@ -920,10 +920,14 @@ fn setup_server(args: &Args) -> Option<net::ServerCtx> {
     if !args.spawn_server && args.server_base.is_none() {
         return None;
     }
-    // The WPT server's https / h2 origins use a self-signed CA; trust any
-    // certificate so https:// and h2 fetches reach it. Must run before the first
-    // request (the readiness probe below builds the shared client).
-    netfetcher::accept_invalid_certs();
+    // The WPT server's https / h2 origins present certificates from WPT's own
+    // test CA; the runner's transport trusts it beside the webpki roots. Must
+    // run before the first request (the readiness probe below fetches).
+    let ca = Path::new(&args.tests_root).join("tools/certs/cacert.pem");
+    if let Err(e) = net::trust_wpt_ca(&ca) {
+        eprintln!("server mode setup failed: {e}");
+        std::process::exit(2);
+    }
     let result = if args.spawn_server {
         eprintln!("spawning `wpt serve` under {} ...", args.tests_root);
         net::ServerCtx::spawn(Path::new(&args.tests_root))

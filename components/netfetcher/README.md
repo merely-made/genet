@@ -122,7 +122,8 @@ Re-exported from `src/lib.rs`:
   `InMemoryAltSvc`, `PreflightCache`, `InMemoryPreflightCache`.
 - Transport seam: `Transport`, `WireRequest`, `RawResponse`, `TransportFuture`,
   `NoTransport`, `BodyStream`; with the `hyper-transport` feature (default),
-  `DefaultTransport` and its test knob `accept_invalid_certs`.
+  `DefaultTransport` (webpki roots; it has no way to turn verification off)
+  and `WireTransport`, which adapts a host-built `genet_wire` engine.
 - WebSocket (feature `websocket`, native-only): `WebSocket`, `WsMessage`,
   `connect_websocket`.
 

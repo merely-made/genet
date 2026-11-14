@@ -72,6 +72,10 @@ netfetcher = { path = "../../components/netfetcher", optional = true }
 tokio = { version = "1", features = ["rt", "macros"], optional = true }
 bytes = { version = "1", optional = true }
 url = { workspace = true, optional = true }
+# The runner's own HTTPS trust: the webpki roots the default transport uses plus
+# WPT's test CA (`tools/certs/cacert.pem`), loaded at run time.
+rustls = { workspace = true, features = ["ring"], optional = true }
+webpki-roots = { workspace = true, optional = true }
 
 # GPU conformance is explicitly selected for its attended validation lane.
 # The ordinary runner and focused CPU network gates omit the compositor.
@@ -82,7 +86,7 @@ pollster = { version = "1.0", optional = true }
 default = ["image-decode", "webrtc"]
 webrtc = ["dep:genet-webrtc"]
 webgl-tests = ["dep:webgl_wgpu", "dep:pollster"]
-netfetch = ["dep:netfetcher", "dep:tokio", "dep:bytes", "dep:url"]
+netfetch = ["dep:netfetcher", "dep:tokio", "dep:bytes", "dep:url", "dep:rustls", "dep:webpki-roots"]
 # Forwards genet-livery's image decoding; see its `image-decode` feature.
 image-decode = ["genet-livery/image-decode", "genet-scripted/image-decode", "genet-render/image-decode"]
 

@@ -6,12 +6,6 @@ use super::{RawResponse, Transport, TransportFuture, WireRequest};
 use crate::request::Method;
 use std::sync::{Arc, OnceLock};
 
-/// Compatibility knob for the process-wide test transport, called before its
-/// first request. Explicit host-owned engines never consult this setting.
-pub fn accept_invalid_certs() {
-    genet_wire::hyper::accept_invalid_certs();
-}
-
 /// Preserve the public process-wide Netfetcher default and its trait identity.
 pub struct DefaultTransport {
     engine: WireTransport,

@@ -379,7 +379,11 @@ impl<E: ScriptEngine> NativeFn<E> for SubtleHmacGenerate {
         let (Some(hash), Some(usages), Some(length)) = (hash, usages, length) else {
             return Ok(cx.make_null());
         };
-        let mut material = Zeroizing::new(vec![0u8; length]);
+        // A refused length or a failed allocation is the spec's failed key
+        // generation: `null`, which the bootstrap throws as OperationError.
+        let Some(mut material) = hmac_key_buffer(length) else {
+            return Ok(cx.make_null());
+        };
         if !crate::crypto::fill_random::<E>(cx, &mut material) {
             return cx.make_string("!R");
         }
@@ -394,6 +398,23 @@ impl<E: ScriptEngine> NativeFn<E> for SubtleHmacGenerate {
             None => Ok(cx.make_null()),
         }
     }
+}
+
+/// The most bytes an HMAC key can need: `HmacKeyGenParams.length` is an
+/// `[EnforceRange] unsigned long` in bits, so 2^32 - 1 bits round up to 2^29
+/// bytes. The bootstrap enforces the WebIDL range; this repeats it natively.
+const MAX_HMAC_KEY_BYTES: usize = (u32::MAX as usize).div_ceil(8);
+
+/// A zeroed buffer for a generated HMAC key, or `None` when `length` is past
+/// the WebIDL bound or the allocation fails (no abort on exhaustion).
+fn hmac_key_buffer(length: usize) -> Option<Zeroizing<Vec<u8>>> {
+    if length > MAX_HMAC_KEY_BYTES {
+        return None;
+    }
+    let mut material = Zeroizing::new(Vec::new());
+    material.try_reserve_exact(length).ok()?;
+    material.resize(length, 0);
+    Some(material)
 }
 
 fn key_id<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> Result<Option<u64>, E::Error> {
@@ -631,6 +652,19 @@ mod tests {
 
     fn hex(bytes: &[u8]) -> String {
         bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    /// Web Crypto HMAC "generate key": a key generation that fails throws
+    /// OperationError, which `null` from the sink becomes. Lengths up to the
+    /// WebIDL `unsigned long` bit bound are allowed; past it, refused before any
+    /// allocation. WPT `generateKey/successes_HMAC` uses at most 1024 bits.
+    #[test]
+    fn hmac_key_buffer_is_bounded_and_fallible() {
+        assert_eq!(MAX_HMAC_KEY_BYTES, 1 << 29);
+        assert_eq!(hmac_key_buffer(128).map(|key| key.len()), Some(128));
+        assert_eq!(hmac_key_buffer(0).map(|key| key.len()), Some(0));
+        assert!(hmac_key_buffer(MAX_HMAC_KEY_BYTES + 1).is_none());
+        assert!(hmac_key_buffer(usize::MAX).is_none());
     }
 
     /// RFC 2202 test case 2 (SHA-1) and RFC 4231 test case 2 (SHA-2).

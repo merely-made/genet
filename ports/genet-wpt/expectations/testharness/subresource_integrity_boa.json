@@ -1,0 +1,1481 @@
+{
+  "command": "testharness",
+  "engine": "boa",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "e98527ac6814cc079b757145cfe540db63e2454402ee98360fc9ba36f9ed7bc7",
+  "subset": "subresource-integrity",
+  "tests": {
+    "subresource-integrity/integrity-policy/parsing.html?type=enforce": {
+      "reason": "drive-deadline",
+      "status": "error"
+    },
+    "subresource-integrity/integrity-policy/parsing.html?type=report": {
+      "reason": "drive-deadline",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Ensure that test is working with a valid destination",
+          "status": "pass"
+        },
+        {
+          "name": "Ensure that test is working with a valid destination and source",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "subresource-integrity/integrity-policy/preload-script-with-integrity.https.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Script with integrity in initial HTML should not trigger Integrity-Policy reports (tests preload scanner)",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "subresource-integrity/integrity-policy/script.https.html?reporting=false": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "subresource-integrity/integrity-policy/script.https.html?reporting=true": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "subresource-integrity/integrity-policy/style.https.html?reporting=false": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "subresource-integrity/integrity-policy/style.https.html?reporting=true": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "subresource-integrity/integrity-policy/tentative/signature.https.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Ensure that a script with signature integrity runs",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "subresource-integrity/signatures/tentative/accept-signature.parser-inserted.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Single, valid integrity assertion.",
+          "status": "fail"
+        },
+        {
+          "name": "One matching + malformed integrity assertion.",
+          "status": "fail"
+        },
+        {
+          "name": "One matching + one mismatching integrity assertion.",
+          "status": "fail"
+        },
+        {
+          "name": "One matching + one mismatching + malformed integrity assertion.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 4
+    },
+    "subresource-integrity/signatures/tentative/accept-signature.window.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=",
+          "status": "timeout"
+        },
+        {
+          "name": "ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs= malformed-thing",
+          "status": "timeout"
+        },
+        {
+          "name": "ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs= ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=",
+          "status": "timeout"
+        },
+        {
+          "name": "ed25519-xDnP380zcL4rJ76rXYjeHlfMyPZEOqpJYjsjEppbuXE= ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=",
+          "status": "timeout"
+        },
+        {
+          "name": "ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs= ed25519-xDnP380zcL4rJ76rXYjeHlfMyPZEOqpJYjsjEppbuXE=",
+          "status": "timeout"
+        },
+        {
+          "name": "ed25519-xDnP380zcL4rJ76rXYjeHlfMyPZEOqpJYjsjEppbuXE= malformed-thing ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=",
+          "status": "timeout"
+        },
+        {
+          "name": "ed25519-JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs= malformed-thing ed25519-xDnP380zcL4rJ76rXYjeHlfMyPZEOqpJYjsjEppbuXE=",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 7
+    },
+    "subresource-integrity/signatures/tentative/authority.https.window.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "subresource-integrity/signatures/tentative/client-initiated.cross-origin.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "`fetch()`: No signature, valid integrity check, w/o cors: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: No signature, valid integrity check, w/ cors: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature, matching integrity check, no cors: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature, mismatched integrity check, no cors: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature, one valid integrity check, no cors: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature, matching integrity check, cors: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature, mismatched integrity check, cors: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature, one valid integrity check, cors: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, matching integrity check, no cors: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, mismatched integrity check, no cors: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, one valid integrity check, no cors: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, matching integrity check, cors: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, mismatched integrity check, cors: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, one valid integrity check, cors: loads.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 14
+    },
+    "subresource-integrity/signatures/tentative/client-initiated.same-origin.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "`fetch()`: No signature, malformed integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: No signature, valid integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature, malformed integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature, matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature, mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature, one valid integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, malformed integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, matching integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, one valid integrity check: blocked.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 10
+    },
+    "subresource-integrity/signatures/tentative/csp.window.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "`<script>`: No signature, no integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: No signature, malformed integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: No signature, integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, no integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, malformed integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, valid integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, one matching and one mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, no integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, malformed integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches one: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches the other: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches both, but only one in CSP: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches neither: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 14
+    },
+    "subresource-integrity/signatures/tentative/header-component.window.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "`fetch()`: Valid signature (signature=(\"content-type\" \"unencoded-digest\";sf);keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=(\"content-type\" \"unencoded-digest\";sf);keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=(\"content-type\" \"unencoded-digest\";sf);keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=(\"content-type\" \"unencoded-digest\";sf);keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=(\"content-type\" \"unencoded-digest\";sf);keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=(\"content-type\" \"unencoded-digest\";sf);keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=(\"unencoded-digest\";sf \"content-type\");keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=(\"unencoded-digest\";sf \"content-type\");keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=(\"unencoded-digest\";sf \"content-type\");keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=(\"unencoded-digest\";sf \"content-type\");keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=(\"unencoded-digest\";sf \"content-type\");keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=(\"unencoded-digest\";sf \"content-type\");keyid=\"JrQLj5P/89iXES9+vFgrIy29clF9CC/oPPsw3c5D0bs=\";tag=\"sri\"), mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`fetch()`: Mismatched header value: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Mismatched header value with matching integrity: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Mismatched header value: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Mismatched header value with matching integrity: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`fetch()`: Missing signed header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Missing signed header with matching integrity: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Missing signed header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Missing signed header with matching integrity: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 20
+    },
+    "subresource-integrity/signatures/tentative/inline.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "No `signature`, no `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "No `signature`, invalid `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "No `signature`, valid `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "No `signature`, multiple `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "invalid `signature`, no `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "invalid `signature`, invalid `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "invalid `signature`, valid `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "invalid `signature`, multiple `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "valid `signature`, no `integrity` => blocked",
+          "status": "fail"
+        },
+        {
+          "name": "valid `signature`, invalid `integrity` => blocked",
+          "status": "fail"
+        },
+        {
+          "name": "valid `signature`, valid `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "valid `signature`, multiple `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "multiple `signature`, no `integrity` => blocked",
+          "status": "fail"
+        },
+        {
+          "name": "multiple `signature`, invalid `integrity` => blocked",
+          "status": "fail"
+        },
+        {
+          "name": "multiple `signature`, valid `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "multiple `signature`, multiple `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "valid `signature`, valid `integrity`, non-ASCII => executes",
+          "status": "pass"
+        },
+        {
+          "name": "SVG valid `signature`, no `integrity` => blocked",
+          "status": "fail"
+        },
+        {
+          "name": "SVG valid `signature`, invalid `integrity` => blocked",
+          "status": "fail"
+        },
+        {
+          "name": "SVG valid `signature`, valid `integrity` => executes",
+          "status": "pass"
+        },
+        {
+          "name": "SVG valid `signature`, multiple `integrity` => executes",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 15,
+      "subtests_total": 21
+    },
+    "subresource-integrity/signatures/tentative/path.window.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "`fetch()`: Valid signature (signature=:+sRkplliS3TanqASHirBTokxhOn6fRTodc7i6Q6PUMsSPP0RJ2Xdb/woWz0+JXaBXAfa55qj+N9paXP5j7DFCw==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:+sRkplliS3TanqASHirBTokxhOn6fRTodc7i6Q6PUMsSPP0RJ2Xdb/woWz0+JXaBXAfa55qj+N9paXP5j7DFCw==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:+sRkplliS3TanqASHirBTokxhOn6fRTodc7i6Q6PUMsSPP0RJ2Xdb/woWz0+JXaBXAfa55qj+N9paXP5j7DFCw==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:+sRkplliS3TanqASHirBTokxhOn6fRTodc7i6Q6PUMsSPP0RJ2Xdb/woWz0+JXaBXAfa55qj+N9paXP5j7DFCw==:), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:+sRkplliS3TanqASHirBTokxhOn6fRTodc7i6Q6PUMsSPP0RJ2Xdb/woWz0+JXaBXAfa55qj+N9paXP5j7DFCw==:), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:+sRkplliS3TanqASHirBTokxhOn6fRTodc7i6Q6PUMsSPP0RJ2Xdb/woWz0+JXaBXAfa55qj+N9paXP5j7DFCw==:), mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:YPH2/cRdbR+DPhb1hVG1BgwCpzPLECsAyBavmb7QaXtCF1Hx2QyYp0ki1mi7UftMOnLVpBJdfdLb99Nzf0XqDg==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:YPH2/cRdbR+DPhb1hVG1BgwCpzPLECsAyBavmb7QaXtCF1Hx2QyYp0ki1mi7UftMOnLVpBJdfdLb99Nzf0XqDg==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:YPH2/cRdbR+DPhb1hVG1BgwCpzPLECsAyBavmb7QaXtCF1Hx2QyYp0ki1mi7UftMOnLVpBJdfdLb99Nzf0XqDg==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:YPH2/cRdbR+DPhb1hVG1BgwCpzPLECsAyBavmb7QaXtCF1Hx2QyYp0ki1mi7UftMOnLVpBJdfdLb99Nzf0XqDg==:), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:YPH2/cRdbR+DPhb1hVG1BgwCpzPLECsAyBavmb7QaXtCF1Hx2QyYp0ki1mi7UftMOnLVpBJdfdLb99Nzf0XqDg==:), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:YPH2/cRdbR+DPhb1hVG1BgwCpzPLECsAyBavmb7QaXtCF1Hx2QyYp0ki1mi7UftMOnLVpBJdfdLb99Nzf0XqDg==:), mismatched integrity check: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 12
+    },
+    "subresource-integrity/signatures/tentative/query.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "`fetch()`: Query = \"\": no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"\": matching integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"\": mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Query = \"test\": no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test\": matching integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test\": mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=a\": no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=a\": matching integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=a\": mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=%2F\": no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=%2F\": matching integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=%2F\": mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=ü\": no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=ü\": matching integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Query = \"test=ü\": mismatched integrity check: blocked.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 10,
+      "subtests_total": 15
+    },
+    "subresource-integrity/signatures/tentative/scheme.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "`fetch()`: Valid signature (signature=:WZp87p7X3ELfgIKL/qxsY/CT6XArMvZRaxcJ3uy1QklEcLf0c8tol2+W2pvaXX4jnd7hGevFVkzWE77rCOIzAA==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:WZp87p7X3ELfgIKL/qxsY/CT6XArMvZRaxcJ3uy1QklEcLf0c8tol2+W2pvaXX4jnd7hGevFVkzWE77rCOIzAA==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:WZp87p7X3ELfgIKL/qxsY/CT6XArMvZRaxcJ3uy1QklEcLf0c8tol2+W2pvaXX4jnd7hGevFVkzWE77rCOIzAA==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:lMzR8lIXYG0Iz0MmTXcRTcBfNw6TgBAPfaNLAU1LzsxWC5dlez8SNe7aCW7avHTWKgaqTGBCMW1LgxkHlijgDA==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:lMzR8lIXYG0Iz0MmTXcRTcBfNw6TgBAPfaNLAU1LzsxWC5dlez8SNe7aCW7avHTWKgaqTGBCMW1LgxkHlijgDA==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:lMzR8lIXYG0Iz0MmTXcRTcBfNw6TgBAPfaNLAU1LzsxWC5dlez8SNe7aCW7avHTWKgaqTGBCMW1LgxkHlijgDA==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 6
+    },
+    "subresource-integrity/signatures/tentative/script.window.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "`<script>`: No signature, no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: No signature, malformed integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: No signature, integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, malformed integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, valid integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, one matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature, mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, malformed integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches one: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches the other: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches both: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signatures, integrity check matches neither: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 14
+    },
+    "subresource-integrity/signatures/tentative/server-initiated.window.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "`fetch()`: Valid signature, same-origin: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature, cross-origin w/o cors, cors: blocked (because of CORS).",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature, same-origin w/ cors: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature, cross-origin w/cors, mode: cors: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, same-origin: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, cross-origin w/o cors, mode: no-cors: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, cross-origin w/o cors, cors: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, same-origin w/ cors: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, cross-origin w/ cors, mode: no-cors: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Invalid signature, cross-origin w/ cors, mode: cors: blocked.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 5,
+      "subtests_total": 10
+    },
+    "subresource-integrity/signatures/tentative/status.window.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "`fetch()`: Valid signature (signature=:BRhRykdW61eK1iEf+ZU+Skf1ErVh8DhogWlPISe3iR7ITX4eryLZwaTAzjsoijRo79gGWnvC8ZIPJoZkByNeBw==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:BRhRykdW61eK1iEf+ZU+Skf1ErVh8DhogWlPISe3iR7ITX4eryLZwaTAzjsoijRo79gGWnvC8ZIPJoZkByNeBw==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:BRhRykdW61eK1iEf+ZU+Skf1ErVh8DhogWlPISe3iR7ITX4eryLZwaTAzjsoijRo79gGWnvC8ZIPJoZkByNeBw==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:BRhRykdW61eK1iEf+ZU+Skf1ErVh8DhogWlPISe3iR7ITX4eryLZwaTAzjsoijRo79gGWnvC8ZIPJoZkByNeBw==:), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:BRhRykdW61eK1iEf+ZU+Skf1ErVh8DhogWlPISe3iR7ITX4eryLZwaTAzjsoijRo79gGWnvC8ZIPJoZkByNeBw==:), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:BRhRykdW61eK1iEf+ZU+Skf1ErVh8DhogWlPISe3iR7ITX4eryLZwaTAzjsoijRo79gGWnvC8ZIPJoZkByNeBw==:), mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:kc+2CFqbwZ2SP47sGCfiP1u/Q0E+1nZlVlSM3VALQz0JNCVcmUKpt4T0t+bXOYdJuTyK89FjJx/rxzDmgCO8BQ==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:kc+2CFqbwZ2SP47sGCfiP1u/Q0E+1nZlVlSM3VALQz0JNCVcmUKpt4T0t+bXOYdJuTyK89FjJx/rxzDmgCO8BQ==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:kc+2CFqbwZ2SP47sGCfiP1u/Q0E+1nZlVlSM3VALQz0JNCVcmUKpt4T0t+bXOYdJuTyK89FjJx/rxzDmgCO8BQ==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:kc+2CFqbwZ2SP47sGCfiP1u/Q0E+1nZlVlSM3VALQz0JNCVcmUKpt4T0t+bXOYdJuTyK89FjJx/rxzDmgCO8BQ==:), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:kc+2CFqbwZ2SP47sGCfiP1u/Q0E+1nZlVlSM3VALQz0JNCVcmUKpt4T0t+bXOYdJuTyK89FjJx/rxzDmgCO8BQ==:), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:kc+2CFqbwZ2SP47sGCfiP1u/Q0E+1nZlVlSM3VALQz0JNCVcmUKpt4T0t+bXOYdJuTyK89FjJx/rxzDmgCO8BQ==:), mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:lHSkRZowLG6kbE9rG4dbe4VW59VGZaJtB/xFErBZKATtWRBTcF4T+Ye0A9yFiI65vgYL+ifVo6U3aZUu7pIUAw==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:lHSkRZowLG6kbE9rG4dbe4VW59VGZaJtB/xFErBZKATtWRBTcF4T+Ye0A9yFiI65vgYL+ifVo6U3aZUu7pIUAw==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:lHSkRZowLG6kbE9rG4dbe4VW59VGZaJtB/xFErBZKATtWRBTcF4T+Ye0A9yFiI65vgYL+ifVo6U3aZUu7pIUAw==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:lHSkRZowLG6kbE9rG4dbe4VW59VGZaJtB/xFErBZKATtWRBTcF4T+Ye0A9yFiI65vgYL+ifVo6U3aZUu7pIUAw==:), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:lHSkRZowLG6kbE9rG4dbe4VW59VGZaJtB/xFErBZKATtWRBTcF4T+Ye0A9yFiI65vgYL+ifVo6U3aZUu7pIUAw==:), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:lHSkRZowLG6kbE9rG4dbe4VW59VGZaJtB/xFErBZKATtWRBTcF4T+Ye0A9yFiI65vgYL+ifVo6U3aZUu7pIUAw==:), mismatched integrity check: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 3,
+      "subtests_total": 18
+    },
+    "subresource-integrity/signatures/tentative/unknown-parameter.window.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "`fetch()`: Valid signature (signature=:eZ2DGIHUsTNMxFReOMkbOrTmn+CqDckCZ5/635x1Apl2ws0nA+qZcHqZFMdjBvcGw0WElh3zYD0ynkQ+cHiWCA==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:eZ2DGIHUsTNMxFReOMkbOrTmn+CqDckCZ5/635x1Apl2ws0nA+qZcHqZFMdjBvcGw0WElh3zYD0ynkQ+cHiWCA==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:eZ2DGIHUsTNMxFReOMkbOrTmn+CqDckCZ5/635x1Apl2ws0nA+qZcHqZFMdjBvcGw0WElh3zYD0ynkQ+cHiWCA==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:eZ2DGIHUsTNMxFReOMkbOrTmn+CqDckCZ5/635x1Apl2ws0nA+qZcHqZFMdjBvcGw0WElh3zYD0ynkQ+cHiWCA==:), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:eZ2DGIHUsTNMxFReOMkbOrTmn+CqDckCZ5/635x1Apl2ws0nA+qZcHqZFMdjBvcGw0WElh3zYD0ynkQ+cHiWCA==:), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:eZ2DGIHUsTNMxFReOMkbOrTmn+CqDckCZ5/635x1Apl2ws0nA+qZcHqZFMdjBvcGw0WElh3zYD0ynkQ+cHiWCA==:), mismatched integrity check: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:YXQH8lkKBcGOMNSFbS56j3d5nK3j15HbFPIdsljzQVGFFd93T6FmXb2cLsoINYQbnMUOQBSROIzFZpgUQTBTBA==:), no integrity check: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:YXQH8lkKBcGOMNSFbS56j3d5nK3j15HbFPIdsljzQVGFFd93T6FmXb2cLsoINYQbnMUOQBSROIzFZpgUQTBTBA==:), matching integrity check: loads.",
+          "status": "fail"
+        },
+        {
+          "name": "`fetch()`: Valid signature (signature=:YXQH8lkKBcGOMNSFbS56j3d5nK3j15HbFPIdsljzQVGFFd93T6FmXb2cLsoINYQbnMUOQBSROIzFZpgUQTBTBA==:), mismatched integrity check: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:YXQH8lkKBcGOMNSFbS56j3d5nK3j15HbFPIdsljzQVGFFd93T6FmXb2cLsoINYQbnMUOQBSROIzFZpgUQTBTBA==:), no integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:YXQH8lkKBcGOMNSFbS56j3d5nK3j15HbFPIdsljzQVGFFd93T6FmXb2cLsoINYQbnMUOQBSROIzFZpgUQTBTBA==:), matching integrity check: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "`<script>`: Valid signature (signature=:YXQH8lkKBcGOMNSFbS56j3d5nK3j15HbFPIdsljzQVGFFd93T6FmXb2cLsoINYQbnMUOQBSROIzFZpgUQTBTBA==:), mismatched integrity check: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 12
+    },
+    "subresource-integrity/subresource-integrity.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Script: Same-origin with correct sha256 hash.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with correct sha384 hash.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with correct sha512 hash.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with empty integrity.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with non-Base64 hash.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with incorrect hash.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with incorrect integrity => cleared after prepare.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with incorrect integrity => set to correct hash after prepare.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with empty integrity => set to incorrect hash after prepare.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with correct integrity => set to incorrect hash after prepare.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with multiple sha256 hashes, including correct.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with multiple sha256 hashes, including unknown algorithm.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with sha256 mismatch, sha512 match",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with sha256 match, sha512 mismatch",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: <crossorigin='anonymous'> with correct hash, ACAO: *",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: <crossorigin='anonymous'> with incorrect hash, ACAO: *",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: <crossorigin='use-credentials'> with correct hash, CORS-eligible",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: <crossorigin='use-credentials'> with incorrect hash CORS-eligible",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: <crossorigin='anonymous'> with CORS-ineligible resource",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Cross-origin, not CORS request, with correct hash",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Cross-origin, not CORS request, with hash mismatch",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Cross-origin, empty integrity",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with correct hash, options.",
+          "status": "not-run"
+        },
+        {
+          "name": "Script: Same-origin with unknown algorithm only.",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with correct sha256 hash",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with correct sha384 hash",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with correct sha512 hash",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with empty integrity",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with non-Base64 integrity",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with incorrect hash.",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with multiple sha256 hashes, including correct.",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with multiple sha256 hashes, including unknown algorithm.",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with sha256 mismatch, sha512 match",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with sha256 match, sha512 mismatch",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: <crossorigin='anonymous'> with correct hash, ACAO: *",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: <crossorigin='anonymous'> with incorrect hash, ACAO: *",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: <crossorigin='use-credentials'> with correct hash, CORS-eligible",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: <crossorigin='use-credentials'> with incorrect hash CORS-eligible",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: <crossorigin='anonymous'> with CORS-ineligible resource",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Cross-origin, not CORS request, with correct hash",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Cross-origin, not CORS request, with hash mismatch",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Cross-origin, empty integrity",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with correct hash, options.",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with unknown algorithm only.",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with correct sha256 hash, rel='stylesheet license'",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with correct sha256 hash, rel='license stylesheet'",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with correct sha256 and sha512 hash, rel='alternate stylesheet' enabled",
+          "status": "not-run"
+        },
+        {
+          "name": "Style: Same-origin with incorrect sha256 and sha512 hash, rel='alternate stylesheet' enabled",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 48
+    },
+    "subresource-integrity/unencoded-digest/tentative/fetch.any.html?include=integrity-fail": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Bad integrity metadata blocks everything, even: No header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Good sha-256 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Repeated sha-256 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Multiple good headers (previous += sha-256): loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Bad sha-256 header: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Repeated sha-256 header: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Multiple bad headers (previous += sha-256): blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Good sha-512 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Repeated sha-512 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Multiple good headers (previous += sha-512): loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Bad sha-512 header: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Repeated sha-512 header: blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Multiple bad headers (previous += sha-512): blocked.",
+          "status": "pass"
+        },
+        {
+          "name": "Bad integrity metadata blocks everything, even: Mixed good and bad headers: blocked.",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 14,
+      "subtests_total": 14
+    },
+    "subresource-integrity/unencoded-digest/tentative/fetch.any.html?include=integrity-none": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "No integrity metadata + No header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "No integrity metadata + Good sha-256 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "No integrity metadata + Repeated sha-256 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "No integrity metadata + Multiple good headers (previous += sha-256): loads.",
+          "status": "pass"
+        },
+        {
+          "name": "No integrity metadata + Bad sha-256 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "No integrity metadata + Repeated sha-256 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "No integrity metadata + Multiple bad headers (previous += sha-256): blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "No integrity metadata + Good sha-512 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "No integrity metadata + Repeated sha-512 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "No integrity metadata + Multiple good headers (previous += sha-512): loads.",
+          "status": "pass"
+        },
+        {
+          "name": "No integrity metadata + Bad sha-512 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "No integrity metadata + Repeated sha-512 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "No integrity metadata + Multiple bad headers (previous += sha-512): blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "No integrity metadata + Mixed good and bad headers: blocked.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 14
+    },
+    "subresource-integrity/unencoded-digest/tentative/fetch.any.html?include=integrity-pass": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Good integrity metadata + No header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Good integrity metadata + Good sha-256 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Good integrity metadata + Repeated sha-256 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Good integrity metadata + Multiple good headers (previous += sha-256): loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Good integrity metadata + Bad sha-256 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "Good integrity metadata + Repeated sha-256 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "Good integrity metadata + Multiple bad headers (previous += sha-256): blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "Good integrity metadata + Good sha-512 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Good integrity metadata + Repeated sha-512 header: loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Good integrity metadata + Multiple good headers (previous += sha-512): loads.",
+          "status": "pass"
+        },
+        {
+          "name": "Good integrity metadata + Bad sha-512 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "Good integrity metadata + Repeated sha-512 header: blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "Good integrity metadata + Multiple bad headers (previous += sha-512): blocked.",
+          "status": "fail"
+        },
+        {
+          "name": "Good integrity metadata + Mixed good and bad headers: blocked.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 7,
+      "subtests_total": 14
+    },
+    "subresource-integrity/unencoded-digest/tentative/fetch.any.worker.html?include=integrity-fail": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "subresource-integrity/unencoded-digest/tentative/fetch.any.worker.html?include=integrity-none": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "subresource-integrity/unencoded-digest/tentative/fetch.any.worker.html?include=integrity-pass": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "subresource-integrity/unencoded-digest/tentative/script.window.html?include=integrity-fail": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Mismatching `integrity` attribute always blocks: No header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Good sha-256 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Repeated sha-256 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Multiple good headers (previous += sha-256): loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Bad sha-256 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Repeated sha-256 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Multiple bad headers (previous += sha-256): blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Good sha-512 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Repeated sha-512 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Multiple good headers (previous += sha-512): loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Bad sha-512 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Repeated sha-512 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Multiple bad headers (previous += sha-512): blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Mismatching `integrity` attribute always blocks: Mixed good and bad headers: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 14
+    },
+    "subresource-integrity/unencoded-digest/tentative/script.window.html?include=integrity-none": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "No `integrity` attribute + No header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Good sha-256 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Repeated sha-256 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Multiple good headers (previous += sha-256): loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Bad sha-256 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Repeated sha-256 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Multiple bad headers (previous += sha-256): blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Good sha-512 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Repeated sha-512 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Multiple good headers (previous += sha-512): loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Bad sha-512 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Repeated sha-512 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Multiple bad headers (previous += sha-512): blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "No `integrity` attribute + Mixed good and bad headers: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 14
+    },
+    "subresource-integrity/unencoded-digest/tentative/script.window.html?include=integrity-pass": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Matching `integrity` attribute + No header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Good sha-256 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Repeated sha-256 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Multiple good headers (previous += sha-256): loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Bad sha-256 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Repeated sha-256 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Multiple bad headers (previous += sha-256): blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Good sha-512 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Repeated sha-512 header: loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Multiple good headers (previous += sha-512): loads.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Bad sha-512 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Repeated sha-512 header: blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Multiple bad headers (previous += sha-512): blocked.",
+          "status": "timeout"
+        },
+        {
+          "name": "Matching `integrity` attribute + Mixed good and bad headers: blocked.",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 14
+    }
+  },
+  "version": 1
+}

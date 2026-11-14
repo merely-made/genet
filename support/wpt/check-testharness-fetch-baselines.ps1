@@ -35,6 +35,12 @@ $baselines = @(
         Subset = "fetch/api/basic"
         Engine = "boa"
         Expectations = "ports/genet-wpt/expectations/testharness/fetch_api_basic_boa.json"
+    },
+    @{
+        # The suite that settles Genet's one SRI routine (genet-sri).
+        Subset = "subresource-integrity"
+        Engine = "boa"
+        Expectations = "ports/genet-wpt/expectations/testharness/subresource_integrity_boa.json"
     }
 )
 

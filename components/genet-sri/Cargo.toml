@@ -1,0 +1,17 @@
+[package]
+rust-version = "1.97.1"
+name = "genet-sri"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository = "https://github.com/merely-made/genet"
+description = "Subresource Integrity metadata parsing and matching for Genet's fetch and script loading"
+
+[dependencies]
+# Digests and base64 come from maintained crates already in the workspace graph;
+# sha2 is pure Rust, so this crate builds for wasm32-unknown-unknown.
+base64 = { workspace = true }
+sha2 = { workspace = true }
+
+[lints]
+workspace = true

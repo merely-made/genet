@@ -57,6 +57,9 @@ members = [
     # consumers, and it must stay genet-side to keep mere's dependency direction
     # one-way.
     "components/netfetcher",
+    # Subresource Integrity, shared by netfetcher and genet-scripted (2026-11-14:
+    # "sure, new crate."). No transport, so it builds for wasm32.
+    "components/genet-sri",
     # The wire engines moved in from Murm on 2026-11-08 (mere cycle-breaks D20): Genet is their
     # only consumer, so HTTP/1-3 and WebSocket carriage (genet-wire, used by netfetcher) and the
     # WebRTC protocol leaf (genet-rtc, used by genet-webrtc) are Genet capabilities. History kept.

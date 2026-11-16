@@ -1,0 +1,36 @@
+<!-- Copyright 2026 Mark Alan Boykin
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this
+     file, You can obtain one at https://mozilla.org/MPL/2.0/.
+     SPDX-License-Identifier: MPL-2.0 -->
+<!doctype html>
+<meta charset="utf-8">
+<title>Ortet live canvas element filter receipt</title>
+<style>
+  html, body { margin: 0; background: white; }
+  #group { position: absolute; left: 20px; top: 20px; width: 80px; height: 60px;
+    filter: invert(1) blur(2px); opacity: .5; }
+  #canvas { display: block; width: 64px; height: 48px; }
+  #sibling { position: absolute; left: 22px; top: 14px; width: 28px; height: 22px;
+    background: blue; }
+  #state { position: absolute; left: 8px; top: 90px; margin: 0; }
+</style>
+<div id="group">
+  <canvas id="canvas" width="64" height="48"></canvas>
+  <div id="sibling"></div>
+</div>
+<h1 id="state">Ortet element filter receipt pending</h1>
+<script>
+  const state = document.getElementById("state");
+  try {
+    const canvas = document.getElementById("canvas");
+    const gl = canvas.getContext("webgl", { premultipliedAlpha: true });
+    if (!gl) throw new Error("WebGL context unavailable");
+    gl.clearColor(1, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL clear failed");
+    state.textContent = "Ortet element filter receipt complete";
+  } catch (error) {
+    state.textContent = "Ortet element filter receipt failed: " + error.message;
+  }
+</script>

@@ -19,6 +19,7 @@ function clear(canvas, color) {
   gl.clearColor(color[0], color[1], color[2], color[3]);
   gl.clear(gl.COLOR_BUFFER_BIT);
   if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL clear");
+  return gl;
 }
 
 function run() {
@@ -27,7 +28,7 @@ function run() {
       throw new Error("canvas attributes before draw");
     clear(canvases[0], [0, 0.5, 0, 0.5]); // premultiplied half-green source-over oracle
     clear(canvases[1], [0.5, 0, 0.5, 1]);
-    clear(canvases[2], [1, 0, 0, 1]);
+    const groupGl = clear(canvases[2], [1, 0, 0, 1]);
     clear(canvases[3], [1, 1, 0, 1]);
     clear(canvases[4], [1, 0, 1, 1]);
     clear(canvases[5], [1, 0, 1, 1]);
@@ -53,8 +54,23 @@ function run() {
     if (!getComputedStyle(domOverlay).backgroundColor) throw new Error("DOM overlay color");
     if (canvases.some((c, i) => c.width !== initial[i][0] || c.height !== initial[i][1]))
       throw new Error("canvas attributes changed");
-    state.textContent = "Ortet standards compositing receipt complete";
-    document.documentElement.dataset.standardsComplete = "yes";
+    // Keep the initial pixels through the first RAF, then update one scissored
+    // patch on the same WebGL context. The two following RAF turns each leave
+    // a frame to present the refreshed generation before completion.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      groupGl.enable(groupGl.SCISSOR_TEST);
+      groupGl.scissor(4, 4, 12, 12);
+      groupGl.clearColor(0, 1, 0, 1);
+      groupGl.clear(groupGl.COLOR_BUFFER_BIT);
+      groupGl.disable(groupGl.SCISSOR_TEST);
+      if (groupGl.getError() !== groupGl.NO_ERROR ||
+          canvases[2].getContext("webgl") !== groupGl)
+        return fail("same-canvas WebGL generation update");
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        state.textContent = "Ortet standards compositing receipt complete";
+        document.documentElement.dataset.standardsComplete = "yes";
+      }));
+    }));
   } catch (error) { fail(error.message); }
 }
 

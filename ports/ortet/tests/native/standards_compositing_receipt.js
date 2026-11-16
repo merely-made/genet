@@ -54,22 +54,18 @@ function run() {
     if (!getComputedStyle(domOverlay).backgroundColor) throw new Error("DOM overlay color");
     if (canvases.some((c, i) => c.width !== initial[i][0] || c.height !== initial[i][1]))
       throw new Error("canvas attributes changed");
-    // Keep the initial pixels through the first RAF, then update one scissored
-    // patch on the same WebGL context. The two following RAF turns each leave
+    // Keep the initial pixels through the first RAF, then clear the same
+    // WebGL canvas to green. The two following RAF turns each leave
     // a frame to present the refreshed generation before completion.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      groupGl.enable(groupGl.SCISSOR_TEST);
-      groupGl.scissor(4, 4, 12, 12);
-      groupGl.clearColor(0, 1, 0, 1);
-      groupGl.clear(groupGl.COLOR_BUFFER_BIT);
-      groupGl.disable(groupGl.SCISSOR_TEST);
-      if (groupGl.getError() !== groupGl.NO_ERROR ||
-          canvases[2].getContext("webgl") !== groupGl)
-        return fail("same-canvas WebGL generation update");
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        state.textContent = "Ortet standards compositing receipt complete";
-        document.documentElement.dataset.standardsComplete = "yes";
-      }));
+      try {
+        if (clear(canvases[2], [0, 1, 0, 1]) !== groupGl)
+          throw new Error("same-canvas WebGL generation update");
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          state.textContent = "Ortet standards compositing receipt complete";
+          document.documentElement.dataset.standardsComplete = "yes";
+        }));
+      } catch (error) { fail(error.message); }
     }));
   } catch (error) { fail(error.message); }
 }

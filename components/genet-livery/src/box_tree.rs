@@ -677,6 +677,40 @@ mod tests {
     }
 
     #[test]
+    fn computed_filter_captures_absolute_and_fixed_descendants_in_buckram() {
+        let dom = StaticDocument::parse(
+            "<html><body><div id=cb><div id=absolute></div><div id=fixed></div></div></body></html>",
+        );
+        let styles = resolve_styles(
+            &dom,
+            &StyleSet::cambium(&[
+                "#cb { filter: invert(0); } #absolute { position: absolute; } #fixed { position: fixed; }",
+            ]),
+            &Device::screen(800.0, 600.0),
+            &InteractionStates::default(),
+        );
+        let generated = GeneratedBoxTree::from_dom(&dom, &styles);
+        let cb = generated
+            .principal_box(find(&dom, dom.document(), "cb").expect("containing block"))
+            .expect("containing block box");
+        let absolute = generated
+            .principal_box(find(&dom, dom.document(), "absolute").expect("absolute"))
+            .expect("absolute box");
+        let fixed = generated
+            .principal_box(find(&dom, dom.document(), "fixed").expect("fixed"))
+            .expect("fixed box");
+
+        assert_eq!(
+            generated[cb].containing_block_establishment,
+            ContainingBlockEstablishment::fixed_and_absolute()
+        );
+        assert_eq!(
+            generated[absolute].containing_block,
+            ContainingBlock::Box(cb)
+        );
+        assert_eq!(generated[fixed].containing_block, ContainingBlock::Box(cb));
+    }
+    #[test]
     fn computed_paint_containment_captures_absolute_and_fixed_descendants_in_buckram() {
         let dom = StaticDocument::parse(
             "<html><body><div id=cb><div id=absolute></div><div id=fixed></div></div></body></html>",

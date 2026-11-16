@@ -2561,15 +2561,18 @@ fn wrapped_inline_text_paints_over_its_background_on_every_line() {
     lines.dedup_by(|a, b| (*a - *b).abs() < 0.5);
     assert!(lines.len() >= 3, "the marks sit on first and later lines");
     for (index, bounds) in rects {
-        let covered = commands.iter().skip(index + 1).any(|command| match command {
-            PaintCmd::DrawText(run) if run.color == red => run.glyphs.iter().any(|glyph| {
-                glyph.point.x >= bounds.min.x - 0.5
-                    && glyph.point.x <= bounds.max.x + 0.5
-                    && glyph.point.y >= bounds.min.y
-                    && glyph.point.y <= bounds.max.y
-            }),
-            _ => false,
-        });
+        let covered = commands
+            .iter()
+            .skip(index + 1)
+            .any(|command| match command {
+                PaintCmd::DrawText(run) if run.color == red => run.glyphs.iter().any(|glyph| {
+                    glyph.point.x >= bounds.min.x - 0.5
+                        && glyph.point.x <= bounds.max.x + 0.5
+                        && glyph.point.y >= bounds.min.y
+                        && glyph.point.y <= bounds.max.y
+                }),
+                _ => false,
+            });
         assert!(
             covered,
             "mark text must be emitted after its background at {bounds:?}"
@@ -3018,4 +3021,74 @@ fn page_zoom_scales_an_emitted_frame_into_the_presentation_viewport() {
     let identity = list.scaled_to(1.0, 320, 240);
     assert_eq!(identity.viewport(), DeviceIntSize::new(320, 240));
     assert_eq!(identity.commands().len(), unscaled);
+}
+
+#[test]
+fn element_filter_wraps_canvas_and_sibling_in_translated_scene() {
+    let document = StaticDocument::parse(
+        r#"<html><body><div id="group"><canvas data-genet-external-texture-key="41"></canvas><span></span></div></body></html>"#,
+    );
+    let styles = resolve_styles(
+        &document,
+        &StyleSet::cambium(&[
+            "html, body { margin: 0 } #group { filter: invert(75%) blur(2px); opacity: .5 } canvas { display: block; width: 20px; height: 20px } span { display: block; width: 20px; height: 20px; background: red }",
+        ]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let fragments = layout(&document, &styles, 320.0, 240.0).unwrap();
+    let canvas = find_canvas(&document);
+    let mut text = TextSystem::new();
+    let list = emit_paint_list_with_text_system_scrolled_with_images_and_external_textures(
+        &document,
+        &styles,
+        &fragments,
+        DeviceIntSize::new(320, 240),
+        1,
+        &mut text,
+        &HashMap::new(),
+        &HashMap::new(),
+        &HashMap::from([(canvas, 41)]),
+    );
+    let commands = list.commands();
+    let start = commands.iter().position(|cmd| matches!(cmd, PaintCmd::PushLayer(layer)
+        if layer.opacity == 0.5 && layer.filters == vec![paint_list_api::FilterOp::Invert(0.75), paint_list_api::FilterOp::Blur(2.0)])).expect("filter layer");
+    let end = commands[start + 1..]
+        .iter()
+        .position(|cmd| matches!(cmd, PaintCmd::PopLayer))
+        .unwrap()
+        + start
+        + 1;
+    assert!(
+        commands[start + 1..end]
+            .iter()
+            .any(|cmd| matches!(cmd, PaintCmd::DrawExternalTexture(_)))
+    );
+    assert!(
+        commands[start + 1..end]
+            .iter()
+            .any(|cmd| matches!(cmd, PaintCmd::DrawRect(_)))
+    );
+    let scene = paint_list_render::translate_paint_list(&list).expect("translate");
+    assert!(scene.ops.iter().any(|op| matches!(op, netrender::SceneOp::PushLayer(layer)
+        if layer.alpha == 0.5 && layer.filters == vec![netrender::SceneFilter::Invert(0.75), netrender::SceneFilter::Blur(2.0)])));
+}
+
+#[test]
+fn filter_alone_establishes_stacking_context() {
+    let list = render(
+        r#"<html><body><div class="filtered"><div class="inner"></div></div><div class="above"></div></body></html>"#,
+        ".filtered { filter: invert(0); } .inner { position: relative; z-index: 10; background: red; width: 20px; height: 20px } .above { position: relative; z-index: 1; background: blue; width: 20px; height: 20px }",
+        1,
+    );
+    let commands = list.commands();
+    let pop = commands
+        .iter()
+        .position(|cmd| matches!(cmd, PaintCmd::PopLayer))
+        .expect("filter group");
+    let blue = commands.iter().position(|cmd| matches!(cmd, PaintCmd::DrawRect(rect) if rect.color == ColorF::new(0.0, 0.0, 1.0, 1.0))).expect("sibling");
+    assert!(
+        pop < blue,
+        "positive z-index descendant stays inside filter stacking context"
+    );
 }

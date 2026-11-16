@@ -251,6 +251,7 @@ fn value_type_path(value_type: &str) -> &'static str {
         "list-style-position" => "crate::values::ListStylePosition",
         "margin" => "crate::values::Margin",
         "opacity" => "crate::values::Opacity",
+        "filter" => "crate::values::Filter",
         "order" => "crate::values::Order",
         "orphans" => "crate::values::Orphans",
         "overflow" => "crate::values::Overflow",
@@ -312,6 +313,7 @@ fn value_type_is_copy(value_type: &str) -> bool {
             | "counter-increment"
             | "counter-set"
             | "transform"
+            | "filter"
     )
 }
 
@@ -389,6 +391,7 @@ fn initial_expression(property: &Property) -> &'static str {
         ("list-style-position", "outside") => "crate::values::ListStylePosition::Outside",
         ("margin", "0") => "crate::values::Margin::Value(crate::values::LengthPercentage::ZERO)",
         ("opacity", "1") => "crate::values::Opacity::ONE",
+        ("filter", "none") => "crate::values::Filter::None",
         ("order", "0") => "crate::values::Order::ZERO",
         ("orphans", "2") => "crate::values::Orphans(2)",
         ("overflow", "visible") => "crate::values::Overflow::Visible",

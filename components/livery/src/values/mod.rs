@@ -36,17 +36,17 @@ pub use property::{
     BackgroundSize, BackgroundSizeComponent, BorderCollapse, BorderStyle, BorderWidth, BoxShadow,
     BoxShadowValue, BoxSizing, BreakAfter, BreakBefore, BreakInside, CaptionSide, Clear, ClipPath,
     ColumnCount, ColumnFill, ColumnWidth, Contain, ContainIntrinsicSize, ContainerName,
-    ContainerType, Direction, Display, Duration, EmptyCells, FlexBasis, FlexDirection, FlexFactor,
-    FlexWrap, Float, FontFamily, FontFeatureSetting, FontFeatureSettings, FontSize, FontStyle,
-    FontVariantLigatures, FontWeight, Gap, GridAutoFlow, GridPlacement, GridTemplate, GridTrack,
-    HangingPunctuation, Hyphens, Inset, LineBreak, LineHeight, ListStylePosition, ListStyleType,
-    Margin, Opacity, Order, Orphans, Overflow, OverflowWrap, Padding, Perspective,
-    PerspectiveOrigin, PointerEvents, Position, Radius, RepeatStyle, Rotate, Scale, ShapeOutside,
-    Size, Spacing, TabSize, TableBorderSpacing, TableLayout, TextAlign, TextAlignLast,
-    TextDecorationColor, TextDecorationLine, TextIndent, TextJustify, TextTransform,
-    TextTransformCase, TextWrapMode, TimingFunction, Transform, TransformFunction, TransformOrigin,
-    TransformStyle, TransitionProperty, Translate, VerticalAlign, Visibility, WhiteSpaceCollapse,
-    Widows, WordBreak, WritingMode, ZIndex,
+    ContainerType, Direction, Display, Duration, EmptyCells, Filter, FilterFunction, FlexBasis,
+    FlexDirection, FlexFactor, FlexWrap, Float, FontFamily, FontFeatureSetting,
+    FontFeatureSettings, FontSize, FontStyle, FontVariantLigatures, FontWeight, Gap, GridAutoFlow,
+    GridPlacement, GridTemplate, GridTrack, HangingPunctuation, Hyphens, Inset, LineBreak,
+    LineHeight, ListStylePosition, ListStyleType, Margin, Opacity, Order, Orphans, Overflow,
+    OverflowWrap, Padding, Perspective, PerspectiveOrigin, PointerEvents, Position, Radius,
+    RepeatStyle, Rotate, Scale, ShapeOutside, Size, Spacing, TabSize, TableBorderSpacing,
+    TableLayout, TextAlign, TextAlignLast, TextDecorationColor, TextDecorationLine, TextIndent,
+    TextJustify, TextTransform, TextTransformCase, TextWrapMode, TimingFunction, Transform,
+    TransformFunction, TransformOrigin, TransformStyle, TransitionProperty, Translate,
+    VerticalAlign, Visibility, WhiteSpaceCollapse, Widows, WordBreak, WritingMode, ZIndex,
 };
 pub use transform_matrix::{Matrix2D, Matrix3D};
 
@@ -117,6 +117,7 @@ macro_rules! unchanged_viewport_resolution {
 
 unchanged_viewport_resolution!(
     Alignment,
+    Filter,
     BackfaceVisibility,
     TransformStyle,
     AnimationDelay,
@@ -580,6 +581,7 @@ macro_rules! discrete_interpolation {
 }
 
 discrete_interpolation!(
+    Filter,
     BackfaceVisibility,
     TransformStyle,
     Alignment,

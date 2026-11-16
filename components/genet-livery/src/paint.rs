@@ -18,15 +18,15 @@ use livery::{
     values::{
         BackfaceVisibility, BackgroundAttachment, BackgroundBox, BackgroundImage, BackgroundSize,
         BackgroundSizeComponent, BorderCollapse, BorderStyle as CssBorderStyle,
-        BoxShadow as CssBoxShadow, ComputedColor, Display, EmptyCells, FontSize, Length,
-        LengthPercentage, LengthUnit, Matrix3D, Overflow as CssOverflow, Position, Radius,
-        RepeatStyle, Visibility,
+        BoxShadow as CssBoxShadow, ComputedColor, Display, EmptyCells, Filter, FilterFunction,
+        FontSize, Length, LengthPercentage, LengthUnit, Matrix3D, Overflow as CssOverflow,
+        Position, Radius, RepeatStyle, Visibility,
     },
 };
 use paint_list_api::{
     AlphaType, BorderDetails, BorderItem, BorderRadius, BorderSide, BorderStyle, BoxShadowClipMode,
     ClipKind, ClipSpec, ColorF, CommonPlacement, DashPattern, DeviceIntSize, EngineId, ExtendMode,
-    ExternalTextureItem, FontResource, GradientStop, IdNamespace, ImageItem, ImageKey,
+    ExternalTextureItem, FilterOp, FontResource, GradientStop, IdNamespace, ImageItem, ImageKey,
     ImageRendering, ImageResource, LayerSpec, LayoutPoint, LayoutRect, LayoutSideOffsets,
     LayoutSize, LayoutTransform, LayoutVector2D, LinearGradientItem, LinearGradientPayload,
     NormalBorder, PaintCmd, PaintList, PathCommand, PathData, RectItem, ShadowItem, StrokeCap,
@@ -989,9 +989,25 @@ fn emit_node<D>(
         .filter(|style| style.display != Display::None && style.visibility == Visibility::Visible)
         .map(|style| style.opacity.value())
         .filter(|opacity| *opacity < 1.0);
-    if let Some(opacity) = opacity {
+    let filters = styles
+        .get(id)
+        .filter(|style| style.display != Display::None && style.visibility == Visibility::Visible)
+        .map(|style| match &style.filter {
+            Filter::None => Vec::new(),
+            Filter::Functions(functions) => functions
+                .iter()
+                .map(|function| match function {
+                    FilterFunction::Invert(value) => FilterOp::Invert(*value),
+                    FilterFunction::Blur(value) => FilterOp::Blur(*value),
+                })
+                .collect(),
+        })
+        .unwrap_or_default();
+    let has_layer = opacity.is_some() || !filters.is_empty();
+    if has_layer {
         list.commands.push(PaintCmd::PushLayer(LayerSpec {
-            opacity,
+            opacity: opacity.unwrap_or(1.0),
+            filters,
             ..LayerSpec::default()
         }));
     }
@@ -1049,7 +1065,7 @@ fn emit_node<D>(
     for _ in 0..clips_descendants {
         list.commands.push(PaintCmd::PopClip);
     }
-    if opacity.is_some() {
+    if has_layer {
         list.commands.push(PaintCmd::PopLayer);
     }
     if transform.is_some() {
@@ -3364,6 +3380,7 @@ where
     let context =
         TransformContextFacts::for_box(style, is_replaced_element(dom, id), flex_grid_item);
     (style.opacity.value() < 1.0
+        || !style.filter.is_none()
         || context.establishes_stacking_context()
         || !style.clip_path.is_none())
     .then_some(0)

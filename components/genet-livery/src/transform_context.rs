@@ -20,6 +20,7 @@ pub(crate) struct TransformContextFacts {
     own_transform: bool,
     perspective: bool,
     preserves_3d: bool,
+    filter: bool,
 }
 
 impl TransformContextFacts {
@@ -45,6 +46,8 @@ impl TransformContextFacts {
                     || style.translate != Translate::None),
             perspective: transformable && style.perspective != Perspective::None,
             preserves_3d: transformable && style.transform_style == TransformStyle::Preserve3d,
+            filter: !matches!(style.display, Display::None | Display::Contents)
+                && !style.filter.is_none(),
         }
     }
 
@@ -67,6 +70,6 @@ impl TransformContextFacts {
     }
 
     pub(crate) fn establishes_positioned_containing_block(self) -> bool {
-        self.own_transform || self.perspective || self.preserves_3d
+        self.own_transform || self.perspective || self.preserves_3d || self.filter
     }
 }

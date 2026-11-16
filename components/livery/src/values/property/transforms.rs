@@ -47,6 +47,120 @@ impl fmt::Display for Opacity {
     }
 }
 
+/// The supported element filter functions, in CSS evaluation order.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Filter {
+    None,
+    Functions(Vec<FilterFunction>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FilterFunction {
+    Invert(f32),
+    Blur(f32),
+}
+
+impl Filter {
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
+impl FromStr for Filter {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let mut input = input.trim();
+        if input.eq_ignore_ascii_case("none") {
+            return Ok(Self::None);
+        }
+        let mut functions = Vec::new();
+        while !input.is_empty() {
+            let open = input
+                .find('(')
+                .ok_or_else(|| ParseError::expected("a filter function"))?;
+            let name = &input[..open];
+            let tail = &input[open + 1..];
+            let close = tail
+                .find(')')
+                .ok_or_else(|| ParseError::expected("a closed filter function"))?;
+            let argument = tail[..close].trim();
+            let mut parser = cssparser::Parser::new(argument);
+            let token = if argument.is_empty() {
+                None
+            } else {
+                Some(
+                    parser
+                        .next()
+                        .map_err(|_| ParseError::expected("a filter argument"))?
+                        .clone(),
+                )
+            };
+            parser
+                .expect_exhausted()
+                .map_err(|_| ParseError::expected("one filter argument"))?;
+            let function = if name.eq_ignore_ascii_case("invert") {
+                let value = match token {
+                    None => 1.0,
+                    Some(cssparser::Token::Number { value, .. }) => value,
+                    Some(cssparser::Token::Percentage { unit_value, .. }) => unit_value,
+                    _ => return Err(ParseError::expected("an invert number or percentage")),
+                };
+                if !value.is_finite() || value < 0.0 {
+                    return Err(ParseError::expected("a nonnegative invert amount"));
+                }
+                FilterFunction::Invert(value.min(1.0))
+            } else if name.eq_ignore_ascii_case("blur") {
+                let value = match token {
+                    None => 0.0,
+                    Some(cssparser::Token::Number { value, .. }) if value == 0.0 => value,
+                    Some(cssparser::Token::Dimension {
+                        value, ref unit, ..
+                    }) if unit.eq_ignore_ascii_case("px") => value,
+                    _ => return Err(ParseError::expected("a pixel blur length")),
+                };
+                if !value.is_finite() || value < 0.0 {
+                    return Err(ParseError::expected("a nonnegative blur length"));
+                }
+                FilterFunction::Blur(value)
+            } else {
+                return Err(ParseError::expected("a supported filter function"));
+            };
+            functions.push(function);
+            input = tail[close + 1..].trim_start();
+        }
+        if functions.is_empty() {
+            Err(ParseError::expected("none or filter functions"))
+        } else {
+            Ok(Self::Functions(functions))
+        }
+    }
+}
+
+impl fmt::Display for Filter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => f.write_str("none"),
+            Self::Functions(functions) => {
+                for (index, function) in functions.iter().enumerate() {
+                    if index != 0 {
+                        f.write_str(" ")?;
+                    }
+                    match function {
+                        FilterFunction::Invert(value) => {
+                            write!(f, "invert({})", format_number(*value))?
+                        },
+                        FilterFunction::Blur(value) => {
+                            write!(f, "blur({}px)", format_number(*value))?
+                        },
+                    }
+                }
+                Ok(())
+            },
+        }
+    }
+}
+
 /// The bounded 2D individual `rotate` property.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Rotate {
@@ -1346,6 +1460,40 @@ impl fmt::Display for TransformFunction {
             Self::Perspective(None) => formatter.write_str("perspective(none)"),
             Self::Perspective(Some(depth)) => write!(formatter, "perspective({depth})"),
             Self::Matrix3D(matrix) => matrix.fmt(formatter),
+        }
+    }
+}
+
+#[cfg(test)]
+mod element_filter_tests {
+    use super::*;
+
+    #[test]
+    fn parses_bounded_filter_list_and_rejects_invalid_values() {
+        let filter: Filter = "invert(75%) blur(2px)".parse().unwrap();
+        assert_eq!(
+            filter,
+            Filter::Functions(vec![
+                FilterFunction::Invert(0.75),
+                FilterFunction::Blur(2.0)
+            ])
+        );
+        assert_eq!(filter.to_string(), "invert(0.75) blur(2px)");
+        assert_eq!(
+            "invert() blur()".parse::<Filter>().unwrap(),
+            Filter::Functions(vec![FilterFunction::Invert(1.0), FilterFunction::Blur(0.0)])
+        );
+        for invalid in [
+            "invert(-1)",
+            "blur(-2px)",
+            "blur(2em)",
+            "brightness(1)",
+            "invert (1)",
+            "invert(1 %)",
+            "blur(1.px)",
+            "invert(1) garbage",
+        ] {
+            assert!(invalid.parse::<Filter>().is_err(), "{invalid}");
         }
     }
 }

@@ -17,11 +17,10 @@ Founded 2026-08-24, when the canonical policy core was distributed across the
 workspace and the component documents for inker, nematic and verso-tile were
 repatriated here from mere.
 
-**Script backend naming (2026-09-26):** Vano is our Nova fork, which we maintain
-and may improve or change as needed for the stack. The current integration still
-uses `script-engine-nova`, `nova_vm`, `NovaEngine` and `--engine nova`; these are
-technical identifiers, not a claim that Genet runs unmodified upstream Nova.
-Historical receipts retain their original names and dependency revisions.
+**Script backend naming:** Bole and Vano are Genet's forks of Boa and Nova.
+Ortet selects them with `--engine bole` and `--engine vano` and reports those
+names in its `backend` field. The legacy spellings are input aliases. Historical
+receipts retain their original names and dependency revisions.
 
 **Human checkpoints and WPT evidence (2026-10-07):** ask and wait for an explicit
 answer, with no response timer or inferred approval. Keep the turn open while an
@@ -1300,7 +1299,7 @@ single digest can honestly be recorded for it.
 The [headed G5 acceptance phase](archive_docs/2026-11-03/2026-09-08_realms_plan.md#phase-headed-g5-acceptance-2026-09-12)
 closes the open item every realms phase since the adoption continuation carried
 forward. The host was chosen by fact, not built: Ortet on `main` already has a
-scripted route (`--engine boa` / `--engine nova` select the scripted session
+scripted route (`--engine bole` / `--engine vano` select the scripted session
 engine), so a real winit window drives the frame loop while the page drives
 itself. The fixture (`ports/ortet/tests/native/realms/`) is a parent document and
 a same-origin child iframe served over one loopback http origin — it **cannot**

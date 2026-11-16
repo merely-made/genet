@@ -54,7 +54,7 @@ function Get-SourceIdentity {
 function Assert-ReceiptLog {
     param([string]$Log, [string]$Engine, [string]$SourceRevision, [string]$ExpectedAddress)
     $output = Get-Content $Log -Raw
-    $engineId = if ($Engine -eq 'nova') { 'genet.scripted.nova' } else { 'genet.scripted' }
+    $engineId = if ($Engine -eq 'vano') { 'genet.scripted.nova' } else { 'genet.scripted' }
     foreach ($needle in @(
         "engine $engineId backend $Engine presented",
         ('semantic heading "' + $completion + '"'),
@@ -108,7 +108,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'native scripted Ortet build failed.' }
     $exe = Join-Path $target 'debug\ortet.exe'
     if (-not (Test-Path $exe)) { throw "Ortet binary was not produced at $exe." }
-    foreach ($engine in @('boa', 'nova')) {
+    foreach ($engine in @('bole', 'vano')) {
         $engineArtifact = Join-Path $artifact $engine
         New-Item -ItemType Directory -Path $engineArtifact -Force | Out-Null
         $png = Join-Path $engineArtifact 'receipt.png'

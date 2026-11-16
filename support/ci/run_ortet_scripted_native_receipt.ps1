@@ -34,7 +34,7 @@ function Assert-ReceiptLog {
     )
 
     $output = Get-Content $Log -Raw
-    $engineId = if ($Engine -eq 'nova') { 'genet.scripted.nova' } else { 'genet.scripted' }
+    $engineId = if ($Engine -eq 'vano') { 'genet.scripted.nova' } else { 'genet.scripted' }
     $identity = "engine $engineId backend $Engine presented"
     if ($output -notmatch [regex]::Escape($identity)) { throw "Ortet $Engine log did not report exact engine/backend identity '$identity'." }
     if ($output -notmatch [regex]::Escape("semantic heading `"$Heading`"")) { throw "Ortet $Engine did not report semantic completion $Heading." }
@@ -148,7 +148,7 @@ try {
             }
         )
 
-        foreach ($engine in @('boa', 'nova')) {
+        foreach ($engine in @('bole', 'vano')) {
             $engineArtifact = Join-Path $artifact $engine
             New-Item -ItemType Directory -Path $engineArtifact -Force | Out-Null
             $png = Join-Path $engineArtifact 'receipt.png'

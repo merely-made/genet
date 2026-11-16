@@ -28,7 +28,7 @@ vocabulary. Following a link is spawning a new session for the new address.
 ortet --url <address> [options]
 
   --url <address>      A file path, a file:// URL, or an http(s) URL.
-  --engine <name>      Session engine: livery (default), boa, or nova.
+  --engine <name>      Session engine: livery (default), bole, or vano.
   --size <WxH>         Window size in physical pixels (default 960x640).
   --frames <N>         Present N frames, then exit once any receipt condition matches.
   --artifact <path>    Write the captured frame as a PNG and print its digest.
@@ -103,7 +103,7 @@ cargo run -p ortet -- --url ports/ortet/examples/article.html \
     --frames 3 --artifact /tmp/ortet_scrolled.png --actions 'scroll:0,240'
 ```
 
-The O5 scripted acceptance runner builds one exact-source Boa/Nova binary and
+The O5 scripted acceptance runner builds one exact-source Bole/Vano binary and
 runs the static input/timer/microtask, bounded timeout, delayed fetch, Worker,
 and stale-session cases through the native host:
 
@@ -116,7 +116,7 @@ Each positive case writes its log, PNG, SHA-256, completion pixel and, for live
 resources, ordered server events. The timeout case must exit unsuccessfully
 with its configured deadline in the log.
 
-The native WebGL receipt uses the selected Boa/Nova engine and the window's
+The native WebGL receipt uses the selected Bole/Vano engine and the window's
 own GPU device. It checks canvas creation, context identity across drawing-buffer
 resize, and exact page/canvas/overlapping-DOM pixels at the reported display scale:
 

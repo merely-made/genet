@@ -105,7 +105,7 @@ function Get-SourceIdentity {
 function Assert-ReceiptLog {
     param([string]$Output, [string]$Engine, [string]$ExpectedAddress)
 
-    $engineId = if ($Engine -eq 'nova') { 'genet.scripted.nova' } else { 'genet.scripted' }
+    $engineId = if ($Engine -eq 'vano') { 'genet.scripted.nova' } else { 'genet.scripted' }
     $identity = "engine $engineId backend $Engine presented"
     if ($Output -notmatch [regex]::Escape($identity)) { throw "Ortet $Engine did not report engine/backend identity '$identity'." }
     if ($Output -notmatch [regex]::Escape("semantic heading `"$completion`"")) { throw "Ortet $Engine did not report semantic completion." }
@@ -283,7 +283,7 @@ try {
         $url = "$origin/parent.html"
         $summary = @()
 
-        foreach ($engine in @('boa', 'nova')) {
+        foreach ($engine in @('bole', 'vano')) {
             $engineArtifact = Join-Path $artifact $engine
             New-Item -ItemType Directory -Path $engineArtifact -Force | Out-Null
             $digests = @()

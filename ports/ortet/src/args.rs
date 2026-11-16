@@ -27,7 +27,7 @@ ortet — the raw Genet host: one window, one document, no chrome.
 usage: ortet --url <address> [options]
 
   --url <address>      A file path, a file:// URL, or an http(s) URL.
-  --engine <name>      Session engine: livery (default), boa, or nova.
+  --engine <name>      Session engine: livery (default), bole, or vano.
   --rtc-bind <IP>     Concrete local RTC address (default 127.0.0.1; host candidates only).
   --size <WxH>         Window size in physical pixels (default 960x640).
   --frames <N>         Present N frames, then exit once any receipt condition matches.
@@ -90,8 +90,8 @@ impl EngineChoice {
     pub const fn name(self) -> &'static str {
         match self {
             Self::Livery => "livery",
-            Self::Boa => "boa",
-            Self::Nova => "nova",
+            Self::Boa => "bole",
+            Self::Nova => "vano",
         }
     }
 }
@@ -235,9 +235,9 @@ where
 fn parse_engine(raw: &str) -> Result<EngineChoice, String> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "livery" => Ok(EngineChoice::Livery),
-        "boa" => Ok(EngineChoice::Boa),
-        "nova" => Ok(EngineChoice::Nova),
-        _ => Err(format!("--engine wants livery, boa, or nova, got {raw}")),
+        "bole" | "boa" => Ok(EngineChoice::Boa),
+        "vano" | "nova" => Ok(EngineChoice::Nova),
+        _ => Err(format!("--engine wants livery, bole, or vano, got {raw}")),
     }
 }
 
@@ -418,14 +418,16 @@ mod tests {
 
     #[test]
     fn engine_selection_is_explicit_and_closed() {
-        assert_eq!(
-            run(&["--url", "a.html", "--engine", "boa"]).engine,
-            EngineChoice::Boa
-        );
-        assert_eq!(
-            run(&["--url", "a.html", "--engine", "NOVA"]).engine,
-            EngineChoice::Nova
-        );
+        for (selector, choice, name) in [
+            ("bole", EngineChoice::Boa, "bole"),
+            ("VANO", EngineChoice::Nova, "vano"),
+            ("boa", EngineChoice::Boa, "bole"),
+            ("nova", EngineChoice::Nova, "vano"),
+        ] {
+            let engine = run(&["--url", "a.html", "--engine", selector]).engine;
+            assert_eq!(engine, choice);
+            assert_eq!(engine.name(), name);
+        }
         assert!(parse(args(&["--url", "a.html", "--engine", "other"])).is_err());
     }
 

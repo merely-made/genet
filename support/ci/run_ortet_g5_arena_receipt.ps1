@@ -7,7 +7,7 @@
 # The G5 arena semantic-contract headed receipt: retain a node from JS,
 # detach it, force collection pressure, adopt/reattach it, mutate it, render
 # it, then release it and confirm the engine's own JS wrapper for it is
-# collected. Reuses the exact-source Boa/Nova build and the receipt
+# collected. Reuses the exact-source Bole/Vano build and the receipt
 # conventions of run_ortet_scripted_native_receipt.ps1 (log/PNG/SHA-256/
 # completion-pixel), against the dedicated fixture
 # ports/ortet/tests/native/g5_arena_receipt.html instead of a new harness.
@@ -35,7 +35,7 @@ $impossible = 'Ortet impossible G5 heading'
 New-Item -ItemType Directory -Path $artifact -Force | Out-Null
 
 # The original G5 run reported HEAD while building an uncommitted tree and
-# a dirty Boa fork. Require clean source repositories and record local path
+# a dirty Bole checkout. Require clean source repositories and record local path
 # dependency revisions as well as Cargo's resolved graph for every replay.
 function Get-SourceIdentity {
     $metadataText = cargo metadata --format-version 1 --locked --offline
@@ -79,7 +79,7 @@ function Assert-ReceiptLog {
     )
 
     $output = Get-Content $Log -Raw
-    $engineId = if ($Engine -eq 'nova') { 'genet.scripted.nova' } else { 'genet.scripted' }
+    $engineId = if ($Engine -eq 'vano') { 'genet.scripted.nova' } else { 'genet.scripted' }
     $identity = "engine $engineId backend $Engine presented"
     if ($output -notmatch [regex]::Escape($identity)) { throw "Ortet $Engine log did not report exact engine/backend identity '$identity'." }
     if ($output -notmatch [regex]::Escape("semantic heading `"$Heading`"")) { throw "Ortet $Engine did not report semantic completion $Heading." }
@@ -131,7 +131,7 @@ try {
     $staticAddress = ([Uri]::new($fixture)).AbsoluteUri
     $anyRefused = $false
 
-    foreach ($engine in @('boa', 'nova')) {
+    foreach ($engine in @('bole', 'vano')) {
         $engineArtifact = Join-Path $artifact $engine
         New-Item -ItemType Directory -Path $engineArtifact -Force | Out-Null
 

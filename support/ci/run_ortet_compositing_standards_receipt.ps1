@@ -50,7 +50,7 @@ function Source-Identity {
 
 function Assert-Log([string]$log, [string]$engine, [string]$revision, [string]$address, [string]$heading, [int]$minFrames) {
     $text = Get-Content $log -Raw
-    $id = if ($engine -eq 'nova') { 'genet.scripted.nova' } else { 'genet.scripted' }
+    $id = if ($engine -eq 'vano') { 'genet.scripted.nova' } else { 'genet.scripted' }
     foreach ($needle in @("engine $id backend $engine presented", "semantic heading `"$heading`"", "source $revision", "settled at $address")) {
         if ($text -notmatch [regex]::Escape($needle)) { throw "$engine log lacks '$needle'" }
     }
@@ -129,7 +129,7 @@ try {
     cargo build -p ortet --features scripted-nova --locked --offline -j $BuildJobs
     if ($LASTEXITCODE -ne 0) { throw 'native Ortet build failed' }
     $exe=Join-Path $target 'debug\ortet.exe'; if (!(Test-Path $exe)) { throw 'ortet.exe missing' }
-    foreach($engine in @('boa','nova')) {
+    foreach($engine in @('bole','vano')) {
         $dir=Join-Path $artifact $engine; New-Item -ItemType Directory -Force $dir | Out-Null
         $log=Join-Path $dir 'receipt.log'; $png=Join-Path $dir 'receipt.png'
         & $exe --url $fixture --engine $engine --size 640x400 --frames 4 --artifact $png --expect-heading $completion --timeout-ms $ReceiptTimeoutMs 2>&1 | Tee-Object $log

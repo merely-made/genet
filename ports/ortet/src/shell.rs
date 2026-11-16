@@ -151,8 +151,7 @@ impl SessionDriver<'_> {
 pub struct Outcome {
     /// The id claimed by the concrete engine that hosted this run.
     pub engine_id: String,
-    /// The command-line backend choice. Boa and Nova intentionally have
-    /// different backends even though Boa uses the generic scripted engine id.
+    /// The canonical command-line backend name, distinct from the session ID.
     pub backend: String,
     pub metadata: BuildMetadata,
     pub address: String,
@@ -342,7 +341,7 @@ fn make_engine_with_wake(
             {
                 let _ = fetcher;
                 Err(
-                    "the boa engine is unavailable: rebuild ortet with --features scripted"
+                    "the bole engine is unavailable: rebuild ortet with --features scripted"
                         .to_owned(),
                 )
             }
@@ -375,13 +374,13 @@ fn make_engine_with_wake(
             #[cfg(all(feature = "scripted-nova", not(target_pointer_width = "64")))]
             {
                 let _ = fetcher;
-                Err("the nova engine is unavailable on 32-bit targets".to_owned())
+                Err("the vano engine is unavailable on 32-bit targets".to_owned())
             }
             #[cfg(not(feature = "scripted-nova"))]
             {
                 let _ = fetcher;
                 Err(
-                    "the nova engine is unavailable: rebuild ortet with --features scripted-nova"
+                    "the vano engine is unavailable: rebuild ortet with --features scripted-nova"
                         .to_owned(),
                 )
             }
@@ -399,10 +398,10 @@ fn make_engine_with_wake(
     match choice {
         crate::args::EngineChoice::Livery => Ok(Box::new(LiverySessionEngine::new(fetcher))),
         crate::args::EngineChoice::Boa => {
-            Err("the boa engine is unavailable: rebuild ortet with --features scripted".to_owned())
+            Err("the bole engine is unavailable: rebuild ortet with --features scripted".to_owned())
         },
         crate::args::EngineChoice::Nova => Err(
-            "the nova engine is unavailable: rebuild ortet with --features scripted-nova"
+            "the vano engine is unavailable: rebuild ortet with --features scripted-nova"
                 .to_owned(),
         ),
     }

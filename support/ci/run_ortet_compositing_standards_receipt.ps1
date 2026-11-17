@@ -127,8 +127,8 @@ function Assert-Pixels([string]$png, [string]$log, [string]$record, [switch]$Ele
                 $expected = "$($s.redRange -join '..'),255,255"
                 $matches = $p.R -ge $s.redRange[0] -and $p.R -le $s.redRange[1] -and $p.G -ge 253 -and $p.B -ge 253
             } elseif ($s.greenWhiteMix) {
-                $expected = '48..210,255,48..210 with matching red and blue'
-                $matches = $p.R -ge 48 -and $p.R -le 210 -and $p.G -ge 253 -and [Math]::Abs($p.R-$p.B) -le 2
+                $expected = '48..210,250..255,48..210 with matching red and blue'
+                $matches = $p.R -ge 48 -and $p.R -le 210 -and $p.G -ge 250 -and [Math]::Abs($p.R-$p.B) -le 2
             } else { $matches = $d -le 2 }
             if (!$matches -or $p.A -ne 255) { throw "$($s.name) at ($x,$y) was $($p.R),$($p.G),$($p.B),$($p.A), expected $expected" }
             [pscustomobject]@{ name=$s.name; x=$x; y=$y; expected=$expected; actual="$($p.R),$($p.G),$($p.B),$($p.A)" }

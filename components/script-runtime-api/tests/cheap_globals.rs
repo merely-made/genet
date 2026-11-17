@@ -204,6 +204,31 @@ fn user_timing_works<E: ScriptEngine>() {
     );
 }
 
+fn navigation_measure_conversion<E: ScriptEngine>() {
+    let (clock, _) = controlled_clock(1_700_000_000_000.0, 1_000.0);
+    let mut rt = Runtime::<E>::with_clock(clock).expect("runtime");
+    let result = read(
+        &mut rt,
+        r#"(function() {
+      function error(f) { try { f(); return 'none'; } catch (e) { return e.name; } }
+      var t = performance.timing;
+      t.responseEnd = t.navigationStart + 42;
+      var a = performance.measure('a', 'navigationStart', 'responseEnd');
+      var b = performance.measure('b', {start: 'responseEnd', duration: 3});
+      var c = performance.measure('c', {end: 'navigationStart', duration: 2});
+      return [a.startTime, a.duration, b.startTime, b.duration, c.startTime, c.duration,
+        error(function(){ performance.measure('z', 'fetchStart'); }),
+        error(function(){ performance.measure('z', 'navigationStart', 'fetchStart'); }),
+        error(function(){ performance.measure('z', 'missing'); }),
+        error(function(){ performance.mark('navigationStart'); })].join(',');
+    })()"#,
+    );
+    assert_eq!(
+        result,
+        "0,42,42,3,-2,2,InvalidAccessError,InvalidAccessError,SyntaxError,SyntaxError"
+    );
+}
+
 fn performance_observer_works<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(
@@ -648,6 +673,7 @@ both_engines! {
     host_resolution_coarsens_further => (host_resolution_on_boa, host_resolution_on_nova),
     date_follows_shared_clock => (date_follows_shared_clock_on_boa, date_follows_shared_clock_on_nova),
     user_timing_works => (user_timing_on_boa, user_timing_on_nova),
+    navigation_measure_conversion => (navigation_measure_on_boa, navigation_measure_on_nova),
     performance_observer_works => (performance_observer_on_boa, performance_observer_on_nova),
     queue_microtask_works => (queue_microtask_on_boa, queue_microtask_on_nova),
     structured_clone_works => (structured_clone_on_boa, structured_clone_on_nova),

@@ -233,6 +233,23 @@ fn worker_scope_has_no_document<E: ScriptEngine>() {
     assert_eq!(read(&mut rt, "got.nav"), "string");
 }
 
+fn worker_navigation_measure<E: ScriptEngine>() {
+    let mut rt = trusted_runtime::<E>();
+    rt.set_script_resource_loader(scripts(&[(
+        "measure.js",
+        r#"
+      function error(f) { try { f(); return 'none'; } catch (e) { return e.name; } }
+      var markResult = error(function(){ performance.mark('navigationStart'); });
+      postMessage([markResult, error(function(){ performance.measure('x', 'navigationStart'); }),
+        error(function(){ performance.measure('x', {end:'fetchStart'}); }),
+        error(function(){ performance.measure('x', 'missing'); })].join(','));
+    "#,
+    )]));
+    rt.eval("var got = null; var w = new Worker('measure.js'); w.onmessage = function(e) { got = e.data; };").expect("start");
+    assert!(drive_until(&mut rt, "String(got !== null)"), "no reply");
+    assert_eq!(read(&mut rt, "got"), "none,TypeError,TypeError,SyntaxError");
+}
+
 fn worker_import_scripts_works<E: ScriptEngine>() {
     let mut rt = trusted_runtime::<E>();
     rt.set_script_resource_loader(scripts(&[
@@ -568,6 +585,7 @@ both_engines! {
     wire_record_round_trips => (wire_record_on_boa, wire_record_on_nova),
     worker_round_trip_works => (worker_round_trip_on_boa, worker_round_trip_on_nova),
     worker_scope_has_no_document => (worker_scope_on_boa, worker_scope_on_nova),
+    worker_navigation_measure => (worker_navigation_measure_on_boa, worker_navigation_measure_on_nova),
     worker_import_scripts_works => (worker_import_scripts_on_boa, worker_import_scripts_on_nova),
     worker_timers_and_ordering_work => (worker_ordering_on_boa, worker_ordering_on_nova),
     worker_timer_uses_elapsed_host_clock => (worker_elapsed_clock_on_boa, worker_elapsed_clock_on_nova),

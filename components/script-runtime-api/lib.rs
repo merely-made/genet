@@ -3020,7 +3020,7 @@ pub(crate) fn install_host_surface<E: ScriptEngine>(
     engine.eval("delete globalThis.__formsPrivate")?;
     streams::finish_streams_install(engine)?;
     // `performance` (hr-time, user timing) + `PerformanceObserver`.
-    timing::install_timing_surface(engine)?;
+    timing::install_timing_surface(engine, scope == GlobalScopeKind::Window)?;
     // `IntersectionObserver`: after `dom` (Element, Document, the geometry
     // natives) and after timing (the clock its entries are stamped from).
     if scope == GlobalScopeKind::Window {

@@ -16,7 +16,17 @@ Maintain a type-by-type matrix of interface availability versus serialization fo
 
 ## Phase G3: timing
 
-`timing.rs` provides only `mark`/`measure` entry types with a frozen SameObject array; `navigationStart` now uses time origin, while other legacy fields initialize to zero. Its conversion of every reserved navigation name throws `SyntaxError`; the historical residual says a zero-valued navigation-timing attribute should instead produce `InvalidAccessError`. Recheck that exact distinction, nonzero-name behavior and current WPT before changing it. Coordinate resource/navigation/paint/longtask/element producers with `2026-10-20_observers_and_timing_plan.md` and network/render hosts. Done for each selected entry family when producer data, identity/lifecycle and error controls pass on both engines, with matched timing results. The SameObject fix is not evidence that those entry producers exist.
+`timing.rs` provides `mark` and `measure` entry types and a frozen SameObject array for `PerformanceObserver.supportedEntryTypes`. Coordinate resource, navigation, paint, long-task and element timing producers with [observers and timing](2026-10-20_observers_and_timing_plan.md) and the network and render hosts. Each entry family needs producer data, identity and lifecycle checks, and error controls on Bole and Vano with matched timing results.
+
+### Legacy navigation names in `performance.measure()` (2026-11-17)
+
+In a Window, `navigationStart` resolves to zero on the measure timeline. Other legacy timing names resolve relative to `navigationStart` when populated and throw `InvalidAccessError` when their value is zero. Worker measures throw `TypeError` for these names, including when a worker mark uses the same name. The `PerformanceMark` name restriction applies in Window realms. [User Timing name conversion](https://www.w3.org/TR/user-timing/#convert-a-name-to-a-timestamp)
+
+`PerformanceTiming.navigationStart` uses time origin. The remaining legacy fields initialize to zero and still need producer data for WPT cases that measure up to `responseEnd` or `loadEventEnd`.
+
+The `cheap_globals` suite passed 34/34 and the `worker` suite passed 36/36 across Bole and Vano. The controls exercise positional and options-based measures, the relative time of a populated field, zero-valued fields, unknown marks, and Worker rejection after creating a mark with a legacy timing name. Logs and dependency snapshots are in `Code/output/genet-measure/`.
+
+`measure_exceptions_navigation_timing.html` passed 4/4 on each engine, up from 0/4 on the prior frozen debug runner. `performance-measure-invalid.worker.html` passed 2/2 on each engine with the current-source worker helper. `measure_navigation_timing.html` reached its harness timeout on both engines with both runners, reporting only the initial `window.performance` assertion.
 
 ## Phase G4: cross-agent reach
 
@@ -24,7 +34,7 @@ Worker and frame messaging are present; BroadcastChannel remains per-agent per `
 
 ## Questions and limits
 
-Which of G1-G4 is the next owner-approved slice, and what exact runtime/host scope is required? Preserve the wasm random-source contract as an implemented boundary, not a new defect. The approved phases above retain the open items; their historical source is archived whole. No WPT totals or test status here are fresh.
+Which of the remaining slices is next, and what runtime and host scope is required? Preserve the implemented wasm random-source contract. The original plan and its evidence are archived whole.
 
 ## Owner carry, 2026-11-03
 

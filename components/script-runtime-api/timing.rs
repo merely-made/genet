@@ -290,16 +290,20 @@ impl<E: ScriptEngine> NativeFn<E> for HrEpoch {
 
 pub(crate) fn install_timing_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
+    is_window: bool,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.set_function::<HrNow>("__hrNow", 1)?;
     engine.set_function::<HrMoment>("__hrMoment", 0)?;
     engine.set_function::<HrEpoch>("__hrEpoch", 2)?;
-    engine.eval(TIMING_BOOTSTRAP)?;
+    engine.eval(
+        &TIMING_BOOTSTRAP.replace("/* IS_WINDOW */", if is_window { "true" } else { "false" }),
+    )?;
     Ok(())
 }
 
 const TIMING_BOOTSTRAP: &str = r#"
 (function() {
+  var isWindow = /* IS_WINDOW */;
   // HTML's crossOriginIsolated: no realm here has the COOP/COEP-backed
   // capability yet, so it is false until a host grants it.
   if (!('crossOriginIsolated' in globalThis)) {
@@ -348,6 +352,10 @@ const TIMING_BOOTSTRAP: &str = r#"
   }
 
   function PerformanceMark(name, options) {
+    name = String(name);
+    if (isWindow && markNameIsReserved(name)) {
+      throw new DOMException("'" + name + "' is a navigation timing attribute.", "SyntaxError");
+    }
     var startTime = now();
     var detail = null;
     if (options !== undefined && options !== null) {
@@ -567,9 +575,13 @@ const TIMING_BOOTSTRAP: &str = r#"
   function convertMarkToTimestamp(mark) {
     if (typeof mark === 'string') {
       if (markNameIsReserved(mark)) {
-        // A navigation-timing attribute name resolves to its (zero) value; a
-        // zero one is not a valid measure endpoint.
-        throw new DOMException("'" + mark + "' has a value of zero.", "SyntaxError");
+        if (!isWindow) throw new TypeError("Navigation timing names require a Window");
+        if (mark === 'navigationStart') return 0;
+        var value = timing[mark];
+        if (value === 0) {
+          throw new DOMException("'" + mark + "' has a value of zero.", "InvalidAccessError");
+        }
+        return value - timing.navigationStart;
       }
       var found = filterEntries(entries, mark, 'mark');
       if (found.length === 0) {
@@ -608,9 +620,6 @@ const TIMING_BOOTSTRAP: &str = r#"
   Performance.prototype.mark = function(name, options) {
     if (arguments.length === 0) throw new TypeError("mark requires a name");
     name = String(name);
-    if (markNameIsReserved(name)) {
-      throw new DOMException("'" + name + "' is a navigation timing attribute.", "SyntaxError");
-    }
     return addEntry(new PerformanceMark(name, options));
   };
   Performance.prototype.measure = function(name, startOrOptions, endMark) {

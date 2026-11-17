@@ -120,6 +120,25 @@ Vello's GPU image import requires straight-alpha RGBA8 with copy-source usage;
 the default premultiplied WebGL surface therefore needs a GPU conversion stage.
 This work does not claim complete WebGL, CSS filters, or blend-mode conformance.
 
+**CSS effects follow-up:** The element's own supported polygon `clip-path`
+clips the result of `filter`; its overflow and descendant clips remain in
+the filter input, and group opacity still composites once. The first
+[`backdrop-filter`](https://drafts.csswg.org/filter-effects-2/#BackdropFilterProperty)
+path supports one on-screen pane with an integral rectangular border box,
+normal opacity, and no enclosing render scope. It samples earlier paint,
+including live canvas images, mirrors samples at the pane edges, and leaves
+the pane's own paint and later draws sharp. Other backdrop roots, rounded or
+transformed panes, group opacity on the pane, document scrolling, page zoom
+and flattened child documents remain outside this path. Earlier element
+filters in the sampled prefix also suppress backdrop blur, since Classic
+resolves those filters after the backdrop pass. The fallback paints
+the rest of the document without applying backdrop blur.
+
+Reproduce using `support/ci/run_ortet_compositing_standards_receipt.ps1` with a
+locked graph and a fresh artifact directory. Its Bole and Vano pixel checks
+cover the clip edge, refreshed canvas behind the pane, mirrored pane edge,
+and sharp foreground inside and outside the pane.
+
 **Origin finding, 2026-09-11:** the first native interior probes passed despite
 an incorrect canvas offset. Visual review and independent coordinate arithmetic
 showed that Livery ignored authored `transform-origin` and always used the box

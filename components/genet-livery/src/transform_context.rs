@@ -21,6 +21,7 @@ pub(crate) struct TransformContextFacts {
     perspective: bool,
     preserves_3d: bool,
     filter: bool,
+    backdrop_filter: bool,
 }
 
 impl TransformContextFacts {
@@ -48,6 +49,8 @@ impl TransformContextFacts {
             preserves_3d: transformable && style.transform_style == TransformStyle::Preserve3d,
             filter: !matches!(style.display, Display::None | Display::Contents)
                 && !style.filter.is_none(),
+            backdrop_filter: !matches!(style.display, Display::None | Display::Contents)
+                && !style.backdrop_filter.is_none(),
         }
     }
 
@@ -66,10 +69,10 @@ impl TransformContextFacts {
     }
 
     pub(crate) fn establishes_stacking_context(self) -> bool {
-        self.own_transform || self.perspective || self.preserves_3d
+        self.own_transform || self.perspective || self.preserves_3d || self.backdrop_filter
     }
 
     pub(crate) fn establishes_positioned_containing_block(self) -> bool {
-        self.own_transform || self.perspective || self.preserves_3d || self.filter
+        self.establishes_stacking_context() || self.filter
     }
 }

@@ -30,6 +30,7 @@ pub use length::{
     MathLengthPercentage, RelativeLengthEnvironment, TreeCounts,
 };
 pub use logical::{LogicalAxis, LogicalSide, PhysicalAxis, PhysicalSide};
+pub use property::BackdropFilter;
 pub use property::{
     Alignment, AnimationDelay, AnimationName, AnimationPlayState, AspectRatio, BackfaceVisibility,
     BackgroundAttachment, BackgroundBox, BackgroundImage, BackgroundPosition, BackgroundRepeat,
@@ -117,6 +118,7 @@ macro_rules! unchanged_viewport_resolution {
 
 unchanged_viewport_resolution!(
     Alignment,
+    BackdropFilter,
     Filter,
     BackfaceVisibility,
     TransformStyle,
@@ -581,6 +583,7 @@ macro_rules! discrete_interpolation {
 }
 
 discrete_interpolation!(
+    BackdropFilter,
     Filter,
     BackfaceVisibility,
     TransformStyle,

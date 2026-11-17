@@ -1,0 +1,45 @@
+<!-- Copyright 2026 Mark Alan Boykin
+     This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this
+     file, you can obtain one at https://mozilla.org/MPL/2.0/.
+     SPDX-License-Identifier: MPL-2.0 -->
+<!doctype html>
+<meta charset="utf-8">
+<title>Ortet live canvas backdrop blur receipt</title>
+<style>
+  html, body { margin: 0; background: white; }
+  #source { position: absolute; left: 20px; top: 20px; width: 70px; height: 86px; }
+  #outside-pane { position: absolute; left: 39px; top: 36px; width: 5px; height: 44px;
+    background: magenta; }
+  #pane { position: absolute; left: 44px; top: 36px; width: 88px; height: 44px;
+    backdrop-filter: blur(7px); }
+  #inside-pane { position: absolute; left: 28px; top: 30px; width: 11px; height: 23px;
+    background: blue; }
+  #foreground { position: absolute; left: 86px; top: 68px; width: 10px; height: 8px;
+    background: red; }
+  #state { position: absolute; left: 8px; top: 125px; margin: 0; }
+</style>
+<canvas id="source" width="70" height="86"></canvas>
+<div id="outside-pane"></div>
+<div id="pane"><div id="inside-pane"></div></div>
+<div id="foreground"></div>
+<h1 id="state">Ortet backdrop blur receipt pending</h1>
+<script>
+  const state = document.getElementById("state");
+  try {
+    const gl = document.getElementById("source").getContext("webgl", { premultipliedAlpha: true });
+    if (!gl) throw new Error("WebGL context unavailable");
+    function clear(r, g) {
+      gl.clearColor(r, g, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL clear failed");
+    }
+    clear(1, 0);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      clear(0, 1);
+      state.textContent = "Ortet backdrop blur receipt complete";
+    }));
+  } catch (error) {
+    state.textContent = "Ortet backdrop blur receipt failed: " + error.message;
+  }
+</script>

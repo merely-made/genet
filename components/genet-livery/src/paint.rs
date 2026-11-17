@@ -49,6 +49,9 @@ use buckram::{
     GridEdgeOrientation, PhysicalSize, TableBorderStyle, TableFragmentRole,
 };
 
+mod backdrop;
+use backdrop::{BackdropPaint, is_backdrop_blur};
+
 /// Genet paint output produced by the Livery CSS/layout path.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LiveryPaintList {
@@ -433,7 +436,9 @@ impl LiveryPaintList {
                 transform: LayoutTransform::identity(),
                 kind: TransformKind::Standard,
             }));
-            replacement.extend(commands);
+            // A flattened child cannot sample its own document backdrop
+            // independently of the parent and its preceding paint.
+            replacement.extend(commands.into_iter().filter(|cmd| !is_backdrop_blur(cmd)));
             replacement.push(PaintCmd::PopTransform);
             replacement.push(PaintCmd::PopClip);
             let index = slot.command_index + inserted;
@@ -562,6 +567,7 @@ impl LiveryPaintList {
         if x == 0.0 && y == 0.0 {
             return self;
         }
+        self.omit_backdrop_blur();
         let transform = TransformSpec {
             origin: LayoutPoint::new(0.0, 0.0),
             transform: LayoutTransform::translation(x, y, 0.0),
@@ -588,6 +594,7 @@ impl LiveryPaintList {
         if factor == 1.0 {
             return self;
         }
+        self.omit_backdrop_blur();
         let transform = TransformSpec {
             origin: LayoutPoint::new(0.0, 0.0),
             transform: LayoutTransform::scale(factor, factor, 1.0),
@@ -598,6 +605,35 @@ impl LiveryPaintList {
         self.shift_slots_after(0, 1, None);
         self
     }
+
+    // The current rectangle pass reads the untransformed, top-level prefix.
+    // Removing its one paint atom keeps all subsequent document content and
+    // outstanding splice slots valid under a host or viewport transform.
+    fn omit_backdrop_blur(&mut self) {
+        let Some(index) = self.commands.iter().position(is_backdrop_blur) else {
+            return;
+        };
+        self.commands.remove(index);
+        for i in self
+            .frame_slots
+            .iter_mut()
+            .map(|slot| &mut slot.command_index)
+            .chain(
+                self.host_leaf_slots
+                    .iter_mut()
+                    .map(|slot| &mut slot.command_index),
+            )
+            .chain(
+                self.text_paint_slots
+                    .iter_mut()
+                    .map(|slot| &mut slot.command_index),
+            )
+        {
+            if *i > index {
+                *i -= 1;
+            }
+        }
+    }
 }
 
 /// The source lookup is borrowed only while emitting. The finished list owns
@@ -607,6 +643,7 @@ pub(crate) struct PaintBuilder<'a> {
     image_keys: HashMap<String, ImageKey>,
     image_sources: &'a dyn crate::ImageSourceLookup,
     document_base_url: Option<&'a str>,
+    backdrop: BackdropPaint,
 }
 
 impl Deref for PaintBuilder<'_> {
@@ -911,6 +948,7 @@ where
         image_keys: HashMap::new(),
         image_sources,
         document_base_url,
+        backdrop: BackdropPaint::default(),
     };
     let mut text_frame = fragments
         .text_frame()
@@ -983,6 +1021,9 @@ fn emit_node<D>(
     if let Some(transform) = &transform {
         list.commands
             .push(PaintCmd::PushTransform(transform.clone()));
+    }
+    if let (Some(style), Some(fragment)) = (styles.get(id), fragments.get(id)) {
+        list.backdrop.draw(&mut list.list, style, fragment);
     }
     let opacity = styles
         .get(id)

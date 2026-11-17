@@ -20,6 +20,8 @@ $fixture = Join-Path $repo 'ports\ortet\tests\native\standards_compositing_recei
 $completion = 'Ortet standards compositing receipt complete'
 $filterFixture = Join-Path $repo 'ports\ortet\tests\native\element_filter_receipt.html'
 $filterCompletion = 'Ortet element filter receipt complete'
+$backdropFixture = Join-Path $repo 'ports\ortet\tests\native\backdrop_filter_receipt.html'
+$backdropCompletion = 'Ortet backdrop blur receipt complete'
 New-Item -ItemType Directory -Path $artifact -Force | Out-Null
 
 function Source-Identity {
@@ -60,19 +62,31 @@ function Assert-Log([string]$log, [string]$engine, [string]$revision, [string]$a
     return $text
 }
 
-function Assert-Pixels([string]$png, [string]$log, [string]$record, [switch]$ElementFilter) {
+function Assert-Pixels([string]$png, [string]$log, [string]$record, [switch]$ElementFilter, [switch]$Backdrop) {
     Add-Type -AssemblyName System.Drawing
     $bitmap = [Drawing.Bitmap]::FromFile($png)
     try {
         $m = [regex]::Match((Get-Content $log -Raw), 'ortet: display scale=(?<scale>[0-9]+(?:\.[0-9]+)?) physical=(?<width>[0-9]+)x(?<height>[0-9]+) logical=(?<lw>[0-9]+)x(?<lh>[0-9]+)')
         $scale = [double]::Parse($m.Groups['scale'].Value, [Globalization.CultureInfo]::InvariantCulture)
         if ($bitmap.Width -ne [int]$m.Groups['width'].Value -or $bitmap.Height -ne [int]$m.Groups['height'].Value) { throw 'Capture differs from native telemetry' }
-        if (!$ElementFilter -and [Math]::Abs((300.5 * $scale) - [Math]::Round(300.5 * $scale)) -gt 0.01) { throw 'Sharp edge is not aligned for measured native scale' }
-        $samples = if ($ElementFilter) {
+        if (!$ElementFilter -and !$Backdrop -and [Math]::Abs((300.5 * $scale) - [Math]::Round(300.5 * $scale)) -gt 0.01) { throw 'Sharp edge is not aligned for measured native scale' }
+        $samples = if ($Backdrop) {
+            @{ name='unblurred-stripe-outside-pane'; logical=@(43,52); color=@(255,0,255) }
+            @{ name='mirrored-pane-edge'; logical=@(44.5,52); color=@(0,255,0) }
+            @{ name='refreshed-canvas-through-pane'; logical=@(62,52); color=@(0,255,0) }
+            @{ name='canvas-edge-blurred-inside-pane'; logical=@(90,52); color=@(0,255,0); greenWhiteMix=$true }
+            @{ name='canvas-sharp-below-pane'; logical=@(89,91); color=@(0,255,0) }
+            @{ name='background-sharp-below-pane'; logical=@(90.5,91); color=@(255,255,255) }
+            @{ name='pane-child-sharp'; logical=@(77,73); color=@(0,0,255) }
+            @{ name='pane-child-overflows-sharply'; logical=@(77,84); color=@(0,0,255) }
+            @{ name='later-foreground-sharp'; logical=@(90,72); color=@(255,0,0) }
+        } elseif ($ElementFilter) {
             @{ name='filtered-canvas'; logical=@(28,28); color=@(128,255,255) }
             @{ name='filtered-overlapping-sibling'; logical=@(55,45); color=@(255,255,128) }
             @{ name='outside-filter'; logical=@(8,40); color=@(255,255,255) }
             @{ name='blur-outside-canvas'; logical=@(19.75,40); color=@(255,255,255); redRange=@(132,250) }
+            @{ name='filter-clip-hard-outside'; logical=@(35.5,109); color=@(255,255,255) }
+            @{ name='filter-input-crosses-clip'; logical=@(36.5,109); color=@(128,255,255) }
         } else { @(
             @{ name='source-over'; logical=@(12,12); color=@(128,255,128) },
             @{ name='dom-over-canvas'; logical=@(20,20); color=@(64,128,192) },
@@ -112,6 +126,9 @@ function Assert-Pixels([string]$png, [string]$log, [string]$record, [switch]$Ele
             if ($s.redRange) {
                 $expected = "$($s.redRange -join '..'),255,255"
                 $matches = $p.R -ge $s.redRange[0] -and $p.R -le $s.redRange[1] -and $p.G -ge 253 -and $p.B -ge 253
+            } elseif ($s.greenWhiteMix) {
+                $expected = '48..210,255,48..210 with matching red and blue'
+                $matches = $p.R -ge 48 -and $p.R -le 210 -and $p.G -ge 253 -and [Math]::Abs($p.R-$p.B) -le 2
             } else { $matches = $d -le 2 }
             if (!$matches -or $p.A -ne 255) { throw "$($s.name) at ($x,$y) was $($p.R),$($p.G),$($p.B),$($p.A), expected $expected" }
             [pscustomobject]@{ name=$s.name; x=$x; y=$y; expected=$expected; actual="$($p.R),$($p.G),$($p.B),$($p.A)" }
@@ -126,6 +143,7 @@ try {
     $before=Source-Identity; $before | Set-Content (Join-Path $artifact 'source-identity.json')
     $env:GENET_SOURCE_REVISION=(git rev-parse HEAD).Trim(); $address=([Uri]::new($fixture)).AbsoluteUri
     $filterAddress=([Uri]::new($filterFixture)).AbsoluteUri
+    $backdropAddress=([Uri]::new($backdropFixture)).AbsoluteUri
     cargo build -p ortet --features scripted-nova --locked --offline -j $BuildJobs
     if ($LASTEXITCODE -ne 0) { throw 'native Ortet build failed' }
     $exe=Join-Path $target 'debug\ortet.exe'; if (!(Test-Path $exe)) { throw 'ortet.exe missing' }
@@ -140,6 +158,11 @@ try {
         if($LASTEXITCODE -ne 0){throw "$engine filter receipt failed"}
         Assert-Log $filterLog $engine $env:GENET_SOURCE_REVISION $filterAddress $filterCompletion 1 | Out-Null
         Assert-Pixels $filterPng $filterLog (Join-Path $dir 'filter-pixels.json') -ElementFilter
+        $backdropLog=Join-Path $dir 'backdrop.log'; $backdropPng=Join-Path $dir 'backdrop.png'
+        & $exe --url $backdropFixture --engine $engine --size 640x400 --frames 4 --artifact $backdropPng --expect-heading $backdropCompletion --timeout-ms $ReceiptTimeoutMs 2>&1 | Tee-Object $backdropLog
+        if($LASTEXITCODE -ne 0){throw "$engine backdrop receipt failed"}
+        Assert-Log $backdropLog $engine $env:GENET_SOURCE_REVISION $backdropAddress $backdropCompletion 4 | Out-Null
+        Assert-Pixels $backdropPng $backdropLog (Join-Path $dir 'backdrop-pixels.json') -Backdrop
     }
     $after=Source-Identity; $after | Set-Content (Join-Path $artifact 'source-identity-after.json')
     if ((($before|ConvertFrom-Json)|ConvertTo-Json -Depth 5 -Compress) -ne (($after|ConvertFrom-Json)|ConvertTo-Json -Depth 5 -Compress)){throw 'source identity changed'}

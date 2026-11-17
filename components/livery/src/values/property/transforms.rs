@@ -161,6 +161,42 @@ impl fmt::Display for Filter {
     }
 }
 
+/// The first backdrop filter lane supports one pixel-valued blur.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BackdropFilter {
+    None,
+    Blur(f32),
+}
+
+impl BackdropFilter {
+    pub fn is_none(self) -> bool {
+        matches!(self, Self::None)
+    }
+}
+
+impl FromStr for BackdropFilter {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input.parse::<Filter>()? {
+            Filter::None => Ok(Self::None),
+            Filter::Functions(functions) => match functions.as_slice() {
+                [FilterFunction::Blur(value)] => Ok(Self::Blur(*value)),
+                _ => Err(ParseError::expected("none or one pixel blur")),
+            },
+        }
+    }
+}
+
+impl fmt::Display for BackdropFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => f.write_str("none"),
+            Self::Blur(value) => write!(f, "blur({}px)", format_number(*value)),
+        }
+    }
+}
+
 /// The bounded 2D individual `rotate` property.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Rotate {
@@ -1467,6 +1503,22 @@ impl fmt::Display for TransformFunction {
 #[cfg(test)]
 mod element_filter_tests {
     use super::*;
+
+    #[test]
+    fn parses_a_single_pixel_backdrop_blur() {
+        assert_eq!("none".parse(), Ok(BackdropFilter::None));
+        assert_eq!("BLUR(2.5PX)".parse(), Ok(BackdropFilter::Blur(2.5)));
+        assert_eq!("blur()".parse(), Ok(BackdropFilter::Blur(0.0)));
+        assert_eq!(BackdropFilter::Blur(2.5).to_string(), "blur(2.5px)");
+        for invalid in [
+            "invert(1)",
+            "blur(2px) blur(1px)",
+            "blur(-1px)",
+            "blur(2em)",
+        ] {
+            assert!(invalid.parse::<BackdropFilter>().is_err(), "{invalid}");
+        }
+    }
 
     #[test]
     fn parses_bounded_filter_list_and_rejects_invalid_values() {

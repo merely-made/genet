@@ -13,22 +13,29 @@
   #canvas { display: block; width: 64px; height: 48px; }
   #sibling { position: absolute; left: 22px; top: 14px; width: 28px; height: 22px;
     background: blue; }
-  #state { position: absolute; left: 8px; top: 90px; margin: 0; }
+  #clipped { position: absolute; left: 20px; top: 90px; width: 80px; height: 40px;
+    filter: invert(1) blur(4px); opacity: .5;
+    clip-path: polygon(16px 0, 100% 0, 100% 100%, 16px 100%); }
+  #clip-canvas { display: block; width: 64px; height: 40px; }
+  #state { position: absolute; left: 8px; top: 145px; margin: 0; }
 </style>
 <div id="group">
   <canvas id="canvas" width="64" height="48"></canvas>
   <div id="sibling"></div>
 </div>
+<div id="clipped"><canvas id="clip-canvas" width="64" height="40"></canvas></div>
 <h1 id="state">Ortet element filter receipt pending</h1>
 <script>
   const state = document.getElementById("state");
   try {
-    const canvas = document.getElementById("canvas");
-    const gl = canvas.getContext("webgl", { premultipliedAlpha: true });
-    if (!gl) throw new Error("WebGL context unavailable");
-    gl.clearColor(1, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL clear failed");
+    for (const id of ["canvas", "clip-canvas"]) {
+      const canvas = document.getElementById(id);
+      const gl = canvas.getContext("webgl", { premultipliedAlpha: true });
+      if (!gl) throw new Error("WebGL context unavailable");
+      gl.clearColor(1, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL clear failed");
+    }
     state.textContent = "Ortet element filter receipt complete";
   } catch (error) {
     state.textContent = "Ortet element filter receipt failed: " + error.message;

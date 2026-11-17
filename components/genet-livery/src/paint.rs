@@ -1003,13 +1003,41 @@ fn emit_node<D>(
                 .collect(),
         })
         .unwrap_or_default();
-    let has_layer = opacity.is_some() || !filters.is_empty();
-    if has_layer {
+    // The element's clip-path clips the filtered result, while overflow and
+    // descendant clips remain in the filter input. Opacity composites last.
+    let own_clip = styles
+        .get(id)
+        .filter(|style| style.display != Display::None && style.visibility == Visibility::Visible)
+        .and_then(|style| {
+            fragments
+                .get(id)
+                .filter(|fragment| paintable_fragment(fragment))
+                .and_then(|fragment| polygon_clip(style, fragment))
+        });
+    let has_filter = !filters.is_empty();
+    let combined_layer = own_clip.is_none() && (opacity.is_some() || has_filter);
+    if combined_layer {
         list.commands.push(PaintCmd::PushLayer(LayerSpec {
             opacity: opacity.unwrap_or(1.0),
             filters,
             ..LayerSpec::default()
         }));
+    } else {
+        if let Some(opacity) = opacity {
+            list.commands.push(PaintCmd::PushLayer(LayerSpec {
+                opacity,
+                ..LayerSpec::default()
+            }));
+        }
+        if let Some(clip) = &own_clip {
+            list.commands.push(PaintCmd::PushClip(clip.clone()));
+        }
+        if has_filter {
+            list.commands.push(PaintCmd::PushLayer(LayerSpec {
+                filters,
+                ..LayerSpec::default()
+            }));
+        }
     }
     let Some((inherited, clips_descendants)) = begin_node(
         dom,
@@ -1065,8 +1093,18 @@ fn emit_node<D>(
     for _ in 0..clips_descendants {
         list.commands.push(PaintCmd::PopClip);
     }
-    if has_layer {
+    if combined_layer {
         list.commands.push(PaintCmd::PopLayer);
+    } else {
+        if has_filter {
+            list.commands.push(PaintCmd::PopLayer);
+        }
+        if own_clip.is_some() {
+            list.commands.push(PaintCmd::PopClip);
+        }
+        if opacity.is_some() {
+            list.commands.push(PaintCmd::PopLayer);
+        }
     }
     if transform.is_some() {
         list.commands.push(PaintCmd::PopTransform);
@@ -1332,18 +1370,6 @@ where
             let style = styles.get(id)?;
             if style.display == Display::None || style.visibility != Visibility::Visible {
                 return None;
-            }
-            // `clip-path` applies to this box's own decoration and content as
-            // well as every descendant. Keep it outside the overflow/table
-            // clips below so the normal reverse-pop closes the narrow scopes
-            // first.
-            if let Some(fragment) = fragments
-                .get(id)
-                .filter(|fragment| paintable_fragment(fragment))
-                && let Some(clip) = polygon_clip(style, fragment)
-            {
-                list.commands.push(PaintCmd::PushClip(clip));
-                clips_descendants += 1;
             }
             text.system
                 .prepare_inline_children(text.frame, dom, styles, fragments, id, style);

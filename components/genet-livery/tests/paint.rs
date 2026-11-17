@@ -3092,3 +3092,72 @@ fn filter_alone_establishes_stacking_context() {
         "positive z-index descendant stays inside filter stacking context"
     );
 }
+
+#[test]
+fn element_clip_wraps_filter_inside_group_opacity_and_keeps_overflow_inside() {
+    let list = render(
+        r#"<html><body><div class="group"><div class="child"></div></div></body></html>"#,
+        "html, body { margin: 0 } .group { width: 80px; height: 60px; opacity: .5; filter: blur(2px); clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); overflow: hidden; background: red } .child { width: 90px; height: 70px; background: blue }",
+        1,
+    );
+    let commands = list.commands();
+    let opacity = commands.iter().position(|cmd| matches!(cmd, PaintCmd::PushLayer(layer) if layer.opacity == 0.5 && layer.filters.is_empty())).expect("outer opacity");
+    let clip = commands
+        .iter()
+        .position(
+            |cmd| matches!(cmd, PaintCmd::PushClip(spec) if matches!(spec.kind, ClipKind::Path(_))),
+        )
+        .expect("own clip");
+    let filter = commands.iter().position(|cmd| matches!(cmd, PaintCmd::PushLayer(layer) if layer.opacity == 1.0 && layer.filters == vec![paint_list_api::FilterOp::Blur(2.0)])).expect("filter");
+    let overflow = commands
+        .iter()
+        .enumerate()
+        .skip(filter + 1)
+        .find_map(|(i, cmd)| {
+            matches!(cmd, PaintCmd::PushClip(spec) if matches!(spec.kind, ClipKind::Rect(_)))
+                .then_some(i)
+        })
+        .expect("overflow");
+    let child = commands.iter().position(|cmd| matches!(cmd, PaintCmd::DrawRect(rect) if rect.color == ColorF::new(0.0, 0.0, 1.0, 1.0))).expect("child");
+    assert!(
+        opacity < clip && clip < filter && filter < overflow && overflow < child,
+        "{commands:#?}"
+    );
+    assert!(
+        matches!(
+            &commands[child + 1..],
+            [
+                PaintCmd::PopClip,
+                PaintCmd::PopLayer,
+                PaintCmd::PopClip,
+                PaintCmd::PopLayer,
+                ..
+            ]
+        ),
+        "{commands:#?}"
+    );
+    let scene = paint_list_render::translate_paint_list(&list).expect("translate");
+    let layers: Vec<_> = scene
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            netrender::SceneOp::PushLayer(layer) => Some(layer),
+            _ => None,
+        })
+        .collect();
+    let outer = layers
+        .iter()
+        .position(|layer| layer.alpha == 0.5)
+        .expect("scene opacity");
+    let effect = layers
+        .iter()
+        .position(|layer| layer.filters == vec![netrender::SceneFilter::Blur(2.0)])
+        .expect("scene filter");
+    assert!(
+        outer < effect
+            && layers[outer + 1..effect]
+                .iter()
+                .any(|layer| matches!(layer.clip, netrender::SceneClip::Path(_))),
+        "scene layers: {layers:#?}"
+    );
+}

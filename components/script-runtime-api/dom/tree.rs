@@ -59,7 +59,14 @@ impl<E: ScriptEngine> NativeFn<E> for CreateElement {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let arg = cx.arg(0);
         let tag = cx.value_to_string(&arg)?;
-        match with_dom::<E, _>(cx, |dom| dom.create_element(html_qual(&tag))) {
+        let mode = cx.arg(1);
+        let html = cx.value_to_string(&mode)? != "false";
+        let name = if html {
+            html_qual(&tag)
+        } else {
+            attr_qual(&tag)
+        };
+        match with_dom::<E, _>(cx, |dom| dom.create_element(name)) {
             Some(id) => reflect_pinned::<E>(cx, id.raw() as u64),
             None => Ok(cx.undefined()),
         }
@@ -269,24 +276,43 @@ impl<E: ScriptEngine> NativeFn<E> for GetTextContent {
     }
 }
 
-/// Collect, in document order under `root`, the elements whose local name matches
-/// `tag` (ASCII case-insensitive; `*` matches all). Shared by the
-/// `getElementsByTagName` count/item sinks. `root` itself is not included (the
-/// document/element receiver is the scope, descendants are the result).
-fn collect_by_tag(dom: &ScriptedDom, root: NodeId, tag: &str) -> Vec<NodeId> {
-    fn walk(dom: &ScriptedDom, node: NodeId, tag: &str, out: &mut Vec<NodeId>) {
+/// Collect matching descendants in tree order. HTML documents compare an
+/// ASCII-lowercased query against HTML elements' qualified names; all other
+/// elements use the original query and case-sensitive qualified names.
+fn collect_by_tag(dom: &ScriptedDom, root: NodeId, tag: &str, html: bool) -> Vec<NodeId> {
+    fn walk(
+        dom: &ScriptedDom,
+        node: NodeId,
+        tag: &str,
+        lower: &str,
+        html: bool,
+        out: &mut Vec<NodeId>,
+    ) {
         for child in dom.dom_children(node).collect::<Vec<_>>() {
-            if dom
-                .element_name(child)
-                .is_some_and(|q| tag == "*" || q.local.as_str().eq_ignore_ascii_case(tag))
-            {
+            if dom.element_name(child).is_some_and(|q| {
+                if tag == "*" {
+                    return true;
+                }
+                let expected = if html && q.ns.as_str() == XHTML_NS {
+                    lower
+                } else {
+                    tag
+                };
+                match q.prefix.as_ref() {
+                    Some(prefix) => expected
+                        .strip_prefix(prefix.as_str())
+                        .and_then(|rest| rest.strip_prefix(':'))
+                        .is_some_and(|local| local == q.local.as_str()),
+                    None => expected == q.local.as_str(),
+                }
+            }) {
                 out.push(child);
             }
-            walk(dom, child, tag, out);
+            walk(dom, child, tag, lower, html, out);
         }
     }
     let mut out = Vec::new();
-    walk(dom, root, tag, &mut out);
+    walk(dom, root, tag, &tag.to_ascii_lowercase(), html, &mut out);
     out
 }
 
@@ -302,7 +328,9 @@ impl<E: ScriptEngine> NativeFn<E> for ElementsByTagNameCount {
         };
         let tag_v = cx.arg(1);
         let tag = cx.value_to_string(&tag_v)?;
-        let n = with_dom::<E, _>(cx, |dom| collect_by_tag(dom, root.id(), &tag).len()).unwrap_or(0);
+        let mode = cx.arg(2);
+        let html = cx.value_to_string(&mode)? == "true";
+        let n = root.with_dom(|dom| collect_by_tag(dom, root.id(), &tag, html).len());
         cx.make_string(&n.to_string())
     }
 }
@@ -323,10 +351,11 @@ impl<E: ScriptEngine> NativeFn<E> for ElementsByTagNameItem {
             .value_to_string(&i_v)?
             .parse::<usize>()
             .unwrap_or(usize::MAX);
-        match with_dom::<E, _>(cx, |dom| {
-            collect_by_tag(dom, root.id(), &tag).get(i).copied()
+        let mode = cx.arg(3);
+        let html = cx.value_to_string(&mode)? == "true";
+        match root.with_dom(|dom| {
+            collect_by_tag(dom, root.id(), &tag, html).get(i).copied()
         })
-        .flatten()
         {
             Some(node) => reflect_pinned::<E>(cx, node.raw() as u64),
             None => Ok(cx.undefined()),
@@ -366,6 +395,22 @@ impl<E: ScriptEngine> NativeFn<E> for DocumentElement {
     }
 }
 
+// Preserve the existing local-name lookup used by document.head/body.
+fn first_by_local_tag(dom: &ScriptedDom, root: NodeId, tag: &str) -> Option<NodeId> {
+    for child in dom.dom_children(root) {
+        if dom
+            .element_name(child)
+            .is_some_and(|q| q.local.as_str().eq_ignore_ascii_case(tag))
+        {
+            return Some(child);
+        }
+        if let Some(found) = first_by_local_tag(dom, child, tag) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 /// `__documentBody(scope)` → the first `<body>` under `scope`, or `undefined`.
 pub(crate) struct DocumentBody;
 impl<E: ScriptEngine> NativeFn<E> for DocumentBody {
@@ -375,7 +420,7 @@ impl<E: ScriptEngine> NativeFn<E> for DocumentBody {
             return Ok(cx.undefined());
         };
         match with_dom::<E, _>(cx, |dom| {
-            collect_by_tag(dom, root.id(), "body").first().copied()
+            first_by_local_tag(dom, root.id(), "body")
         })
         .flatten()
         {
@@ -394,7 +439,7 @@ impl<E: ScriptEngine> NativeFn<E> for DocumentHead {
             return Ok(cx.undefined());
         };
         match with_dom::<E, _>(cx, |dom| {
-            collect_by_tag(dom, root.id(), "head").first().copied()
+            first_by_local_tag(dom, root.id(), "head")
         })
         .flatten()
         {

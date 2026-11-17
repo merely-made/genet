@@ -165,6 +165,30 @@ fn self_is_replaceable_on_window<E: ScriptEngine>() {
     );
 }
 
+fn namespace_attributes_and_live_tag_queries<E: ScriptEngine>() {
+    assert_eq!(console::<E>(r#"
+      var H = 'http://www.w3.org/1999/xhtml', S = 'http://www.w3.org/2000/svg';
+      var xml = document.implementation.createDocument(null, 'root', null);
+      var xhtml = document.implementation.createDocument(H, 'root', null);
+      var parsed = new DOMParser().parseFromString('<root/>', 'application/xhtml+xml');
+      console.log([xml.createElement('DiV').namespaceURI, xhtml.createElement('DiV').namespaceURI,
+        parsed.createElement('DiV').namespaceURI, xhtml.createElement('DiV').localName].join('|'));
+      var e = xml.createElementNS(H, 'div'); xml.documentElement.appendChild(e);
+      e.setAttribute('DaTa-Å', 'one'); e.setAttribute('data-Å', 'two');
+      console.log([e.getAttribute('DaTa-Å'), e.getAttribute('data-Å'), e.hasAttribute('DATA-Å')].join('|'));
+      document.body.appendChild(e);
+      console.log([e.getAttribute('DATA-Å'), e.hasAttribute('DATA-Å')].join('|'));
+      e.removeAttribute('DATA-Å'); console.log([e.getAttribute('data-Å'), e.getAttribute('DaTa-Å')].join('|'));
+      var host = document.createElement('div'); document.body.appendChild(host);
+      var h = document.createElementNS(H, 'div'), upper = document.createElementNS(H, 'DIV');
+      var svg = document.createElementNS(S, 's:Thing'); host.appendChild(h); host.appendChild(upper); host.appendChild(svg);
+      var live = host.getElementsByTagName('DIV');
+      console.log([live.length, host.getElementsByTagName('s:Thing').length, host.getElementsByTagName('s:thing').length].join('|'));
+      xml.documentElement.appendChild(host);
+      console.log([live.length, live[0] === h, host.getElementsByTagName('div')[0] === h, host.getElementsByTagName('DIV')[0] === upper].join('|'));
+    "#), vec!["|http://www.w3.org/1999/xhtml|http://www.w3.org/1999/xhtml|DiV", "one|two|false", "two|true", "|", "1|1|0", "1|true|true|true"]);
+}
+
 macro_rules! per_backend {
     ($body:ident, $boa:ident, $nova:ident) => {
         #[test]
@@ -210,3 +234,5 @@ per_backend!(
     replaceable_self_on_boa,
     replaceable_self_on_nova
 );
+
+per_backend!(namespace_attributes_and_live_tag_queries, namespace_attributes_queries_on_boa, namespace_attributes_queries_on_nova);

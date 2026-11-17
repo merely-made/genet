@@ -25,6 +25,31 @@ fn run<E: ScriptEngine>(rt: &mut Runtime<E>, source: &str) {
     }
 }
 
+fn tag_collection_follows_cross_arena_adoption<E: ScriptEngine>() {
+    let mut rt = runtime::<E>();
+    run(&mut rt, r#"
+        var root = document.createElement('div');
+        var leaf = document.createElement('span'); root.appendChild(leaf);
+        var live = root.getElementsByTagName('SPAN');
+        child.document.body.appendChild(root);
+        if (live.length !== 1 || live[0] !== leaf ||
+            child.Element.prototype.getElementsByTagName.call(root, 'SPAN')[0] !== leaf)
+            throw new Error('tag collection did not follow adopted owner arena');
+        var added = child.document.createElement('span'); root.appendChild(added);
+        if (live.length !== 2 || live[1] !== added) throw new Error('tag collection lost liveness');
+        var xml = child.document.implementation.createDocument(null, 'root', null);
+        var uppercase = child.document.createElementNS('http://www.w3.org/1999/xhtml', 'SPAN');
+        root.appendChild(uppercase); xml.documentElement.appendChild(root);
+        var xmlList = root.getElementsByTagName('SPAN');
+        if (live.length !== 2 || xmlList.length !== 1 || xmlList[0] !== uppercase)
+            throw new Error('document mode or original collection filter lost across arenas');
+        document.body.appendChild(root);
+        if (xmlList.length !== 1 || xmlList[0] !== uppercase ||
+            root.getElementsByTagName('SPAN').length !== 2)
+            throw new Error('held XML filter or new HTML filter changed after adoption');
+    "#);
+}
+
 fn automatic_insertion_preserves_wrapper_and_routes_events<E: ScriptEngine>() {
     let mut rt = runtime::<E>();
     run(
@@ -415,6 +440,10 @@ macro_rules! backend {
             #[test]
             fn mixed_component_collection() {
                 super::mixed_creation_realms_share_detached_component_liveness::<$engine>();
+            }
+            #[test]
+            fn adopted_tag_collection() {
+                super::tag_collection_follows_cross_arena_adoption::<$engine>();
             }
             #[test]
             fn automatic_insertion() {

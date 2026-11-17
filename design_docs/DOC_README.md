@@ -140,7 +140,6 @@ older `docs/` corpus without changing their location or governance.
 | [MutationObserver and timing](2026-10-20_observers_and_timing_plan.md#mutationobserver-archival-carry-2026-11-16) | The observer implementation is complete. Phase M owns current verification of parser-driven records, CDATA `textContent`, and cross-realm callback exception reporting. |
 | [Selection and Range](2026-09-07_selection_range_plan.md) | `Range` / `StaticRange` / `Selection` over the scripted arena, with the live-range steps at the bootstrap's mutation funnel and a boundary index keyed by node. Landed 2026-09-07: `selection` 0/280 to 28,582/33,621 subtests, `dom/ranges` 0 to 10 all-pass, +29,126 subtest passes and zero pass-to-fail. The DOM node model lane supplied all three on 2026-09-07 (plus a constructible `Document`, the second floor in the same file) and `dom/ranges` unfloored to 15 all-pass / 35,466 subtests. |
 | [DOM node model](2026-09-07_dom_node_model_plan.md) | `DocumentFragment` insertion, `CDATASection` and real `DocumentType` nodes, the `ParentNode` / `ChildNode` mixins, `normalize`, `outerHTML`, namespaced attributes as live `Attr` nodes, `DOMParser` / `XMLSerializer` and `Node.baseURI`. Landed 2026-09-07: `dom/ranges` unfloored (15 errored to 1, 24 to 35,466 subtests), `html/semantics/interfaces.html` 298 to 435 of 438, +82,944 subtest passes over nine directories with zero pass-to-fail. Next proof is a server-mode receipt for `responseXML`, and static `NodeList` indexed access, which is a `Proxy` trap per read. |
-| [Tag-name casing and the window globals](2026-09-07_tagname_window_globals_plan.md) | `tagName` / `nodeName` fold only for an HTML-namespaced element whose current node document is an HTML document, element interfaces and custom element names match case-sensitively, `document.importNode` exists, and `window` / `document` / `self` have their `[LegacyUnforgeable]` and `[Replaceable]` shapes on both the window and the worker global. Landed 2026-09-07: `Element-tagName.html` 3/6 to 6/6, `html/semantics/interfaces.html` to all-pass, +31 subtest passes with zero pass-to-fail. Residuals: `createElement`'s namespace on an XML document, and attribute-name folding, which still turns on the namespace alone. |
 | [Dedicated Worker](2026-09-07_worker_plan.md) | A second `Runtime` of the same engine on its own thread with `DedicatedWorkerGlobalScope`, `Worker` on the page, `MessagePort` across the boundary, and a JSON encoding of the clone record as the cross-agent wire. Landed 2026-09-07: `workers` 5 to 74 all-pass and 21 to 321 subtests, genet-wpt hosts `.worker.js` and `.any.worker` variants, +972 subtest passes with zero pass-to-fail. Both-engine automated coverage includes cycles, aliases, ports, transfers, fetch, errors and termination; O5 accepts bounded native headed Worker delivery. Conformance remains open: `SharedWorker`, cross-agent `BroadcastChannel`, module workers, nested-worker relay ordering, real `ArrayBuffer` storage/view detachment and cooperative termination remain residuals. Browser-hosted scripting acceptance remains open. |
 | [WebSocket](2026-09-07_websocket_plan.md) | The `WebSocket` host object over netfetcher's transport, with the browser policy the Fetch algorithm does not wrap it in enforced on the connection path. Landed 2026-09-07: `websockets` 0 to 1,090 of 1,877 subtests in disk mode, 254 all-pass and 1,144/1,586 in the first server-mode run; `fetch` and `xhr` byte-identical. Residuals: worker-hosted sockets (214 files), `WebSocketStream`, real backpressure. |
 | [Reflector identity](2026-09-07_reflector_identity_plan.md) | Wrapper liveness follows node reachability: every wrapper has an opaque root, a connected node's wrapper lives as long as its document, a detached subtree's as long as script holds any one of it. Landed 2026-09-07 with zero census movement over six directories under both harness-collection settings; the receipts are the reproducer set and the restored `ErrorEvent` `toStringTag`, not a score. Residual: the between-tick window for detached trees. |
@@ -283,30 +282,6 @@ completed corpus census or bounded slice does not close its enclosing feature.
   The [census lane receipt](../../../testing/genet/design_docs/receipts/2026-10-04_genet_census_panics/receipt.md)
   records all controls, 33 attributed movements and remaining feature forks.)
 
-- [tagname_window_globals_plan](2026-09-07_tagname_window_globals_plan.md)
-  (**landed 2026-09-07**: the two shape residuals the interface-table and Worker
-  lanes left named. The HTML uppercasing moved out of the arena's `__tagName` /
-  `__nodeName` and into the bootstrap, because the rule depends on the node's
-  *current* node document being an HTML document — which only the JS tier tracks,
-  and which `importNode` and `adoptNode` change — so the natives now report a
-  case-preserved qualified name and one `elementQualifiedName` folds per read.
-  With case preserved, element-interface selection reads the **local name**
-  case-sensitively (`createElementNS(html, 'DIV')` is an `HTMLUnknownElement`),
-  custom element definitions are keyed by local name so `foo-bar` cannot claim
-  `foo-BAR`, and `isValidCustomElementName` gained the first-code-point and
-  no-ASCII-uppercase rules it was missing. `document.importNode` was added on a
-  `cloneNode` refactored to take its destination document. `window` and
-  `document` became `[LegacyUnforgeable]` accessors and `self` a `[Replaceable]`
-  one, with a `Runtime::new_worker` so the worker global never defines what it
-  must not have rather than deleting it afterwards — both backends, Nova
-  included, accept a non-configurable accessor on the global.
-  `dom/nodes/Element-tagName.html` 3/6 -> 6/6,
-  `html/semantics/interfaces.html` 435/438 -> **438/438** (all-pass),
-  `Document-importNode` 0/5 -> 4/5, `custom-elements/Document-createElementNS`
-  to all-pass, `unexpected-self-properties.worker` holds at 57/57; +31 subtest
-  passes over six directories, five files `fail -> pass`, zero pass-to-fail.
-  Two baselines repinned forward. Raw maps under
-  `Code/testing/genet/wpt-ledger/2026-09-07_tagname_window_globals/`.)
 - [worker_plan](2026-09-07_worker_plan.md)
   (**landed 2026-09-07**: the dedicated Worker. Both engines are `!Send`, so the
   worker thread constructs its own `Runtime` and owns it; the spawn needs no
@@ -712,6 +687,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
 Per policy §4 and §8: a plan moves here once complete and once its open
 points have a home elsewhere. Links into a moved plan are repaired in the
 same session; links out of it are rewritten for its new depth.
+
+### Archived 2026-11-17
+
+- [Tag-name casing and window globals](archive_docs/2026-11-17/2026-09-07_tagname_window_globals_plan.md) — the original window and worker global checks and the follow-through on element creation, attribute casing and qualified-name matching passed focused Bole and Vano gates. The [closeout](archive_docs/2026-11-17/2026-09-07_tagname_window_globals_plan.md#dom-naming-follow-through-2026-11-17) records the named WPT results and follow-up owners.
 
 ### Archived 2026-11-16
 

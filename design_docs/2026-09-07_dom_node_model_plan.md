@@ -304,6 +304,10 @@ receipt belongs to a server-mode run, which is the XHR plan's open next proof.
 5. **`createElement` always lowercases**, including on an XML document, where
    the DOM keeps the given case. `createElementNS` is exact, and that is what
    `DOMParser`'s XML documents are built from.
+   **Resolved for constructed and parser-created documents (2026-11-17).**
+   `createElement()` now preserves case in XML and XHTML, and chooses the
+   namespace for each of those modes. The [Realms frontier](2026-11-03_realms_frontier_plan.md#phase-r1-synthetic-and-template-metadata)
+   owns propagation of the response document type into navigated realms.
 6. **`document.doctype` has no quirks-mode consequence in the scripted tier.**
    The arena's doctype is a node, not a mode: quirks still comes from the static
    parse. **Closed 2026-09-25** by `2026-09-25_line_box_model_plan.md`: the
@@ -321,6 +325,21 @@ receipt belongs to a server-mode run, which is the XHR plan's open next proof.
 10. **`DOMParser` and `XMLSerializer` carry no class string.** They are defined
     after `installShapeInterfaces` runs and are not in `dom.idl`, so
     `Object.prototype.toString.call(new DOMParser())` is `[object Object]`.
+
+### Attribute mutation and live collection carry (2026-11-17)
+
+`Element-setAttribute.html` passes the ASCII folding assertion on Bole and
+Vano. Its qualified-name collision assertion still fails on both engines.
+`setAttribute()` inserts a third attribute when two existing namespaced
+attributes share the same qualified name. Update the first matching attribute
+and preserve its namespace, mutation records and live `Attr` view.
+
+The Document and Element `getElementsByTagName` WPTs each retain six
+interface/property failures on Bole and Vano. Cover the `HTMLCollection`
+prototype, strict indexed writes, expandos shadowing `item` and `namedItem`,
+and named and indexed own-property descriptors. The WPT liveness row first
+requires `instanceof HTMLCollection`. Preserve the separately passing runtime
+mutation and adoption controls when fixing that interface.
 
 ## Gates
 

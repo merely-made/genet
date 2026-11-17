@@ -16,6 +16,19 @@ The first connected `base` selection, parent effective-base snapshots, and inher
 
 Mark selected this slice for briefing on 2026-10-02 (line-breaking ruling 7). First reproduce `URL`, `documentURI`, and `baseURI` for `createHTMLDocument`, `createDocument`, document cloning and template-content owner documents, including adoption and retained reads after teardown. Do not assume constructor existence proves independent metadata: `dom/bootstrap.js` contains constructors but the old plan names metadata as unresolved. Done when both-engine focused controls cover all four creation paths and lifecycle cases, matched WPT movements are attributed, and base/identity regressions remain green.
 
+The 2026-11-17 tag-name follow-through adds a concrete navigation metadata
+case to the existing XML navigable work. `Document-createElement.html` uses
+`/common/dummy.xml` and `/common/dummy.xhtml` in iframes and reports 41/147
+passing assertions on each engine in the disk runner. Realm bootstrap assigns
+HTML mode to its initial global document. Trace the response document type
+through XML parsing and initial realm install, then verify the namespace and
+case of `createElement()` from the iframe's document. In
+`Element-getElementsByTagName-change-document-HTMLNess.html`, both engines
+retain the held collection's HTML filter after adoption into an XML iframe.
+A new collection then also uses the HTML filter and fails the XML-mode
+assertion. Repeat both assertions after document type reaches the realm.
+Keep the constructed and `DOMParser` cases as controls.
+
 ## Phase R2: retained documents and inherited bases
 
 Reproduce mutations through retained retired documents separately from already-landed reads, and history restoration of inherited effective bases independently of visible URL/security origin. Done when the selected lifecycle semantics preserve authority and isolation, same-origin/opaque-origin controls and borrowed getters remain correct, and both engines pass focused teardown, navigation and history controls with matched WPT accounting. Preserve borrowed Location entry-realm attribution and lazy-frame activation as separate lifecycle checks.

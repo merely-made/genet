@@ -400,3 +400,17 @@ the full per-file transition table, `moved_files.txt` for the 122 file list).
 `dom` map is byte-identical to that one. Something between `2c47cff7627` and
 `5af76a0cb8c` moved `baseURI` and left the checked-in baseline behind. Repinning
 it is a decision for the lane that owns it, not a side effect of this one.
+
+### DOM worker timeout and baseline carry (2026-11-17)
+
+`dom/ranges/Range-mutations-replaceData.html` reached the default 30-second
+worker limit in isolated runs on Bole and Vano with the macOS x86-64 debug
+runner. Both runs returned zero assertions. The runner/Range owners should
+repeat the named case with matched optimized binaries before selecting a
+case-specific deadline or investigating Range costs. Retain the worker-limit
+results separately from any runs with a longer deadline.
+
+Reconcile the exact `dom` and `dom/nodes` Bole maps with matched full-slice
+runners. The November 17 tag-name evidence covers named files in isolation.
+Account for the qualified-name and attribute movements alongside existing
+timeouts and navigation or collection failures when refreshing the maps.

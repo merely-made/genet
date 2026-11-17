@@ -1,5 +1,8 @@
 # Tag-name casing per document type, and the window global's own properties
 
+**Status (2026-11-17).** Archived after the DOM naming follow-through passed
+its focused Bole and Vano gates. The remaining cases have owners listed below.
+
 **Status: landed 2026-09-07.** Two bounded corrections in the scripted tier's
 host surface, both of them shape questions the earlier lanes deferred rather
 than answered: which names fold to uppercase and when, and what kind of
@@ -308,3 +311,46 @@ the repins: `unexpected=0` on every one.
   global never defines what it must not have.
 - **2026-09-07** — Gates green; `post` maps recorded and diffed; two baselines
   repinned forward.
+
+## DOM naming follow-through (2026-11-17)
+
+`createElement()` now selects the namespace from the document mode for
+constructed and parser-created documents. Attribute operations use ASCII
+folding for HTML elements in HTML node documents. The tag collection chooses
+its qualified-name filter at invocation and reads the current owner arena on
+each access. The [DOM qualified-name algorithm](https://dom.spec.whatwg.org/#concept-getelementsbytagname)
+defines the filter for each document type.
+
+The runtime tag-name and window-globals suite passed all 14 tests and the
+cross-arena adoption suite passed all 22 tests across Bole and Vano. The
+regressions cover XML and XHTML creation, ASCII attribute casing through
+adoption, and held and borrowed live collections. The child-realm XML control
+checks both an existing collection and a newly requested one after adoption.
+
+The named WPTs on the macOS x86-64 debug runner produced the same counts on
+Bole and Vano.
+
+| File | Passed |
+|---|---:|
+| `Element-tagName.html` | 6/6 |
+| `Document-getElementsByTagName.html` | 12/18 |
+| `Element-getElementsByTagName.html` | 13/19 |
+| `Element-hasAttribute.html` | 2/2 |
+| `Element-removeAttribute.html` | 2/2 |
+| `Element-setAttribute.html` | 1/2 |
+| `Document-createElement.html` | 41/147 |
+| `Element-getElementsByTagName-change-document-HTMLNess.html` | 0/1 |
+
+Compared by assertion name and occurrence with the checked-in Bole `dom/nodes`
+snapshot, the completed files gained 18 passing assertions with zero prior
+passes lost. This is a named comparison with the recorded snapshot.
+`Document-createElement-namespace.html` and
+`Range-mutations-replaceData.html` reached the default 30-second worker limit
+on both engines and returned zero assertions. See `Code/output/genet-tag-name/`
+for the frozen runner, lock, maps and logs.
+
+### Follow-up owners
+
+- [Realms and document lifetime](../../2026-11-03_realms_frontier_plan.md#phase-r1-synthetic-and-template-metadata) owns document type for navigated XML and XHTML. The verbose iframe adoption WPT reached the new collection assertion on both engines and found HTML filtering in the navigated XML document.
+- [DOM node model](../../2026-09-07_dom_node_model_plan.md#attribute-mutation-and-live-collection-carry-2026-11-17) owns `HTMLCollection` interface and property behavior and the `setAttribute()` qualified-name collision.
+- [WPT harness repair](../../2026-09-07_wpt_harness_repair_plan.md#dom-worker-timeout-and-baseline-carry-2026-11-17) owns the matched exact-baseline reconciliation and the optimized Range timeout check with the Range owner.

@@ -839,7 +839,7 @@
         // A Document clone begins empty, even when deep. createHTMLDocument()
         // would prepopulate html/head/body and make copied children duplicates.
         copy = wrapNode(__createDocument());
-        privateSet(documentModes, copy, isHtmlDocument(node));
+        privateSet(documentModes, copy, privateGet(documentModes, node));
         __copyDocumentEncoding(node.__ref, copy.__ref);
         copyDocument = copy;
         break;
@@ -1203,10 +1203,13 @@
     element.__webglContext._resizeDrawingBuffer(width, height);
   }
 
+  function attributeName(el, name) {
+    if (/[A-Z]/.test(name) && el.namespaceURI === XHTML_NS && isHtmlDocument(ownerDocumentOf(el))) return asciiLower(name);
+    return name;
+  }
   Element.prototype.setAttribute = function(name, value) {
     name = String(name); validateName(name);
-    // In an HTML element, the qualified name is lowercased.
-    if (this.namespaceURI === 'http://www.w3.org/1999/xhtml') name = name.toLowerCase();
+    name = attributeName(this, name);
     var oldValue = __getAttribute(this.__ref, name);
     var newValue = String(value);
     moSetAttribute(this.__ref, name, newValue);
@@ -1219,7 +1222,7 @@
       prepareScriptsAfterInsertion(this, null);
     }
   };
-  Element.prototype.getAttribute = function(name) { return __getAttribute(this.__ref, String(name)); };
+  Element.prototype.getAttribute = function(name) { return __getAttribute(this.__ref, attributeName(this, String(name))); };
   Object.defineProperty(Element.prototype, 'innerHTML', {
     configurable: true,
     get: function() { return String(__getInnerHtml(this.__ref)); },
@@ -1288,14 +1291,14 @@
     detachAttrView(this, nsArg(ns), local, oldValue);
     moRemoveAttributeNS(this.__ref, nsArg(ns), local);
   };
-  Element.prototype.hasAttribute = function(name) { return __getAttribute(this.__ref, String(name)) !== null; };
+  Element.prototype.hasAttribute = function(name) { return __getAttribute(this.__ref, attributeName(this, String(name))) !== null; };
   Element.prototype.hasAttributes = function() { return __attributeRecords(this.__ref) !== ''; };
   Element.prototype.getAttributeNames = function() {
     return attributeRecords(this).map(function(r) { return r.qname; });
   };
   Element.prototype.removeAttribute = function(name) {
     name = String(name);
-    if (this.namespaceURI === 'http://www.w3.org/1999/xhtml') name = name.toLowerCase();
+    name = attributeName(this, name);
     var oldValue = __getAttribute(this.__ref, name);
     if (oldValue !== null) {
       var recs = attributeRecords(this);
@@ -2001,11 +2004,12 @@
   // getElementsByTagName / getElementsByClassName, shared by Element and Document
   // (scope is the receiver), returning live HTMLCollections.
   function getElementsByTagName(tag) {
-    var ref = this.__ref; tag = String(tag);
+    var scope = this, ref = this.__ref; tag = String(tag);
+    var html = String(isHtmlDocument(scope.nodeType === 9 ? scope : ownerDocumentOf(scope)));
     return makeCollection(function() {
-      var n = +__elementsByTagNameCount(ref, tag);
+      var n = +__elementsByTagNameCount(ref, tag, html);
       var out = [];
-      for (var i = 0; i < n; i++) { out.push(wrapNode(__elementsByTagNameItem(ref, tag, String(i)))); }
+      for (var i = 0; i < n; i++) { out.push(wrapNode(__elementsByTagNameItem(ref, tag, String(i), html))); }
       return out;
     }, true);
   }
@@ -2364,8 +2368,7 @@
     configurable: true, get: function() { return namedNodeMapFor(this); }
   });
   Element.prototype.getAttributeNode = function(qname) {
-    qname = String(qname);
-    if (this.namespaceURI === 'http://www.w3.org/1999/xhtml') qname = qname.toLowerCase();
+    qname = attributeName(this, String(qname));
     var recs = attributeRecords(this);
     for (var i = 0; i < recs.length; i++) {
       if (recs[i].qname === qname) return attrFor(this, recs[i].ns, recs[i].prefix, recs[i].local);
@@ -2859,7 +2862,7 @@
     // Only an HTML document folds the name, and only over ASCII: an XML document
     // keeps the case it was given.
     if (isHtmlDocument(this)) tag = asciiLower(tag);
-    var el = wrapNode(__createElement(tag));
+    var el = wrapNode(__createElement(tag, String(isHtmlDocument(this) || privateGet(documentModes, this) === 'xhtml')));
     ownerDocuments.set(el, this);
     var isValue = customElementIsOption(options);
     if (isValue !== null) {
@@ -3217,10 +3220,11 @@
           return doc;
         },
         createDocument: function(ns, qname, doctype) {
+          ns = nsArg(ns);
           var doc = wrapNode(__createDocument());
-          privateSet(documentModes, doc, false); // an XML document: createCDATASection is allowed
+          privateSet(documentModes, doc, ns === XHTML_NS ? 'xhtml' : false); // XML document; XHTML has its own content type
           if (doctype) doc.appendChild(doctype);
-          if (qname) { doc.appendChild(doc.createElementNS(ns === null ? '' : String(ns), String(qname))); }
+          if (qname) { doc.appendChild(doc.createElementNS(ns, String(qname))); }
           return doc;
         }
       };
@@ -6619,14 +6623,14 @@
     if (ref === undefined || ref === null) {
       // Parse failure (XML only; the HTML parser never fails).
       var bad = wrapNode(__createDocument());
-      privateSet(documentModes, bad, false);
+      privateSet(documentModes, bad, type === 'application/xhtml+xml' ? 'xhtml' : false);
       var err = bad.createElementNS('http://www.mozilla.org/newlayout/xml/parseerror.xml', 'parsererror');
       err.textContent = 'XML parse error';
       bad.appendChild(err);
       return bad;
     }
     var doc = wrapNode(ref);
-    privateSet(documentModes, doc, isHtml);
+    privateSet(documentModes, doc, isHtml ? true : (type === 'application/xhtml+xml' ? 'xhtml' : false));
     return doc;
   };
   globalThis.DOMParser = DOMParser;

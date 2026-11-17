@@ -26,12 +26,17 @@ tracing = "0.1"
 # crate without either dragging the other's dependencies into the build.
 
 [features]
+native-webgl = ["dep:genet-runtime", "dep:webgl_wgpu"]
 # Explicit actual-WebGPU acquired-surface diagnostics; ordinary hosts unchanged.
 browser-surface-readback-diagnostics = []
 # Wasm viewer artifacts that present only through Netrender's WebGL2 backend:
 # boot refuses and every RenderCore path is unreachable, so classic Vello,
 # wgpu boot and composition drop out of the build. Refused off wasm.
 without-classic-vello = ["netrender/without-classic-vello"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+genet-runtime = { path = "../script-runtime-api", optional = true }
+webgl_wgpu = { workspace = true, optional = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)'] }

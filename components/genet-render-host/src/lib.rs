@@ -29,6 +29,8 @@
 #![cfg_attr(feature = "without-classic-vello", allow(unreachable_code, unused_variables))]
 
 use netrender::{ColorLoad, NetrenderOptions, Renderer, Scene};
+#[cfg(all(not(target_arch = "wasm32"), feature = "native-webgl"))]
+pub mod webgl;
 pub use netrender::profiling::ThreadCpuStamp as NativeThreadCpuStamp;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex, Weak};

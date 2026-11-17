@@ -4,167 +4,26 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-//! Native WebGL contexts backed by Ortet's existing render device.
-//!
-//! A [`WebGlHost`] is document-host state, rather than a global GPU helper:
-//! every context it mints uses the exact `wgpu::Device` and `Queue` from the
-//! current `RenderCore`.  The registry retains only live default-framebuffer
-//! contexts.  A handler has a stable key for its lifetime; resize replaces the
-//! backing texture in-place and drop removes the key.
-
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
 
 use script_runtime_api::WebGlHandler;
 use webgl_wgpu::{
-    BufferTarget, BufferUsage, PrimitiveMode, ShaderStage, WebGlBufferId, WebGlCanvasDescriptor,
-    WebGlContext, WebGlError, WebGlProgramId, WebGlShaderId, WebGlTextureId, WebGlUniformLocation,
+    BufferTarget, BufferUsage, PrimitiveMode, ShaderStage, WebGlBufferId, WebGlError,
+    WebGlProgramId, WebGlShaderId, WebGlTextureId, WebGlUniformLocation,
 };
 
-const GL_ARRAY_BUFFER: u32 = 0x8892;
-const GL_COLOR_BUFFER_BIT: u32 = 0x4000;
-const GL_DITHER: u32 = 0x0BD0;
-const GL_ELEMENT_ARRAY_BUFFER: u32 = 0x8893;
-const GL_FRAGMENT_SHADER: u32 = 0x8B30;
-const GL_INVALID_ENUM: u32 = 0x0500;
-const GL_INVALID_FRAMEBUFFER_OPERATION: u32 = 0x0506;
-const GL_INVALID_OPERATION: u32 = 0x0502;
-const GL_INVALID_VALUE: u32 = 0x0501;
-const GL_NO_ERROR: u32 = 0;
-const GL_SCISSOR_TEST: u32 = 0x0C11;
-const GL_TRIANGLES: u32 = 0x0004;
-const GL_VERTEX_SHADER: u32 = 0x8B31;
-const GL_CONTEXT_LOST_WEBGL: u32 = 0x9242;
+use super::{
+    Context, GL_ARRAY_BUFFER, GL_COLOR_BUFFER_BIT, GL_CONTEXT_LOST_WEBGL, GL_DITHER,
+    GL_ELEMENT_ARRAY_BUFFER, GL_FRAGMENT_SHADER, GL_INVALID_ENUM, GL_INVALID_FRAMEBUFFER_OPERATION,
+    GL_INVALID_OPERATION, GL_INVALID_VALUE, GL_NO_ERROR, GL_SCISSOR_TEST, GL_TRIANGLES,
+    GL_VERTEX_SHADER, Registry,
+};
 
-type Context = Arc<Mutex<WebGlContext>>;
-
-#[derive(Clone)]
-struct RegisteredContext {
-    context: Context,
-    content_generation: Arc<AtomicU64>,
-}
-
-type Registry = Arc<Mutex<HashMap<u64, RegisteredContext>>>;
-
-/// Same-device WebGL factory and live default-framebuffer registry.
-#[derive(Clone)]
-pub struct WebGlHost {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    next_key: Arc<AtomicU64>,
-    contexts: Registry,
-    staged_images: Arc<Mutex<HashSet<netrender::ImageKey>>>,
-}
-
-impl WebGlHost {
-    /// Build from the `RenderCore` device before a scripted document is
-    /// spawned.  This must not create a second wgpu device.
-    pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
-        Self {
-            device,
-            queue,
-            next_key: Arc::new(AtomicU64::new(1)),
-            contexts: Arc::new(Mutex::new(HashMap::new())),
-            staged_images: Arc::new(Mutex::new(HashSet::new())),
-        }
-    }
-
-    /// Fresh document-local script capability. Each factory invocation mints
-    /// one context and registers its default framebuffer under a stable key.
-    pub fn scripted_document_options(&self) -> genet_scripted::ScriptedDocumentOptions {
-        let host = self.clone();
-        genet_scripted::ScriptedDocumentOptions {
-            webgl: Some(Box::new(move |width, height| {
-                host.make_handler(width, height)
-                    .map(|handler| Box::new(handler) as Box<dyn WebGlHandler>)
-            })),
-            ..genet_scripted::ScriptedDocumentOptions::default()
-        }
-    }
-
-    fn make_handler(&self, width: u32, height: u32) -> Option<OrtetWebGl> {
-        let width = width.max(1);
-        let height = height.max(1);
-        let max_dimension = self.device.limits().max_texture_dimension_2d;
-        if width > max_dimension || height > max_dimension {
-            return None;
-        }
-        let context = Arc::new(Mutex::new(
-            WebGlContext::from_wgpu_handles(
-                self.device.clone(),
-                self.queue.clone(),
-                WebGlCanvasDescriptor::new(width, height),
-            )
-            .ok()?,
-        ));
-        let key = self.next_key.fetch_add(1, Ordering::Relaxed);
-        let content_generation = Arc::new(AtomicU64::new(1));
-        self.contexts.lock().expect("WebGL registry lock").insert(
-            key,
-            RegisteredContext {
-                context: context.clone(),
-                content_generation: content_generation.clone(),
-            },
-        );
-        Some(OrtetWebGl::new(
-            context,
-            key,
-            self.contexts.clone(),
-            content_generation,
-        ))
-    }
-
-    /// Stage every trusted texture used by this frame as a normal Vello image.
-    ///
-    /// This runs even for an empty draw list so a dropped, hidden, or navigated
-    /// canvas cannot leave its previous GPU image registered for a later key.
-    pub fn sync_external_images(
-        &self,
-        renderer: &netrender::Renderer,
-        draws: &[document_session_api::SessionExternalTextureDraw],
-    ) {
-        let live: Vec<(netrender::ImageKey, RegisteredContext)> = {
-            let registry = self.contexts.lock().expect("WebGL registry lock");
-            draws
-                .iter()
-                .filter_map(|draw| {
-                    registry
-                        .get(&draw.texture_key)
-                        .cloned()
-                        .map(|context| (netrender::external_image_key(draw.texture_key), context))
-                })
-                .collect()
-        };
-        let desired: HashSet<_> = live.iter().map(|(key, _)| *key).collect();
-        for (image_key, registered) in &live {
-            let context = registered.context.lock().expect("WebGL context lock");
-            let drawing_buffer = context.texture();
-            let source_view = drawing_buffer.create_view();
-            renderer.stage_external_image(
-                *image_key,
-                &source_view,
-                [drawing_buffer.size.0, drawing_buffer.size.1],
-                netrender::SourceAlpha::Premultiplied,
-                registered.content_generation.load(Ordering::Relaxed),
-            );
-        }
-        let mut staged = self.staged_images.lock().expect("staged WebGL images lock");
-        for stale in staged.difference(&desired) {
-            renderer.unregister_external_image(*stale);
-        }
-        *staged = desired;
-    }
-
-    #[cfg(test)]
-    fn live_contexts(&self) -> usize {
-        self.contexts.lock().expect("WebGL registry lock").len()
-    }
-}
-
-struct OrtetWebGl {
-    context: Context,
+pub(super) struct NativeWebGl {
+    pub(super) context: Context,
     external_key: u64,
     registry: Registry,
     content_generation: Arc<AtomicU64>,
@@ -196,8 +55,8 @@ struct OrtetWebGl {
     pending_error: RefCell<Option<WebGlError>>,
 }
 
-impl OrtetWebGl {
-    fn new(
+impl NativeWebGl {
+    pub(super) fn new(
         context: Context,
         external_key: u64,
         registry: Registry,
@@ -250,7 +109,7 @@ impl OrtetWebGl {
     }
 }
 
-impl Drop for OrtetWebGl {
+impl Drop for NativeWebGl {
     fn drop(&mut self) {
         self.registry
             .lock()
@@ -259,7 +118,7 @@ impl Drop for OrtetWebGl {
     }
 }
 
-impl WebGlHandler for OrtetWebGl {
+impl WebGlHandler for NativeWebGl {
     fn external_texture_key(&self) -> Option<u64> {
         Some(self.external_key)
     }
@@ -303,7 +162,7 @@ impl WebGlHandler for OrtetWebGl {
                 .expect("webgl context lock")
                 .set_scissor_test_enabled(true);
         }
-        // DEPTH_TEST / BLEND / CULL_FACE recorded only — see struct doc.
+        // DEPTH_TEST / BLEND / CULL_FACE recorded only â€” see struct doc.
     }
 
     fn disable(&mut self, cap: u32) {
@@ -644,191 +503,5 @@ impl WebGlHandler for OrtetWebGl {
             .expect("WebGL context lock")
             .read_pixels(x as u32, y as u32, w, h)
             .unwrap_or_default()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use genet_render_host::RenderCore;
-    use netrender::NetrenderOptions;
-
-    fn core_and_host() -> Option<(RenderCore, WebGlHost)> {
-        let core = match RenderCore::boot(NetrenderOptions {
-            tile_cache_size: Some(4),
-            enable_vello: true,
-            ..Default::default()
-        }) {
-            Ok(core) => core,
-            Err(error) => {
-                eprintln!("skipping Ortet WebGL GPU test: {error}");
-                return None;
-            },
-        };
-        let host = WebGlHost::new(core.device().clone(), core.queue().clone());
-        Some((core, host))
-    }
-
-    fn host() -> Option<WebGlHost> {
-        core_and_host().map(|(_, host)| host)
-    }
-
-    #[test]
-    fn registry_tracks_two_contexts_across_resize_and_drop() {
-        let Some(host) = host() else { return };
-        let mut first = host.make_handler(4, 4).expect("first context");
-        let second = host.make_handler(8, 8).expect("second context");
-        let first_key = first.external_texture_key().expect("first key");
-        let second_key = second.external_texture_key().expect("second key");
-        assert_ne!(first_key, second_key);
-        assert_eq!(host.live_contexts(), 2);
-
-        let before = {
-            let context = first.context.lock().expect("WebGL context lock");
-            (context.texture().size, context.texture().generation)
-        };
-        first.resize(6, 5);
-        let after = {
-            let context = first.context.lock().expect("WebGL context lock");
-            (context.texture().size, context.texture().generation)
-        };
-        assert_eq!(first.external_texture_key(), Some(first_key));
-        assert_eq!(before.0, (4, 4));
-        assert_eq!(after.0, (6, 5));
-        assert!(after.1 > before.1);
-        drop(second);
-        assert_eq!(host.live_contexts(), 1);
-        drop(first);
-        assert_eq!(host.live_contexts(), 0);
-        let third = host.make_handler(2, 2).expect("third context");
-        assert_ne!(third.external_texture_key(), Some(first_key));
-        drop(third);
-    }
-
-    #[test]
-    fn document_factory_registers_and_drops_its_context() {
-        let Some(host) = host() else { return };
-        let mut options = host.scripted_document_options();
-        let handler = options.webgl.as_mut().expect("WebGL capability")(3, 2)
-            .expect("document WebGL context");
-        assert_eq!(host.live_contexts(), 1);
-        drop(handler);
-        assert_eq!(host.live_contexts(), 0);
-    }
-
-    #[test]
-    fn document_factory_rejects_oversized_context_without_registering_it() {
-        let Some(host) = host() else { return };
-        let too_wide = host
-            .device
-            .limits()
-            .max_texture_dimension_2d
-            .checked_add(1)
-            .expect("finite texture dimension limit");
-        let mut options = host.scripted_document_options();
-        assert!(options.webgl.as_mut().expect("WebGL capability")(too_wide, 1).is_none());
-        assert_eq!(host.live_contexts(), 0);
-        assert_eq!(host.next_key.load(Ordering::Relaxed), 1);
-        let handler = options.webgl.as_mut().expect("WebGL capability")(1, 1)
-            .expect("valid context after rejected request");
-        assert_eq!(handler.external_texture_key(), Some(1));
-        drop(handler);
-        assert_eq!(host.live_contexts(), 0);
-    }
-
-    #[test]
-    fn sync_stages_only_trusted_contexts_refreshes_and_retires() {
-        let Some((core, host)) = core_and_host() else {
-            return;
-        };
-        let mut context = host.make_handler(4, 3).expect("staged context");
-        let key = context.external_texture_key().expect("context key");
-        let image_key = netrender::external_image_key(key);
-        let draws = [
-            document_session_api::SessionExternalTextureDraw {
-                texture_key: key,
-                dest_rect: [0.0, 0.0, 4.0, 3.0],
-                opacity: 1.0,
-                scene_op_boundary: 0,
-            },
-            document_session_api::SessionExternalTextureDraw {
-                texture_key: 999,
-                dest_rect: [4.0, 0.0, 8.0, 3.0],
-                opacity: 1.0,
-                scene_op_boundary: 1,
-            },
-        ];
-
-        host.sync_external_images(core.renderer(), &draws);
-        assert_eq!(
-            *host.staged_images.lock().expect("staged WebGL images lock"),
-            HashSet::from([image_key]),
-            "an untrusted/unknown source key must not stage an image"
-        );
-
-        context.clear_color(0.0, 1.0, 0.0, 1.0);
-        context.clear(GL_COLOR_BUFFER_BIT);
-        context.resize(6, 5);
-        host.sync_external_images(core.renderer(), &draws);
-        assert_eq!(
-            *host.staged_images.lock().expect("staged WebGL images lock"),
-            HashSet::from([image_key]),
-            "a producer resize refreshes the stable staged image key"
-        );
-
-        host.sync_external_images(core.renderer(), &[]);
-        assert!(
-            host.staged_images
-                .lock()
-                .expect("staged WebGL images lock")
-                .is_empty()
-        );
-        assert!(
-            !core.renderer().unregister_external_image(image_key),
-            "the empty frame already retired the source"
-        );
-    }
-
-    #[test]
-    fn production_handler_draws_a_triangle() {
-        let Some(host) = host() else { return };
-        let mut gl = host.make_handler(32, 32).expect("draw context");
-        gl.viewport(0, 0, 32, 32);
-        gl.clear_color(0.0, 0.0, 0.0, 1.0);
-        gl.clear(GL_COLOR_BUFFER_BIT);
-
-        let vertex = gl.create_shader(GL_VERTEX_SHADER);
-        gl.shader_source(
-            vertex,
-            "attribute vec2 a_position; void main() { gl_Position = vec4(a_position, 0.0, 1.0); }",
-        );
-        gl.compile_shader(vertex);
-        assert!(gl.get_shader_compile_status(vertex));
-        let fragment = gl.create_shader(GL_FRAGMENT_SHADER);
-        gl.shader_source(
-            fragment,
-            "precision mediump float; uniform vec4 u_color; void main() { gl_FragColor = u_color; }",
-        );
-        gl.compile_shader(fragment);
-        assert!(gl.get_shader_compile_status(fragment));
-        let program = gl.create_program();
-        gl.attach_shader(program, vertex);
-        gl.attach_shader(program, fragment);
-        gl.link_program(program);
-        assert!(gl.get_program_link_status(program));
-        gl.use_program(Some(program));
-        let color = gl.get_uniform_location(program, "u_color");
-        assert!(color >= 0);
-        gl.uniform4f(color, 0.0, 1.0, 0.0, 1.0);
-        let position = gl.get_attrib_location(program, "a_position");
-        assert_eq!(position, 0);
-        let buffer = gl.create_buffer();
-        gl.bind_buffer(GL_ARRAY_BUFFER, Some(buffer));
-        gl.buffer_data_f32(GL_ARRAY_BUFFER, &[-0.8, -0.8, 0.8, -0.8, 0.0, 0.8], 0x88E4);
-        gl.enable_vertex_attrib_array(position as u32);
-        gl.vertex_attrib_pointer_f32(position as u32, 2, false, 0, 0);
-        gl.draw_arrays(GL_TRIANGLES, 0, 3);
-        assert_eq!(gl.get_error(), GL_NO_ERROR);
-        assert_eq!(gl.read_pixels_rgba8(16, 16, 1, 1), vec![0, 255, 0, 255]);
     }
 }

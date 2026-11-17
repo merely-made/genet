@@ -650,10 +650,6 @@ path = "ports/ortet/src/web.rs"
 reason = "The raw wasm32 Ortet host. Existing source-size debt; a responsibility split must preserve BrowserResourceLimits, WebOrtet, BrowserNavigation and existing module visibility."
 
 [[exception]]
-path = "ports/ortet/src/webgl.rs"
-reason = "Native WebGL contexts backed by Ortet's existing render device. Existing source-size debt; a responsibility split must preserve Context, RegisteredContext, Registry and existing module visibility."
-
-[[exception]]
 path = "resources/resource_protocol/license.html"
 reason = "License. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
 

@@ -43,5 +43,3 @@ pub mod shell;
 pub mod timing;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
-#[cfg(all(not(target_arch = "wasm32"), feature = "scripted"))]
-pub mod webgl;

@@ -15,7 +15,7 @@ default = []
 # O5a is opt-in so the default Ortet target keeps the script-free dependency
 # cone. These only select existing genet-documents lanes; O5b scheduling and
 # host integration remain separate work.
-scripted = ["genet-documents/scripted", "dep:genet-scripted", "dep:genet-bole", "dep:genet-runtime", "dep:webgl_wgpu", "dep:genet-webrtc"]
+scripted = ["genet-documents/scripted", "genet-presenter/native-webgl", "dep:genet-scripted", "dep:genet-bole", "dep:genet-runtime", "dep:genet-webrtc"]
 scripted-nova = ["scripted", "genet-documents/scripted-nova", "dep:genet-vano"]
 # Browser-only real-device lease probe; never exposed in ordinary artifacts.
 browser-frame-fixture = []
@@ -65,7 +65,6 @@ wgpu = { workspace = true }
 png = "0.18"
 genet-runtime = { path = "../../components/script-runtime-api", optional = true }
 genet-scripted = { path = "../../components/genet-scripted", optional = true }
-webgl_wgpu = { workspace = true, optional = true }
 
 genet-webrtc = { path = "../../components/genet-webrtc", optional = true }
 

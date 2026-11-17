@@ -49,7 +49,7 @@ use crate::mutate::MutationPlan;
 use crate::receipt;
 use crate::timing::{FrameTiming, Phase, TimingLog, TimingSummary, json_string};
 #[cfg(feature = "scripted")]
-use crate::webgl::WebGlHost;
+use genet_render_host::webgl::{WebGlHost, WebGlImages};
 
 #[cfg(feature = "scripted")]
 fn worker_helper(backend: script_runtime_api::WorkerBackend) -> Option<script_runtime_api::WorkerProcessLauncher> {
@@ -303,6 +303,17 @@ fn make_engine(
 }
 
 #[cfg(feature = "scripted")]
+fn scripted_document_options(host: &WebGlHost) -> genet_scripted::ScriptedDocumentOptions {
+    let host = host.clone();
+    genet_scripted::ScriptedDocumentOptions {
+        webgl: Some(Box::new(move |width, height| {
+            host.create_handler(width, height)
+        })),
+        ..Default::default()
+    }
+}
+
+#[cfg(feature = "scripted")]
 fn make_engine_with_wake(
     choice: crate::args::EngineChoice,
     fetcher: OrtetFetcher,
@@ -325,7 +336,7 @@ fn make_engine_with_wake(
                 Ok(Box::new(engine.with_options_factory(move |_| {
                     let mut options = webgl.as_ref().map_or_else(
                         genet_scripted::ScriptedDocumentOptions::default,
-                        WebGlHost::scripted_document_options,
+                        scripted_document_options,
                     );
                     options.webrtc = Some(std::rc::Rc::new(
                         genet_webrtc::NativeWebRtcFactory::new(genet_webrtc::Settings {
@@ -359,7 +370,7 @@ fn make_engine_with_wake(
                 Ok(Box::new(engine.with_options_factory(move |_| {
                     let mut options = webgl.as_ref().map_or_else(
                         genet_scripted::ScriptedDocumentOptions::default,
-                        WebGlHost::scripted_document_options,
+                        scripted_document_options,
                     );
                     options.webrtc = Some(std::rc::Rc::new(
                         genet_webrtc::NativeWebRtcFactory::new(genet_webrtc::Settings {
@@ -417,6 +428,8 @@ struct Ortet {
     core: Arc<RenderCore>,
     #[cfg(feature = "scripted")]
     webgl: WebGlHost,
+    #[cfg(feature = "scripted")]
+    webgl_images: WebGlImages,
     a11y_bridge: Option<AccessKitBridge>,
     a11y: Accessibility,
     width: u32,
@@ -494,6 +507,8 @@ impl Ortet {
             core,
             #[cfg(feature = "scripted")]
             webgl,
+            #[cfg(feature = "scripted")]
+            webgl_images: WebGlImages::default(),
             a11y_bridge: None,
             a11y: Accessibility::default(),
             scale_factor: 1.0,
@@ -1007,8 +1022,18 @@ impl Ortet {
         // is an in-order SceneImage now, so it inherits Livery's transform,
         // clip, and opacity stack instead of a flat post-scene overlay.
         #[cfg(feature = "scripted")]
-        self.webgl
-            .sync_external_images(host.renderer(), self.session.external_texture_draws());
+        if let Err(error) = self.webgl_images.sync(
+            &self.webgl,
+            host.renderer(),
+            self.session
+                .external_texture_draws()
+                .iter()
+                .map(|draw| draw.texture_key),
+        ) {
+            self.failure = Some(error.into());
+            event_loop.exit();
+            return;
+        }
         // The residual so far — accessibility, arena census, receipt
         // conditions — belongs to neither work nor wait.
         let _ = phase.lap();

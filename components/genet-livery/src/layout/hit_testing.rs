@@ -8,7 +8,10 @@
 //! 2D geometry as paint, including flattened descendants of scroll containers.
 
 use super::*;
-use crate::{paint::stacking_level, placement::PlacementState};
+use crate::{
+    paint::{StackingOrder, stacking_order},
+    placement::PlacementState,
+};
 
 /// Topmost pointer-enabled element at a document-space CSS pixel position.
 pub fn hit_test<D>(
@@ -74,13 +77,13 @@ where
 {
     let mut children = order_modified_children(dom, styles, parent);
     children.sort_by_key(|child| {
-        stacking_level(
+        stacking_order(
             dom,
             styles,
             *child,
             crate::paint::is_blockified_item(fragments, *child),
         )
-        .unwrap_or_default()
+        .map_or(0, StackingOrder::level)
     });
     children
 }
@@ -118,7 +121,7 @@ where
 
 struct StackingEntry<Id> {
     id: Id,
-    level: i32,
+    order: StackingOrder,
     placement: PlacementState,
 }
 
@@ -145,9 +148,6 @@ where
         placement: &PlacementState,
         roots: Option<&HashSet<D::NodeId>>,
     ) {
-        if roots.is_some_and(|roots| roots.contains(&id)) {
-            return;
-        }
         let Some(entered) = placement.enter(
             self.dom,
             self.styles,
@@ -168,9 +168,7 @@ where
             self.winner = Some(id);
         }
         if let Some(roots) = roots {
-            for child in order_modified_children(self.dom, self.styles, id) {
-                self.visit(child, &entered.children, Some(roots));
-            }
+            self.visit_in_flow_children(id, &entered.children, roots);
             return;
         }
 
@@ -179,16 +177,28 @@ where
         // negative / normal / nonnegative phases, not at their DOM depth.
         let mut items = Vec::new();
         self.collect_stacking(id, &entered.children, &mut items);
-        items.sort_by_key(|item| item.level);
+        items.sort_by_key(|item| item.order.level());
         let roots = items.iter().map(|item| item.id).collect::<HashSet<_>>();
-        for item in items.iter().filter(|item| item.level < 0) {
+        for item in items.iter().filter(|item| item.order.level() < 0) {
             self.visit(item.id, &item.placement, None);
         }
-        for child in order_modified_children(self.dom, self.styles, id) {
-            self.visit(child, &entered.children, Some(&roots));
+        self.visit_in_flow_children(id, &entered.children, &roots);
+        for item in items.iter().filter(|item| item.order.level() >= 0) {
+            let excluded = (item.order == StackingOrder::Positioned).then_some(&roots);
+            self.visit(item.id, &item.placement, excluded);
         }
-        for item in items.iter().filter(|item| item.level >= 0) {
-            self.visit(item.id, &item.placement, None);
+    }
+
+    fn visit_in_flow_children(
+        &mut self,
+        parent: D::NodeId,
+        placement: &PlacementState,
+        roots: &HashSet<D::NodeId>,
+    ) {
+        for child in order_modified_children(self.dom, self.styles, parent) {
+            if !roots.contains(&child) {
+                self.visit(child, placement, Some(roots));
+            }
         }
     }
 
@@ -199,7 +209,7 @@ where
         items: &mut Vec<StackingEntry<D::NodeId>>,
     ) {
         for child in order_modified_children(self.dom, self.styles, parent) {
-            if let Some(level) = stacking_level(
+            if let Some(order) = stacking_order(
                 self.dom,
                 self.styles,
                 child,
@@ -207,10 +217,14 @@ where
             ) {
                 items.push(StackingEntry {
                     id: child,
-                    level,
+                    order,
                     placement: placement.clone(),
                 });
-            } else if let Some(entered) = placement.enter(
+                if order != StackingOrder::Positioned {
+                    continue;
+                }
+            }
+            if let Some(entered) = placement.enter(
                 self.dom,
                 self.styles,
                 self.fragments,

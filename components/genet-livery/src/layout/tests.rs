@@ -1910,6 +1910,33 @@ fn positioned_hit_test_respects_stacking_level_and_ancestor_clip() {
 }
 
 #[test]
+fn auto_z_index_hit_order_matches_the_zero_level_paint_phase() {
+    let dom = StaticDocument::parse(
+        "<div id=under></div><div id=pane></div><div id=foreground></div><div id=in-flow></div>",
+    );
+    let styles = resolve_styles(
+        &dom,
+        &StyleSet::cambium(&["html, body { margin: 0 }
+             div { width: 80px; height: 80px; }
+             #under, #pane, #foreground { position: absolute; left: 0; top: 0; }
+             #pane { backdrop-filter: blur(7px); }
+             #foreground { z-index: auto; left: 40px; width: 20px; }"]),
+        &Device::screen(320.0, 240.0),
+        &InteractionStates::default(),
+    );
+    let layout = layout(&dom, &styles, 320.0, 240.0).expect("layout");
+    let node = |id| node_by_id(&dom, dom.document(), id).expect(id);
+    assert_eq!(
+        hit_test(&dom, &styles, &layout, 10.0, 10.0),
+        Some(node("pane"))
+    );
+    assert_eq!(
+        hit_test(&dom, &styles, &layout, 45.0, 10.0),
+        Some(node("foreground"))
+    );
+}
+
+#[test]
 fn positioned_descendant_paints_above_its_stacking_context_background() {
     let dom =
         StaticDocument::parse("<div id=card><div id=collapse></div><div id=editor></div></div>");

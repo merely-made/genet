@@ -56,10 +56,15 @@ fn assert_no_backdrop(list: &LiveryPaintList) {
 }
 
 #[test]
-fn backdrop_blur_is_one_atomic_draw_before_pane_foreground() {
+fn backdrop_blur_samples_only_preceding_auto_z_index_siblings() {
     let list = render(
-        "<html><body><div id=under></div><div id=pane></div></body></html>",
-        "html, body { margin: 0 } #under { position: absolute; left: 4px; top: 4px; width: 100px; height: 80px; background: red } #pane { position: absolute; left: 20px; top: 30px; width: 40px; height: 24px; backdrop-filter: blur(7px); background: blue }",
+        "<div id=under></div><div id=pane></div><div id=foreground></div>",
+        r#"
+        html, body { margin: 0 }
+        #under { position: absolute; left: 4px; top: 4px; width: 100px; height: 80px; background: lime }
+        #pane { position: absolute; left: 20px; top: 30px; width: 40px; height: 24px; backdrop-filter: blur(7px); background: blue }
+        #foreground { position: absolute; z-index: auto; left: 28px; top: 35px; width: 16px; height: 12px; background: red }
+        "#,
     );
     let commands = list.commands();
     let atoms: Vec<_> = commands
@@ -82,9 +87,19 @@ fn backdrop_blur_is_one_atomic_draw_before_pane_foreground() {
         ),
         (20.0, 30.0, 60.0, 54.0)
     );
-    let red = commands.iter().position(|cmd| matches!(cmd, PaintCmd::DrawRect(rect) if rect.color == ColorF::new(1.0, 0.0, 0.0, 1.0))).expect("preceding background");
-    let blue = commands.iter().position(|cmd| matches!(cmd, PaintCmd::DrawRect(rect) if rect.color == ColorF::new(0.0, 0.0, 1.0, 1.0))).expect("pane foreground");
-    assert!(red < at && at < blue, "{commands:#?}");
+    let rect_index = |color| {
+        commands
+            .iter()
+            .position(|cmd| matches!(cmd, PaintCmd::DrawRect(rect) if rect.color == color))
+            .expect("fixture rectangle paints")
+    };
+    let under = rect_index(ColorF::new(0.0, 1.0, 0.0, 1.0));
+    let pane = rect_index(ColorF::new(0.0, 0.0, 1.0, 1.0));
+    let foreground = rect_index(ColorF::new(1.0, 0.0, 0.0, 1.0));
+    assert!(
+        under < at && at < pane && pane < foreground,
+        "expected preceding sibling, blur, pane, later sibling; got command indices {under}, {at}, {pane}, {foreground}"
+    );
 }
 
 #[test]

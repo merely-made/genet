@@ -2840,6 +2840,10 @@ fn has_visible_box_decoration(style: &ComputedValues) -> bool {
 struct StackingItem<Id> {
     id: Id,
     level: i32,
+    // A positioned box with z-index: auto paints its own in-flow content
+    // here. These descendants have their own entries in the enclosing phase.
+    positioned_descendants: Option<HashSet<Id>>,
+    covered_inline: bool,
     // Flattening moves the subtree outside these ancestors' normal paint
     // walk, so overflow clips and content scroll must travel together.
     ancestor_scopes: Vec<StackingScope>,
@@ -2977,6 +2981,7 @@ fn emit_children_in_stacking_order<D>(
         scroll_offsets,
         &mut Vec::new(),
         &mut items,
+        None,
     );
     items.sort_by_key(|item| item.level);
     sort_preserve_3d_runs(dom, styles, fragments, &mut items);
@@ -3032,6 +3037,7 @@ fn emit_children_in_stacking_order<D>(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn collect_stacking_items<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
@@ -3041,23 +3047,41 @@ fn collect_stacking_items<D>(
     scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
     ancestor_scopes: &mut Vec<StackingScope>,
     items: &mut Vec<StackingItem<D::NodeId>>,
+    positioned_ancestor: Option<usize>,
 ) where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    for child in order_modified_children(dom, styles, parent) {
-        // A numeric positioned or flex/grid item starts a local context. Its
-        // descendants are collected when that context is emitted, keeping it
-        // atomic here.
-        if let Some(level) =
-            stacking_level(dom, styles, child, is_blockified_item(fragments, child))
+    let children = order_modified_children(dom, styles, parent);
+    for (index, child) in children.iter().copied().enumerate() {
+        let mut positioned_parent = positioned_ancestor;
+        if let Some(order) =
+            stacking_order(dom, styles, child, is_blockified_item(fragments, child))
         {
+            if let Some(ancestor) = positioned_ancestor {
+                items[ancestor]
+                    .positioned_descendants
+                    .as_mut()
+                    .expect("positioned ancestor has a descendant set")
+                    .insert(child);
+            }
+            let positioned = order == StackingOrder::Positioned;
+            let item_index = items.len();
             items.push(StackingItem {
                 id: child,
-                level,
+                level: order.level(),
+                positioned_descendants: positioned.then(HashSet::new),
+                covered_inline: positioned
+                    && positioned_inline_overlay_is_covered(
+                        dom, styles, fragments, &children, index, child,
+                    ),
                 ancestor_scopes: ancestor_scopes.clone(),
             });
-            continue;
+            if !positioned {
+                // A real context collects its descendants when it paints.
+                continue;
+            }
+            positioned_parent = Some(item_index);
         }
 
         let added_clip = match dom.kind(child) {
@@ -3095,6 +3119,7 @@ fn collect_stacking_items<D>(
             scroll_offsets,
             ancestor_scopes,
             items,
+            positioned_parent,
         );
         ancestor_scopes.truncate(previous_len);
     }
@@ -3128,6 +3153,9 @@ fn emit_stacking_items<'items, D>(
 {
     let mut open: Option<&'items [StackingScope]> = None;
     for item in items {
+        if item.covered_inline {
+            continue;
+        }
         let reuse = open.is_some_and(|current| scope_stacks_match(current, &item.ancestor_scopes));
         if !reuse {
             if let Some(current) = open {
@@ -3140,18 +3168,38 @@ fn emit_stacking_items<'items, D>(
             }
             open = Some(&item.ancestor_scopes);
         }
-        emit_node(
-            dom,
-            styles,
-            fragments,
-            item.id,
-            None,
-            text,
-            list,
-            scroll_offsets,
-            canvas_background_source,
-            external_textures,
-        );
+        if let Some(descendants) = &item.positioned_descendants {
+            emit_normal_node(
+                dom,
+                styles,
+                fragments,
+                item.id,
+                PaintScope {
+                    inherited: None,
+                    stacking_roots: Some(descendants),
+                    inline_owner: generates_inline_box(fragments, item.id).then_some(item.id),
+                    canvas_background_source,
+                    external_textures,
+                },
+                text,
+                list,
+                scroll_offsets,
+                None,
+            );
+        } else {
+            emit_node(
+                dom,
+                styles,
+                fragments,
+                item.id,
+                None,
+                text,
+                list,
+                scroll_offsets,
+                canvas_background_source,
+                external_textures,
+            );
+        }
     }
     if let Some(current) = open {
         for scope in current.iter().rev() {
@@ -3193,12 +3241,6 @@ fn emit_normal_node<'a, D>(
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    if scope
-        .stacking_roots
-        .is_some_and(|roots| roots.contains(&id))
-    {
-        return;
-    }
     // The backface cull applies to a box that paints in its ancestor's walk
     // as well as to one that starts its own stacking context.
     if culled_by_backface(dom, styles, fragments, id) {
@@ -3286,7 +3328,7 @@ fn emit_normal_children<'a, D>(
     let child_ids = order_modified_children(dom, styles, parent);
 
     let mut inline_group = Vec::new();
-    for (index, child) in child_ids.iter().copied().enumerate() {
+    for child in child_ids {
         if scope
             .stacking_roots
             .is_some_and(|roots| roots.contains(&child))
@@ -3309,9 +3351,6 @@ fn emit_normal_children<'a, D>(
             deferred_collapsed.as_deref_mut(),
         );
         inline_group.clear();
-        if positioned_inline_overlay_is_covered(dom, styles, fragments, &child_ids, index, child) {
-            continue;
-        }
         emit_normal_node(
             dom,
             styles,
@@ -3430,27 +3469,53 @@ fn same_fragment(left: &Fragment, right: &Fragment) -> bool {
         && (left.height - right.height).abs() <= 0.5
 }
 
-pub(crate) fn stacking_level<D>(
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StackingOrder {
+    Positioned,
+    Context(i32),
+}
+
+impl StackingOrder {
+    pub(crate) fn level(self) -> i32 {
+        match self {
+            Self::Positioned => 0,
+            Self::Context(level) => level,
+        }
+    }
+}
+
+pub(crate) fn stacking_order<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     id: D::NodeId,
     flex_grid_item: bool,
-) -> Option<i32>
+) -> Option<StackingOrder>
 where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
     let style = styles.get(id)?;
+    if matches!(style.display, Display::None | Display::Contents)
+        || style.visibility != Visibility::Visible
+    {
+        return None;
+    }
     if let Some(level) = z_index_stacking_level(styles, id, flex_grid_item) {
-        return Some(level);
+        return Some(StackingOrder::Context(level));
     }
     let context =
         TransformContextFacts::for_box(style, is_replaced_element(dom, id), flex_grid_item);
-    (style.opacity.value() < 1.0
+    if style.opacity.value() < 1.0
         || !style.filter.is_none()
         || context.establishes_stacking_context()
-        || !style.clip_path.is_none())
-    .then_some(0)
+        || !style.clip_path.is_none()
+        || matches!(style.position, Position::Fixed | Position::Sticky)
+    {
+        Some(StackingOrder::Context(0))
+    } else {
+        matches!(style.position, Position::Absolute | Position::Relative)
+            .then_some(StackingOrder::Positioned)
+    }
 }
 
 /// The perspective an element establishes for its children, in the document
@@ -3897,6 +3962,12 @@ fn emit_inline_group<'a, D>(
         deferred_scope = text.frame.begin_deferred_decorations(&sources, elements);
     }
     for root in roots {
+        if scope
+            .stacking_roots
+            .is_some_and(|excluded| excluded.contains(root))
+        {
+            continue;
+        }
         emit_normal_node(
             dom,
             styles,

@@ -1479,7 +1479,7 @@ fn positioned_descendants_flatten_into_the_nearest_stacking_context() {
         r#"<html><body><div class="stage"><div class="wrapper"><div class="highest"></div><div class="negative"></div></div><div class="middle"></div></div></body></html>"#,
         r#"
         .stage { position: relative; z-index: 0; width: 100px; height: 100px; background-color: black; }
-        .wrapper { width: 40px; height: 40px; background-color: #ffff00; }
+        .wrapper { position: relative; z-index: auto; width: 40px; height: 40px; background-color: #ffff00; }
         .highest { position: absolute; z-index: 5; width: 10px; height: 10px; background-color: #ff00ff; }
         .negative { position: absolute; z-index: -2; width: 10px; height: 10px; background-color: lime; }
         .middle { position: absolute; z-index: 2; width: 10px; height: 10px; background-color: blue; }

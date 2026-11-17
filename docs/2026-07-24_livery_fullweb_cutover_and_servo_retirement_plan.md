@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-24
 **Status:** superseded for engine selection by the completed
-[Stylo fork deletion lane](2026-08-16_stylo_fork_deletion_lane_plan.md). On
+[Stylo fork deletion lane](../design_docs/archive_docs/2026-11-16/2026-08-16_stylo_fork_deletion_lane_plan.md). On
 2026-08-21 the incumbent engine and its differential were deleted. The
 property and layout ledgers below remain useful Livery/Buckram defect maps,
 but their parity bars and flip gates are historical.

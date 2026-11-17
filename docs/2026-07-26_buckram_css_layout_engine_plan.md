@@ -1745,7 +1745,7 @@ Execute K7 in this order:
 
 1. Continue replaced-content sizing and aspect-ratio transfer from the current
    receipts: block and grid border-box sizing and inline replaced roots are
-   closed in the [orchestrator decomposition findings](../design_docs/2026-08-28_orchestrator_decomposition_plan.md)
+   closed in the [orchestrator decomposition findings](../design_docs/archive_docs/2026-11-16/2026-08-28_orchestrator_decomposition_plan.md)
    (`72dc32cbf3e` for border-box sizing and `afc09d06ea4` for inline roots);
    percentage min/max constraints on replaced
    elements remain with Taffy's indefinite-size clamp until an explicit

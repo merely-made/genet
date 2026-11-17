@@ -5,7 +5,7 @@ Every gate below is green; the census maps are under
 `Code/testing/genet/wpt-ledger/2026-09-07_dom_node_model/`.
 
 This lane closes the core DOM residuals the
-[MutationObserver](2026-09-07_mutation_observer_plan.md) and
+[MutationObserver](archive_docs/2026-11-16/2026-09-07_mutation_observer_plan.md) and
 [Selection and Range](2026-09-07_selection_range_plan.md) plans named and left
 to Mark: `DocumentFragment` insertion (which changes core insertion semantics),
 `CDATASection` and real `DocumentType` nodes (which `dom/common.js` floors two

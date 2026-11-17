@@ -166,7 +166,7 @@ flex parsing map moves only `flex-shorthand.html` and
   `length_percentage_auto` in `9df392f42d8`. The remaining Row 18
   zero-percentage item concerns authored-syntax provenance, separate from the
   repaired premature-resolution path. See the
-  [decomposition follow-through](2026-08-28_orchestrator_decomposition_plan.md#outcome).
+  [decomposition follow-through](../2026-11-16/2026-08-28_orchestrator_decomposition_plan.md#outcome).
 - The same follow-through records measured block/grid border-box sizing
   (`72dc32cbf3e`) and inline replaced-root sizing (`afc09d06ea4`). Percentage
   min/max constraints on replaced elements remain an explicit K7 boundary.

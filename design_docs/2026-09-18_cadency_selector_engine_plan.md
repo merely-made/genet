@@ -5,7 +5,7 @@
 **Status:** landed and published, 2026-09-20. Nothing published from genet
 depends on a servo/stylo-repository crate any more.
 
-**Parent:** [The stylo fork deletion lane](../docs/2026-08-16_stylo_fork_deletion_lane_plan.md),
+**Parent:** [The stylo fork deletion lane](archive_docs/2026-11-16/2026-08-16_stylo_fork_deletion_lane_plan.md),
 complete 2026-08-21. That lane removed the fork. This one removes what the
 servo/stylo repository still supplied from crates.io.
 

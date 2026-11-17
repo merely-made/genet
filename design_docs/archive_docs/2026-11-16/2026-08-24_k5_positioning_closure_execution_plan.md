@@ -7,7 +7,7 @@
 overlap and revalidated on accepted `origin/main`
 `d650ff8b44d3dc306255d2313be635000b9962ea`.
 
-**Parent:** [Buckram and Livery lane program](2026-08-21_buckram_livery_lane_program_plan.md),
+**Parent:** [Buckram and Livery lane program](../../../docs/2026-08-21_buckram_livery_lane_program_plan.md),
 row 1+2+7.
 
 ## Purpose

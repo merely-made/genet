@@ -137,7 +137,7 @@ older `docs/` corpus without changing their location or governance.
 | [XMLHttpRequest](2026-09-07_xhr_plan.md) | XHR as a state machine over the fetch seam, landed 2026-09-07: xhr 53 to 281 subtests in disk mode, 831 of 1,336 in server mode, fetch holds. Residuals: responseXML needs DOMParser; 28 errors are Worker and document.domain demand. |
 | [Globals, clone and timing](2026-11-03_globals_clone_timing_frontier_plan.md) | Reconcile actual transfer custody, platform serialization, timing producers and cross-agent reach. SubtleCrypto, FileList and later Worker/frame messaging already exist; their presence does not establish full qualification. |
 | [IDL interface table](2026-09-07_idl_interface_table_plan.md) | The scripted tier's HTML interface table is generated from WPT's vendored WebIDL plus its tag map, with 41 reasoned overrides and a drift test. 72 interfaces / 338 reflected attributes / 41 shape-only DOM-CSSOM interfaces. Next proof is extending the shape pass past `html`, `dom` and `cssom`, and the reflection-algorithm gaps (`ReflectRange` clamping, invalid-value defaults). |
-| [MutationObserver](2026-09-07_mutation_observer_plan.md) | The arena's mutation point now has two consumers: Livery's `DomMutation` stream and a spec-shaped observer record fanned out at the same mutators, off until something observes. Landed 2026-09-07 with four `dom/nodes/MutationObserver-*` files all-pass, +495 subtest passes and zero pass-to-fail. `Range` landed 2026-09-07 and closed that residual (`childList` 18/38 to 32/38, `characterData` 13/23 to 21/23). The DOM node model lane then closed the rest on 2026-09-07 — fragment insertion, `normalize`, `outerHTML`, attribute namespaces and the static-to-scripted clone of comments and PIs — and the four `MutationObserver-*` files now pass. |
+| [MutationObserver and timing](2026-10-20_observers_and_timing_plan.md#mutationobserver-archival-carry-2026-11-16) | The observer implementation is complete. Phase M owns current verification of parser-driven records, CDATA `textContent`, and cross-realm callback exception reporting. |
 | [Selection and Range](2026-09-07_selection_range_plan.md) | `Range` / `StaticRange` / `Selection` over the scripted arena, with the live-range steps at the bootstrap's mutation funnel and a boundary index keyed by node. Landed 2026-09-07: `selection` 0/280 to 28,582/33,621 subtests, `dom/ranges` 0 to 10 all-pass, +29,126 subtest passes and zero pass-to-fail. The DOM node model lane supplied all three on 2026-09-07 (plus a constructible `Document`, the second floor in the same file) and `dom/ranges` unfloored to 15 all-pass / 35,466 subtests. |
 | [DOM node model](2026-09-07_dom_node_model_plan.md) | `DocumentFragment` insertion, `CDATASection` and real `DocumentType` nodes, the `ParentNode` / `ChildNode` mixins, `normalize`, `outerHTML`, namespaced attributes as live `Attr` nodes, `DOMParser` / `XMLSerializer` and `Node.baseURI`. Landed 2026-09-07: `dom/ranges` unfloored (15 errored to 1, 24 to 35,466 subtests), `html/semantics/interfaces.html` 298 to 435 of 438, +82,944 subtest passes over nine directories with zero pass-to-fail. Next proof is a server-mode receipt for `responseXML`, and static `NodeList` indexed access, which is a `Proxy` trap per read. |
 | [Tag-name casing and the window globals](2026-09-07_tagname_window_globals_plan.md) | `tagName` / `nodeName` fold only for an HTML-namespaced element whose current node document is an HTML document, element interfaces and custom element names match case-sensitively, `document.importNode` exists, and `window` / `document` / `self` have their `[LegacyUnforgeable]` and `[Replaceable]` shapes on both the window and the worker global. Landed 2026-09-07: `Element-tagName.html` 3/6 to 6/6, `html/semantics/interfaces.html` to all-pass, +31 subtest passes with zero pass-to-fail. Residuals: `createElement`'s namespace on an XML document, and attribute-name folding, which still turns on the namespace alone. |
@@ -447,26 +447,6 @@ completed corpus census or bounded slice does not close its enclosing feature.
   18/38 → 32/38 and `-characterData` 13/23 → 21/23; +29,126 subtest passes over
   five directories with zero pass-to-fail. Raw maps under
   `Code/testing/genet/wpt-ledger/2026-09-07_selection_range/`.)
-- [mutation_observer_plan](2026-09-07_mutation_observer_plan.md)
-  (**landed 2026-09-07**: `MutationObserver` as a second consumer of
-  `genet-scripted-dom`'s mutation point. The arena fans out at the mutator into
-  a spec-shaped `ObservedMutation` — siblings around a removal, old values,
-  `innerHTML` / `textContent` as added and removed node lists, and the target's
-  ancestor chain captured at mutation time — rather than widening or tapping
-  the `DomMutation` stream Livery drains, which carries none of those and is
-  fenced off from this lane. The record is off until something observes. The
-  registry, `MutationObserverInit` validation, the interested-observer walk,
-  transient registered observers and the notify microtask live in the JS
-  bootstrap over three native sinks (`__moObserving`, `__moTake`, `__moGroup`);
-  records are queued at mutation time through the bootstrap's twelve mutating
-  call sites, because Nova's global natives cannot be interposed on.
-  `MutationObserver` and `MutationRecord` left the generator's
-  `SHAPE_ONLY_DENY` list, so the table declares them and the shape pass defers
-  to the implementation. `sanity` 0/13 → 13/13, `takeRecords` 0/3 → 3/3,
-  `disconnect` 0/2 → 2/2, `callback-arguments` 0/1 → 1/1, `attributes` 0/42 →
-  35/42, `childList` 0/38 → 18/38; +495 subtest passes over `dom`,
-  `custom-elements` and `html/dom` with zero pass-to-fail. Raw maps under
-  `Code/testing/genet/wpt-ledger/2026-09-07_mutation_observer/`.)
 - [idl_interface_table_plan](2026-09-07_idl_interface_table_plan.md)
   (**landed 2026-09-07**: the scripted tier's hand-maintained HTML interface
   table is replaced by one generated offline from WPT's vendored WebIDL
@@ -676,12 +656,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
 
 ## layout and styling
 
-- [Retained and parallel inline shaping](2026-11-01_retained_parallel_shaping_plan.md) — implemented and reviewed locally; bounded qualification shows reuse and pooled gains alongside cold and memory regressions; source-specific evidence and runtime limits remain explicit.
-- [Shaping cost reduction](2026-11-01_shaping_cost_reduction_plan.md) — source-specific follow-up, preserved controls, vector-storage budget and bounded qualification.
-- [Borrowed shaping validation](2026-11-02_borrowed_shaping_validation_plan.md) — qualified local borrowed-input validation and isolated shared-buffer diagnosis; reconciled through main 2d492f0, with fresh renderer-cohort shaping/consumer/wasm gates, final RTC compile and declared repository hooks passing for authorized main publication. Three timing cohorts remain bound to d17e53b; whole-workload cold equivalence and broader runtime remain open.
-  (**qualification, 2026-11-01**): retained exact-input shaping and optional
-  caller-supplied native pooling have separate measured gates; process
-  orchestration remains outside this plan.
+- [Shaping cost reduction](2026-11-01_shaping_cost_reduction_plan.md) — whole-workload cold equivalence and the optional selective long-buffer experiment remain open. The qualification keeps the original controls, vector-storage budget and measured resize and pooling bounds.
 
 - [css_3d_transforms_and_first_frame_plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md)
   (**bounded Genet seam implemented; downstream native Bench B accepted 2026-09-13**:
@@ -732,20 +707,21 @@ completed corpus census or bounded slice does not close its enclosing feature.
   These three area roots travelled with their code and are now in mere's
   `design_docs/`.
 
-## codebase structure
-
-- [orchestrator_decomposition_plan](2026-08-28_orchestrator_decomposition_plan.md)
-  (**seven extraction phases complete 2026-08-29; follow-through recorded
-  through 2026-09-02**: the original phases preserved behavior. Later entries
-  separately record the layout transaction split, sizing repairs and their
-  bounded receipts. The two-builder assessment recommends factoring shared
-  table helpers if pursued. Pelt's code now lives in Mere.)
-
 ## archive_docs/ — completed plans
 
 Per policy §4 and §8: a plan moves here once complete and once its open
 points have a home elsewhere. Links into a moved plan are repaired in the
 same session; links out of it are rewritten for its new depth.
+
+### Archived 2026-11-16
+
+- [Orchestrator decomposition](archive_docs/2026-11-16/2026-08-28_orchestrator_decomposition_plan.md) — all seven extraction phases landed on 2026-08-29, with layout transaction follow-through recorded through 2026-09-02. Optional layout cleanup is tracked in [architecture reduction](2026-11-03_architecture_reduction_followthrough_plan.md#images-render-and-layout).
+- [Stylo fork deletion](archive_docs/2026-11-16/2026-08-16_stylo_fork_deletion_lane_plan.md) — L0–L7 landed in August 2026. Livery and Buckram own ongoing CSS behavior.
+- [K5 positioning closure](archive_docs/2026-11-16/2026-08-24_k5_positioning_closure_execution_plan.md) — accepted-main revalidation preserved all 26 named passes and all 623 runnable per-file outcomes from the candidate.
+- [MutationObserver](archive_docs/2026-11-16/2026-09-07_mutation_observer_plan.md) — the mutation-record implementation landed on 2026-09-07. The original comparison gained 495 subtest passes across three directories with zero pass-to-fail movements. Range and DOM node work closed six of the historical residuals. [Observers and timing](2026-10-20_observers_and_timing_plan.md#mutationobserver-archival-carry-2026-11-16) tracks the remaining checks.
+- [Retained and parallel inline shaping](archive_docs/2026-11-16/2026-11-01_retained_parallel_shaping_plan.md) and [borrowed shaping validation](archive_docs/2026-11-16/2026-11-02_borrowed_shaping_validation_plan.md) — implementation and bounded publication checks landed on `main`. [Shaping cost reduction](2026-11-01_shaping_cost_reduction_plan.md#remaining-follow-up-2026-11-16) tracks cold equivalence and the optional selective long-buffer experiment.
+
+### Earlier archives
 
 - [2026-09-02/fleece_standards_adoption_plan](archive_docs/2026-09-02/2026-08-24_fleece_standards_adoption_plan.md)
   (**complete 2026-08-25, archived 2026-09-02**: Fleece 0.2 shipped canonical

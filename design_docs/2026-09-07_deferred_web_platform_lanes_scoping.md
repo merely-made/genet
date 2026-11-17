@@ -11,7 +11,7 @@ and names the proof a promoted execution plan must carry.
 The [harness repair](2026-09-07_wpt_harness_repair_plan.md),
 [IDL interfaces](2026-09-07_idl_interface_table_plan.md),
 [cheap globals](2026-11-03_globals_clone_timing_frontier_plan.md),
-[MutationObserver](2026-09-07_mutation_observer_plan.md),
+[MutationObserver](archive_docs/2026-11-16/2026-09-07_mutation_observer_plan.md),
 [XMLHttpRequest](2026-09-07_xhr_plan.md), and
 [Selection and Range](2026-09-07_selection_range_plan.md) have dated plans
 and bounded landing receipts. Their residuals remain prerequisites where

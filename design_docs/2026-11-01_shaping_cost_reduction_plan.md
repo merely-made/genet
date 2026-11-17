@@ -2,7 +2,7 @@
 
 > **For agentic workers:** use superpowers:subagent-driven-development. Preserve the worktree and evidence. Steps use checkbox syntax.
 
-**Status (2026-11-03):** selected cost reductions are qualified for the user-authorized main publication; whole-workload cold equivalence remains open. The [borrowed validation plan](2026-11-02_borrowed_shaping_validation_plan.md#publication-reconciliation-2026-11-03) owns current reconciliation/publication. Earlier isolation restrictions below describe the historical stages.
+**Status (2026-11-16):** selected cost reductions and borrowed validation landed in main history; whole-workload cold equivalence and experimental long-buffer follow-up remain open. Publication reconciliation is recorded in the [archived borrowed validation plan](archive_docs/2026-11-16/2026-11-02_borrowed_shaping_validation_plan.md#publication-reconciliation-2026-11-03). Earlier isolation restrictions below describe the historical stages.
 
 **Goal:** remove the measured cold-layout regression and make retained layout memory understood and controllable while preserving resize reuse, changed-key edits, and parallel gains.
 
@@ -10,7 +10,7 @@
 
 **Tech stack:** existing Rust/Parley/Fontique/Rayon; no dependency upgrade or replacement engine.
 
-**Spec:** user-approved follow-up: reconcile current main, profile allocation and owner-thread costs, remove confirmed waste, and rerun preserved controls. Original semantic contract: `2026-11-01_retained_parallel_shaping_plan.md`.
+**Spec:** user-approved follow-up: reconcile current main, profile allocation and owner-thread costs, remove confirmed waste, and rerun preserved controls. Original semantic contract: [retained and parallel shaping plan](archive_docs/2026-11-16/2026-11-01_retained_parallel_shaping_plan.md).
 
 ## Global constraints
 
@@ -68,3 +68,10 @@ Source `24f743517497bec0d44316ab0794572441f70177` passed full Livery default/par
 Three CPU 0,2 cold cohorts included two independent original processes. Final cached-serial article layout versus original A/B had paired medians `-4.346/-6.719`, `-8.495/+0.089`, and `-2.621/+0.355` ms; the original A/B article medians were `-2.987/+7.815/+2.696` ms. This empirical process control leaves the cold-original goal unresolved, not proven by a universal performance claim. Small cached-serial layout comparisons favored final in these samples, and raised-cap final cached-serial resize reused all 2,048 small keys. Default direct-vector history plateaued below 32 MiB; that is not a heap or RSS bound. Task 2J also remains materially slower than 2I for atomic layout in its CPU 0 samples. Full ranges, signs, order strata, current gates, precise mode/cap distinctions and artifact hashes are in the [receipt](../../../testing/genet/design_docs/archive_docs/receipts/2026-11-01_retained_parallel_shaping_plan_receipts.md) and preserved Task 3 report. Whole-phase review and the single documentation fix wave passed scoped re-review. The checkpoint is retained locally; the cold-goal disposition remains open pending the user's acceptance criterion.
 
 The non-headline default cold controls also remain relevant: final cached-serial minus original paired layout medians were +0.754 ms for mixed-256 (27/30 positive; both order medians positive) and +0.793 ms for single-long (23/30 positive). Each is one cohort without an original twin; neither establishes a general or causal regression. Small-2048 pool-minus-serial layout medians favored pooling in all three headline cohorts, while frame medians were +2.004/-1.082/-11.152 ms and cycle medians +8.009/+2.527/-10.861 ms. A consistent small end-to-end pool gain is not established. The cold goal remains open pending the user's acceptance criterion.
+
+## Remaining follow-up, 2026-11-16
+
+- [ ] Resolve the whole-workload cold-equivalence goal against the original controls with an agreed acceptance tolerance and source-bound evidence.
+- [ ] If selected, develop and review a selective long-buffer ownership design from the isolated shared-buffer experiment before production adoption. Preserve mutable tab and justification semantics and compare complete output and measured performance.
+
+Current-source WPT, browser/GPU and platform runtime, sanitizer and fresh MSRV were not qualified by the shaping publication pass; consumer repins were excluded. The historical external receipt and publication report are unavailable in this local checkout; their existing paths are retained. The historical receipt remains in Git at `0856bc77b18^`.

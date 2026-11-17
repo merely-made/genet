@@ -5,7 +5,7 @@
 **Status:** complete. L0-L6 landed 2026-08-18; L7 landed 2026-08-21 after
 the owner retired the undefined dogfooding gate and explicitly ruled to delete.
 
-**Parent:** [Livery fullweb cutover and the servo-* retirement](2026-07-24_livery_fullweb_cutover_and_servo_retirement_plan.md),
+**Parent:** [Livery fullweb cutover and the servo-* retirement](../../../docs/2026-07-24_livery_fullweb_cutover_and_servo_retirement_plan.md),
 whose 2026-08-16 revision rules the goal and authorises F5 feature-gating.
 
 ## The ruling this serves

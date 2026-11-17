@@ -8,7 +8,7 @@
 
 **Tech Stack:** existing Rust, local Parley0.10/Fontique and optional caller-owned Rayon. No dependency or toolchain upgrades.
 
-**Spec:** user-approved chat description, “validate borrowed inputs, allocate an owned key on a miss,” followed by “go for it”; existing semantic contract in `2026-11-01_retained_parallel_shaping_plan.md` and source-bound checkpoint/receipt in `2026-11-01_shaping_cost_reduction_plan.md`. The previous whole-matrix cold-equivalence goal remains open; no new tolerance is inferred.
+**Spec:** user-approved chat description, “validate borrowed inputs, allocate an owned key on a miss,” followed by “go for it”; existing semantic contract in the [retained shaping plan](2026-11-01_retained_parallel_shaping_plan.md) and source-bound checkpoint/receipt in the [shaping cost reduction plan](../../2026-11-01_shaping_cost_reduction_plan.md). The previous whole-matrix cold-equivalence goal remains open; no new tolerance is inferred.
 
 ## Global Constraints
 
@@ -66,6 +66,10 @@ This is a separate cut with a reviewed brief before implementation; no shared-bu
 
 **Done for this pass:** the borrowed path is correctly implemented and independently reviewed, targeted current-source effects are measured and documented, and shared-buffer follow-up is either justified with a reviewed diagnosis or omitted with evidence. The earlier whole-matrix cold goal is closed only if its explicit criterion is actually established or the user changes it.
 
+
+## Archive disposition, 2026-11-16
+
+Published implementation and qualification are in main history. The remaining whole-workload cold-equivalence criterion and experimental long-buffer follow-up are owned by the [shaping cost reduction plan](../../2026-11-01_shaping_cost_reduction_plan.md). Current WPT, browser/GPU/platform runtime, sanitizer and fresh MSRV qualification were not established by this pass; consumer repins were excluded. The historical external receipts and publication report are unavailable in this local checkout; references remain, and the historical receipt is recoverable from Git at `0856bc77b18^`. The unchecked task boxes above are historical; the completion status and qualification records describe their disposition.
 
 ## Local completion status, 2026-11-03
 

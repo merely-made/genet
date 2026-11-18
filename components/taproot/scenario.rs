@@ -54,6 +54,7 @@ pub const DEFAULT_WAIT_CAP: u32 = 600;
 #[derive(Clone, Debug, PartialEq)]
 enum Step {
     Act(String),
+    ActId(String),
     Click(Selector),
     SelectText(String),
     Settle(u32),
@@ -226,6 +227,11 @@ impl Scenario {
                     self.fail(format!("act: no command '{label}'"));
                 }
             },
+            Step::ActId(id) => {
+                if !app.act_id(&id) {
+                    self.fail(format!("act: command id '{id}' was absent or refused"));
+                }
+            },
             Step::Click(sel) => {
                 if !app.click(&sel) {
                     // The miss attributes itself into the event stream, so a
@@ -315,6 +321,7 @@ fn describe(sel: &Selector) -> String {
     let base = match &sel.matcher {
         Match::Class(c) => format!(".{c}"),
         Match::Role(r) => format!("role:{r}"),
+        Match::Key(key) => format!("key:{key}"),
     };
     let mut out = base;
     if let Some(t) = &sel.text {
@@ -329,7 +336,16 @@ fn describe(sel: &Selector) -> String {
 fn parse_step(line: &str) -> Result<Step, String> {
     let (verb, rest) = split_first(line);
     match verb {
-        "act" => Ok(Step::Act(rest.to_string())),
+        "act" => {
+            if let Some(id) = rest.strip_prefix("id:") {
+                if id.is_empty() || id.contains(char::is_whitespace) {
+                    return Err("act id: wants one nonempty action id".into());
+                }
+                Ok(Step::ActId(id.to_string()))
+            } else {
+                Ok(Step::Act(rest.to_string()))
+            }
+        },
         "settle" => Ok(Step::Settle(rest.trim().parse().unwrap_or(1))),
         "wait" => Ok(Step::Wait(rest.trim().parse().unwrap_or(DEFAULT_WAIT_CAP))),
         "log" => Ok(Step::Log(rest.to_string())),
@@ -373,9 +389,9 @@ fn parse_cmp(op: &str) -> Result<Cmp, String> {
     }
 }
 
-/// Parse a `click` selector: `.class` or `role:name`, then an optional
-/// `@attr=value` or free text.
-fn parse_selector(rest: &str) -> Result<Selector, String> {
+/// Parse a scenario selector. A surface scope may precede a class, role or
+/// exact authored key; a free-text or attribute filter may follow it.
+pub fn parse_selector(rest: &str) -> Result<Selector, String> {
     let (head, tail) = split_first(rest.trim());
     let (scope, head, tail) = if let Some(surface) = head.strip_prefix("surface:") {
         if surface.is_empty() {
@@ -390,8 +406,12 @@ fn parse_selector(rest: &str) -> Result<Selector, String> {
         Selector::class(class)
     } else if let Some(role) = head.strip_prefix("role:") {
         Selector::role(role)
+    } else if let Some(key) = head.strip_prefix("key:").filter(|key| !key.is_empty()) {
+        Selector::key(key)
     } else {
-        return Err(format!("click wants '.class' or 'role:name', got '{head}'"));
+        return Err(format!(
+            "selector wants '.class', 'role:name' or 'key:value', got '{head}'"
+        ));
     };
     if let Some(scope) = scope {
         sel = sel.on_surface(scope);
@@ -559,6 +579,11 @@ mod tests {
         assert!(parse_selector("surface: role:button").is_err());
         assert!(parse_selector("surface:contributed").is_err());
         assert_eq!(
+            parse_selector("surface:contributed key:settings/mode").unwrap(),
+            Selector::key("settings/mode").on_surface("contributed"),
+        );
+        assert!(parse_selector("key:").is_err());
+        assert_eq!(
             parse_selector("role:button surface:literal").unwrap(),
             Selector::role("button").containing("surface:literal")
         );
@@ -639,6 +664,23 @@ mod tests {
         assert!(
             ticks >= 4,
             "burned the cap rather than returning instantly: {ticks}"
+        );
+    }
+
+    #[test]
+    fn action_id_has_its_own_dispatch_and_does_not_try_the_label_hook() {
+        assert!(
+            matches!(parse_step("act id:session:save"), Ok(Step::ActId(id)) if id == "session:save")
+        );
+        assert!(parse_step("act id:").is_err());
+        assert!(parse_step("act id:session:save extra").is_err());
+        let mut app = MockApp::new();
+        let out = run("act id:absent", &mut app);
+        assert!(!out.ok);
+        assert!(
+            out.log
+                .iter()
+                .any(|line| line.contains("command id 'absent'"))
         );
     }
 

@@ -57,28 +57,18 @@ fn matching_nodes(
     lookup: &impl SemanticLookup,
     prefer_exact: bool,
 ) -> Vec<SemanticTarget> {
-    let Match::Role(role) = &sel.matcher else {
+    if matches!(sel.matcher, Match::Class(_)) {
         return matching_classes(dom, sel)
             .into_iter()
             .map(SemanticTarget::Dom)
             .collect();
-    };
+    }
     let nodes = lookup.nodes();
     let matched: Vec<_> = nodes
         .iter()
         .filter(|node| {
             !node.hidden
-                && node.role.is_some_and(|token| {
-                    token == role
-                        || matches!(
-                            (token, role.as_str()),
-                            ("img", "image") | ("cell", "gridcell")
-                        )
-                })
-                && sel
-                    .text
-                    .as_ref()
-                    .is_none_or(|text| node.name.is_some_and(|name| name.contains(text)))
+                && sel.matches_semantics(node.role, node.name, node.authored_key)
                 && sel
                     .attr
                     .as_ref()
@@ -127,7 +117,14 @@ impl SemanticLookup for DocumentLookup<'_> {
                     role: super::projection::role_token(semantic.role),
                     name: semantic.name.as_deref(),
                     hidden: semantic.state.hidden,
-                    authored_key: None,
+                    authored_key: ["data-key", "data-tabkey", "id"]
+                        .into_iter()
+                        .find_map(|name| {
+                            let (namespace, local) = ns_local(name);
+                            self.dom
+                                .attribute(node, &namespace, &local)
+                                .filter(|key| !key.is_empty())
+                        }),
                     opaque_address: None,
                 });
             }
@@ -145,11 +142,22 @@ impl SemanticLookup for DocumentLookup<'_> {
 pub struct AccessKitLookup<'a, F> {
     tree: &'a accesskit::TreeUpdate,
     dom_target: F,
+    authored_key: Option<&'a dyn Fn(u64) -> Option<&'a str>>,
 }
 #[cfg(feature = "accesskit")]
 impl<'a, F: Fn(u64) -> Option<NodeId>> AccessKitLookup<'a, F> {
     pub fn new(tree: &'a accesskit::TreeUpdate, dom_target: F) -> Self {
-        Self { tree, dom_target }
+        Self {
+            tree,
+            dom_target,
+            authored_key: None,
+        }
+    }
+
+    /// Borrow keys from the envelope table for this exact tree observation.
+    pub fn with_authored_keys(mut self, keys: &'a dyn Fn(u64) -> Option<&'a str>) -> Self {
+        self.authored_key = Some(keys);
+        self
     }
 }
 #[cfg(feature = "accesskit")]
@@ -175,7 +183,7 @@ impl<F: Fn(u64) -> Option<NodeId>> SemanticLookup for AccessKitLookup<'_, F> {
                 role: document_session_api::a11y::accesskit_role_token(node.role()),
                 name: node.label(),
                 hidden: false,
-                authored_key: None,
+                authored_key: self.authored_key.and_then(|key| key(id.0)),
                 opaque_address: None,
             });
             pending.extend(node.children().iter().rev().copied());

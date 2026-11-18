@@ -649,6 +649,30 @@ mod lookup_tests {
     }
 
     #[test]
+    fn authored_key_reads_owner_metadata_and_ignores_copy() {
+        let mut dom = ScriptedDom::new();
+        let root = dom.document();
+        let button = element(&mut dom, root, "button", "button");
+        let projection = projection(&dom);
+        let mut tree = genet_render::accesskit_tree_from_projection(projection);
+        let id = dom.opaque_id(button);
+        tree.nodes
+            .iter_mut()
+            .find(|(candidate, _)| candidate.0 == id)
+            .unwrap()
+            .1
+            .set_label("Edited copy");
+        let keys = |candidate| (candidate == id).then_some("fixture/apply");
+        let lookup = AccessKitLookup::new(&tree, |_| None).with_authored_keys(&keys);
+        let targets = matching_with_lookup(&dom, &Selector::key("fixture/apply"), &lookup);
+        assert_eq!(targets, [SemanticTarget::Contributed(id)]);
+        assert!(matching_with_lookup(&dom, &Selector::key("fixture"), &lookup).is_empty());
+        assert!(
+            matching_with_lookup(&dom, &Selector::key("Edited copy"), &lookup).is_empty()
+        );
+    }
+
+    #[test]
     fn composed_lookup_preserves_dom_roles_and_class_attribute_contracts() {
         let mut dom = ScriptedDom::new();
         let root = dom.document();

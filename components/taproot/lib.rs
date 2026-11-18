@@ -46,7 +46,8 @@ pub use lookup::{
 
 mod projection;
 pub use projection::{
-    matching_prefer_exact_with_projection, matching_with_projection, role_token as document_role_token,
+    matching_prefer_exact_with_projection, matching_with_projection,
+    role_token as document_role_token,
 };
 
 /// One retained cambium surface the driver can search and hit-test: its DOM,
@@ -68,6 +69,7 @@ pub struct ProbeSurface<'a> {
 pub enum Match {
     Class(String),
     Role(String),
+    Key(String),
 }
 
 /// An element selector: a [`Match`] plus optional filters, all AND-ed. The text
@@ -110,6 +112,41 @@ impl Selector {
             text: None,
             attr: None,
         }
+    }
+
+    /// Select by the exact key carried in the owner's current semantics.
+    pub fn key(key: impl Into<String>) -> Self {
+        Self {
+            surface: None,
+            matcher: Match::Key(key.into()),
+            text: None,
+            attr: None,
+        }
+    }
+
+    /// Apply the semantic part of a selector to owner-supplied facts.
+    /// Attribute and surface filters are handled by the caller.
+    pub fn matches_semantics(
+        &self,
+        role: Option<&str>,
+        name: Option<&str>,
+        authored_key: Option<&str>,
+    ) -> bool {
+        let kind = match &self.matcher {
+            Match::Role(wanted) => role.is_some_and(|role| {
+                role == wanted
+                    || matches!(
+                        (role, wanted.as_str()),
+                        ("img", "image") | ("cell", "gridcell")
+                    )
+            }),
+            Match::Key(wanted) => authored_key == Some(wanted.as_str()),
+            Match::Class(_) => false,
+        };
+        kind && self
+            .text
+            .as_deref()
+            .is_none_or(|text| name.is_some_and(|name| name.contains(text)))
     }
 
     /// Restrict this request to one host surface family.
@@ -209,7 +246,7 @@ fn aria_hidden(dom: &ScriptedDom, node: NodeId) -> bool {
 fn matches_class(dom: &ScriptedDom, node: NodeId, sel: &Selector) -> bool {
     let by_kind = match &sel.matcher {
         Match::Class(c) => dom.has_class(node, c),
-        Match::Role(_) => panic!("role selectors require matching_with_projection"),
+        Match::Role(_) | Match::Key(_) => panic!("semantic selectors require matching_with_lookup"),
     };
     if !by_kind {
         return false;
@@ -292,7 +329,7 @@ pub fn matching_estimated_fixture(dom: &ScriptedDom, sel: &Selector) -> Vec<Node
         return matching_classes(dom, sel);
     }
     let Match::Role(role) = &sel.matcher else {
-        unreachable!();
+        return Vec::new();
     };
     let mut out = Vec::new();
     fn walk(dom: &ScriptedDom, node: NodeId, sel: &Selector, role: &str, out: &mut Vec<NodeId>) {
@@ -421,6 +458,12 @@ pub trait Automatable {
     /// command, so the driver fails loudly rather than silently no-op.
     fn act(&mut self, label: &str) -> bool;
 
+    /// Invoke an ID advertised by the owner in its current observation.
+    /// Implementations must preserve the observed target through owner admission.
+    fn act_id(&mut self, _id: &str) -> bool {
+        false
+    }
+
     /// Deliver a synthetic pointer press at window coords; the app routes it
     /// through its own surface plan (that routing is app-specific).
     fn press(&mut self, x: f32, y: f32);
@@ -526,7 +569,7 @@ pub trait AutomatableExt: Automatable {
 impl<A: Automatable> AutomatableExt for A {}
 
 mod scenario;
-pub use scenario::{Cmp, Driveable, Outcome, Progress, Scenario};
+pub use scenario::{Cmp, Driveable, Outcome, Progress, Scenario, parse_selector};
 
 #[cfg(test)]
 mod tests {

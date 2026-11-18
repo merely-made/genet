@@ -122,12 +122,16 @@ async fn fetch_inner(request: Request, cx: &FetchContext) -> Response {
     let mut cross_site_iframe = false;
 
     // HTTP cache (RFC 9111 + request cache mode): only for GET, only when a real
-    // cache is wired, and never for `no-store`.
+    // cache is wired, and never for `no-store`. Iframe navigation bypasses
+    // shared cache storage and lookup until cached responses can reevaluate
+    // request credentials, CORS and integrity.
     let now = SystemTime::now();
     let mode = request.cache;
-    let cache_key =
-        (cx.cache.enabled() && matches!(method, Method::Get) && mode != CacheMode::NoStore)
-            .then(|| cache::cache_key("GET", &current_url));
+    let cache_key = (!iframe
+        && cx.cache.enabled()
+        && matches!(method, Method::Get)
+        && mode != CacheMode::NoStore)
+        .then(|| cache::cache_key("GET", &current_url));
     let mut revalidate = match probe_cache(cx, cache_key.as_deref(), mode, now, &url_list) {
         CacheProbe::Serve(response) => return response,
         CacheProbe::Proceed { revalidate } => revalidate,

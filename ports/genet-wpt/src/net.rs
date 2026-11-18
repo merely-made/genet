@@ -112,9 +112,17 @@ fn worker_loop(rx: std::sync::mpsc::Receiver<Job>) {
                 },
                 Err(_) => break, // all senders dropped: shut down
             }
-            handles.retain(|_, h| !h.is_finished());
+            sweep_fetch_jobs(&mut handles, &mut pulls);
         }
     });
+}
+
+fn sweep_fetch_jobs(
+    handles: &mut std::collections::HashMap<u64, tokio::task::AbortHandle>,
+    pulls: &mut std::collections::HashMap<u64, tokio::sync::mpsc::UnboundedSender<()>>,
+) {
+    handles.retain(|_, handle| !handle.is_finished());
+    pulls.retain(|_, sender| !sender.is_closed());
 }
 
 /// One process-wide HTTP cache, shared across every deferred fetch so the
@@ -188,9 +196,8 @@ pub fn trust_wpt_ca(ca_pem: &Path) -> Result<(), String> {
     .with_no_client_auth();
     // Retrying canceled requests matches the default transport's pool.
     let engine = netfetcher::wire::hyper::HttpTransport::new(tls, true);
-    let transport: std::sync::Arc<dyn netfetcher::Transport> = std::sync::Arc::new(
-        netfetcher::WireTransport::new(std::sync::Arc::new(engine)),
-    );
+    let transport: std::sync::Arc<dyn netfetcher::Transport> =
+        std::sync::Arc::new(netfetcher::WireTransport::new(std::sync::Arc::new(engine)));
     TRANSPORT
         .set(transport)
         .map_err(|_| "the runner's transport was already set".to_owned())
@@ -1146,6 +1153,29 @@ fn parse_http_port(line: &str) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn completed_fetch_jobs_release_pull_channels() {
+        let (closed_tx, closed_rx) = tokio::sync::mpsc::unbounded_channel();
+        drop(closed_rx);
+        let (live_tx, mut live_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (stream_tx, mut stream_rx) = tokio::sync::mpsc::unbounded_channel();
+        let completed = tokio::spawn(async {});
+        let completed_handle = completed.abort_handle();
+        completed.await.unwrap();
+        let live = tokio::spawn(async move { stream_rx.recv().await });
+        let mut handles =
+            std::collections::HashMap::from([(1, completed_handle), (2, live.abort_handle())]);
+        let mut pulls = std::collections::HashMap::from([(1, closed_tx), (2, live_tx)]);
+        sweep_fetch_jobs(&mut handles, &mut pulls);
+        assert!(!handles.contains_key(&1));
+        assert!(handles.contains_key(&2));
+        assert!(!pulls.contains_key(&1));
+        pulls.get(&2).unwrap().send(()).unwrap();
+        assert_eq!(live_rx.recv().await, Some(()));
+        stream_tx.send(()).unwrap();
+        live.await.unwrap();
+    }
 
     #[test]
     fn parses_the_primary_http_port_only() {

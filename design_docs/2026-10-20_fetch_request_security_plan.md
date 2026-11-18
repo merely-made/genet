@@ -509,3 +509,21 @@ become the default.
   Open P2 work includes production host adoption, asynchronous iframe
   acquisition, nested and lazy iframes, later iframe navigations, the other
   element destinations, and matched generated WPT server-mode accounting.
+- **2026-11-17** Integration on upstream `fe42f351a24` adds two P2 corrections.
+  Iframe requests bypass shared HTTP cache lookup and insertion until cached
+  responses can reevaluate credentials, CORS and integrity. Two regressions
+  reproduced both directions of cache reuse before the fix, and ordinary fetch
+  caching still passes. The WPT worker sweeps closed pull senders alongside
+  completed handles. Its regression failed with a retained closed sender, then
+  passed while also verifying that the live sender remains usable.
+  Under the final ignored lock, netfetcher passed 99/99 and genet-sri 14/14.
+  The actual runner cleanup test passed 1/1, the default-feature runner built
+  with `netfetch`, and the localhost HTTP witness passed 3/3 on Boa and 3/3
+  on Vano, with the received referrers retained in the server log.
+  This lock resolves Bole `b9240e98` and the declared NetRender main supplier
+  `7060634f`. Its SHA-256 is
+  `44a39c67bcc04491e805eec21b8ee338f0429b986305000716e5c7e371f40a3f`.
+  The earlier runner compile failure against the historical NetRender lock and
+  the failing-first regressions remain in
+  `Code/testing/genet/priorities-20261117/`, beside fresh metadata, full logs
+  and `http-witness/`. The P2 residuals listed above remain open.

@@ -68,7 +68,10 @@ async fn cross_site_iframe_does_not_send_lax_navigation_cookie() {
     let base = Url::parse(&server.url()).unwrap();
     cx.cookies.set_cookie(&base, "id=lax; SameSite=Lax; Path=/");
     let origin = Url::parse("http://parent.test/").unwrap().origin();
-    for (path, destination) in [("iframe", Destination::Iframe), ("top", Destination::Document)] {
+    for (path, destination) in [
+        ("iframe", Destination::Iframe),
+        ("top", Destination::Document),
+    ] {
         let mut request = Request::get(base.join(path).unwrap());
         request.mode = RequestMode::Navigate;
         request.origin = Some(origin.clone());
@@ -91,10 +94,19 @@ async fn cross_site_iframe_redirect_limits_cookies_on_every_hop() {
         ) -> crate::transport::TransportFuture<'_> {
             let mut headers = vec![
                 ("set-cookie".into(), "lax=new; SameSite=Lax; Path=/".into()),
-                ("set-cookie".into(), "strict=new; SameSite=Strict; Path=/".into()),
+                (
+                    "set-cookie".into(),
+                    "strict=new; SameSite=Strict; Path=/".into(),
+                ),
                 ("set-cookie".into(), "default=new; Path=/".into()),
-                ("set-cookie".into(), "insecure=new; SameSite=None; Path=/".into()),
-                ("set-cookie".into(), "secure=new; SameSite=None; Secure; Path=/".into()),
+                (
+                    "set-cookie".into(),
+                    "insecure=new; SameSite=None; Path=/".into(),
+                ),
+                (
+                    "set-cookie".into(),
+                    "secure=new; SameSite=None; Secure; Path=/".into(),
+                ),
             ];
             let status = if request.url.path() == "/redirect" {
                 headers.push(("location".into(), "https://parent.test/target".into()));
@@ -119,7 +131,8 @@ async fn cross_site_iframe_redirect_limits_cookies_on_every_hop() {
     let mut cx = FetchContext::permissive();
     let transport = Arc::new(RedirectCookies::default());
     cx.transport = transport.clone();
-    cx.cookies.set_cookie(&final_url, "existing=old; SameSite=Lax; Path=/");
+    cx.cookies
+        .set_cookie(&final_url, "existing=old; SameSite=Lax; Path=/");
     let mut request = Request::get(start.clone()).with_origin(final_url.origin());
     request.mode = RequestMode::Navigate;
     request.credentials = Credentials::Include;
@@ -127,9 +140,13 @@ async fn cross_site_iframe_redirect_limits_cookies_on_every_hop() {
     let response = fetch(request, &cx).await;
     assert_eq!(response.status, 200);
     assert_eq!(response.url_list, [start.clone(), final_url.clone()]);
-    assert_eq!(cx.cookies.cookies_for(&start, SameSiteContext::same_site()), ["secure=new"]);
     assert_eq!(
-        cx.cookies.cookies_for(&final_url, SameSiteContext::same_site()),
+        cx.cookies.cookies_for(&start, SameSiteContext::same_site()),
+        ["secure=new"]
+    );
+    assert_eq!(
+        cx.cookies
+            .cookies_for(&final_url, SameSiteContext::same_site()),
         ["existing=old", "secure=new"],
     );
     assert_eq!(
@@ -254,6 +271,91 @@ async fn records_set_cookie_through_the_jar() {
 
     assert_eq!(res.status, 200);
     assert_eq!(spy.0.lock().unwrap().as_slice(), &["id=abc".to_string()]);
+}
+
+#[tokio::test]
+async fn iframe_ignores_an_existing_ordinary_fetch_cache_entry() {
+    let mut server = mockito::Server::new_async().await;
+    let url = Url::parse(&format!("{}/cached", server.url())).unwrap();
+    let cx = caching_cx();
+    let seed = server
+        .mock("GET", "/cached")
+        .with_status(200)
+        .with_header("cache-control", "max-age=300")
+        .with_body("ordinary")
+        .expect(1)
+        .create_async()
+        .await;
+    assert_eq!(
+        fetch(Request::get(url.clone()), &cx)
+            .await
+            .bytes()
+            .await
+            .unwrap()
+            .as_ref(),
+        b"ordinary"
+    );
+    seed.assert_async().await;
+    seed.remove_async().await;
+    let live = server
+        .mock("GET", "/cached")
+        .with_status(200)
+        .with_body("iframe")
+        .expect(1)
+        .create_async()
+        .await;
+    let mut request = Request::get(url);
+    request.destination = Destination::Iframe;
+    request.mode = RequestMode::Navigate;
+    assert_eq!(
+        fetch(request, &cx).await.bytes().await.unwrap().as_ref(),
+        b"iframe"
+    );
+    live.assert_async().await;
+}
+
+#[tokio::test]
+async fn iframe_does_not_seed_the_ordinary_fetch_cache() {
+    let mut server = mockito::Server::new_async().await;
+    let url = Url::parse(&format!("{}/cached", server.url())).unwrap();
+    let cx = caching_cx();
+    let frame = server
+        .mock("GET", "/cached")
+        .with_status(200)
+        .with_header("cache-control", "max-age=300")
+        .with_body("iframe")
+        .expect(1)
+        .create_async()
+        .await;
+    let mut request = Request::get(url.clone());
+    request.destination = Destination::Iframe;
+    request.mode = RequestMode::Navigate;
+    assert_eq!(
+        fetch(request, &cx).await.bytes().await.unwrap().as_ref(),
+        b"iframe"
+    );
+    frame.assert_async().await;
+    frame.remove_async().await;
+    let ordinary = server
+        .mock("GET", "/cached")
+        .with_status(200)
+        .with_header("cache-control", "max-age=300")
+        .with_body("ordinary")
+        .expect(1)
+        .create_async()
+        .await;
+    for _ in 0..2 {
+        assert_eq!(
+            fetch(Request::get(url.clone()), &cx)
+                .await
+                .bytes()
+                .await
+                .unwrap()
+                .as_ref(),
+            b"ordinary"
+        );
+    }
+    ordinary.assert_async().await;
 }
 
 #[tokio::test]

@@ -529,3 +529,38 @@ become the default.
   the failing-first regressions remain in
   `Code/testing/genet/priorities-20261117/`, beside fresh metadata, full logs
   and `http-witness/`. The P2 residuals listed above remain open.
+- **2026-11-18** The scripted URL loader negotiates a document fetch with its
+  host. An acquired top-document response installs its headers before parsing.
+  Parser-created and script-created eager iframes in the top document use the
+  same host contract with the runtime's navigation policy. An unsupported host
+  or scheme uses the legacy loader. A failed acquisition ends the load.
+  Ortet and Inker's HTTP fetchers select the nested iframe destination in
+  netfetcher and keep their existing request budgets. The live scripted resource
+  resolver records frame owners while the runtime acquires their HTML. The
+  static resolver still acquires frame HTML. Frame mutations leave retained
+  stylesheet and image responses intact when their URLs coincide.
+
+  The shared HTTP header builder omits non-HTTP(S) source URLs from `Referer`
+  and omits its computed `Origin` for iframe GET and HEAD navigations. The
+  initiator origin still informs cookie and mixed-content policy, including
+  redirect hops. [HTTP Semantics, Referer](https://www.rfc-editor.org/rfc/rfc9110.html#name-referer)
+
+  Graphshell's Pelt engine-load path uses Inker's fetcher via `LocalFetcher`.
+  Callers supplying a body still need a response-metadata carrier. Nested and
+  lazy iframe acquisition, later iframe navigations, the remaining element
+  destinations and asynchronous loading are open.
+
+  Local gates above `206d67a33e3` passed 100 netfetcher tests, six scripted
+  entry-point tests spanning Boa and Vano, 18 resource resolver tests and six
+  live CSSOM tests. Ortet passed 60 default-feature library tests and both
+  wire tests with the scripted engines enabled. Inker `b1f011314f7` passed
+  its nine HTTP tests against the local Genet graph. Inker's broader suite
+  had one reader scroll failure that reproduced on clean baseline source.
+  The logs are in `Code/testing/genet/priorities-20261118/`.
+
+  Matched server-mode WPT compared `fe42f351a24` with `efef89ec882` using the
+  same corpus, lock and WPT server configuration. The generated Fetch Metadata
+  iframe file moved from 0/18 to 1/18 on Boa and from 1/18 to 2/18 on Vano.
+  The two generated iframe referrer-policy files stayed at 0/12 each on
+  both engines. All three files reached the harness deadline on both runners.
+  Reports and exact assertions are in `Code/testing/genet/priorities-20261118/wpt/`.

@@ -926,9 +926,38 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     {
         let navigation = NavigationFragment::parse(url);
         let fetcher = ScriptResourceBridge::new_with_generation(fetcher, wake, generation);
-        let response = fetcher
-            .fetch_response(&navigation.resource_url)
-            .ok_or_else(|| format!("could not load {}", navigation.resource_url))?;
+        let request = genet_host_api::ResourceRequest::plain_get(&navigation.resource_url);
+        let (response, response_headers) =
+            match fetcher.fetch_document(&request, genet_host_api::DocumentFetchKind::TopLevel) {
+                genet_host_api::DocumentFetchResult::Unsupported => (
+                    fetcher
+                        .fetch_response(&navigation.resource_url)
+                        .ok_or_else(|| format!("could not load {}", navigation.resource_url))?,
+                    Vec::new(),
+                ),
+                genet_host_api::DocumentFetchResult::Response(mut response) => {
+                    if matches!(response.status, 204 | 205)
+                        || matches!(
+                            response.response_type.as_str(),
+                            "opaque" | "opaqueredirect" | "error"
+                        )
+                    {
+                        return Err(format!("could not load {}", navigation.resource_url));
+                    }
+                    if response.content_type.is_none() {
+                        response.content_type = response
+                            .headers
+                            .iter()
+                            .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+                            .map(|(_, value)| value.clone());
+                    }
+                    let headers = std::mem::take(&mut response.headers);
+                    (response.into_legacy_response(), headers)
+                },
+                genet_host_api::DocumentFetchResult::Failed => {
+                    return Err(format!("could not load {}", navigation.resource_url));
+                },
+            };
         let decoded = genet_scripted_dom::html_encoding::decode_html_document(
             &response.bytes,
             response.content_type.as_deref(),
@@ -949,6 +978,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             options,
             decoded.encoding,
             decode_options,
+            response_headers,
         )?;
         document.pending_fragment = (!navigation.text_directives.is_empty()
             || navigation.element_fragment.is_some())
@@ -1078,6 +1108,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             options,
             Default::default(),
             Default::default(),
+            Vec::new(),
         )
     }
     fn build_encoded(
@@ -1087,9 +1118,11 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
         options: ScriptedDocumentOptions,
         encoding: script_runtime_api::DocumentEncoding,
         decode_options: script_runtime_api::HtmlDecodeOptions,
+        response_headers: Vec<(String, String)>,
     ) -> Result<Self, String> {
         let mut rt =
             Runtime::<E>::new().map_err(|error| format!("script runtime init: {error:?}"))?;
+        rt.set_document_response_headers(response_headers);
         rt.set_document_encoding(encoding);
         rt.set_html_decode_options(decode_options);
         rt.set_validation_message_catalog(options.validation_message_catalog);

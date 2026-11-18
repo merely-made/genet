@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use genet_documents::LocalFetcher;
 use genet_host_api::{
-    ResourceFetchPolicy, ResourceFetchResponse, ResourceFetcher, ResourceRequest, ResourceResponse,
+    DocumentFetchKind, DocumentFetchResult, ResourceFetchPolicy, ResourceFetchResponse,
+    ResourceFetcher, ResourceRequest, ResourceResponse,
 };
 
 /// Which lane serves an address.
@@ -91,6 +92,22 @@ impl ResourceFetcher for OrtetFetcher {
             },
             FetchLane::Remote => self.remote.as_ref()?.fetch_request(request),
             _ => None,
+        }
+    }
+
+    fn fetch_document(
+        &self,
+        request: &ResourceRequest,
+        kind: DocumentFetchKind,
+    ) -> DocumentFetchResult {
+        match lane_for(&request.url) {
+            FetchLane::Remote => self
+                .remote
+                .as_ref()
+                .map_or(DocumentFetchResult::Failed, |remote| {
+                    remote.fetch_document(request, kind)
+                }),
+            _ => DocumentFetchResult::Unsupported,
         }
     }
 
@@ -176,6 +193,26 @@ impl ResourceFetcher for RemoteFetcher {
     fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
         self.fetch_request_result(request).ok()
     }
+
+    fn fetch_document(
+        &self,
+        request: &ResourceRequest,
+        kind: DocumentFetchKind,
+    ) -> DocumentFetchResult {
+        if lane_for(&request.url) != FetchLane::Remote {
+            return DocumentFetchResult::Unsupported;
+        }
+        let Some(mut wire) = netfetcher::Request::from_host(request) else {
+            return DocumentFetchResult::Failed;
+        };
+        if kind == DocumentFetchKind::Iframe {
+            wire.destination = netfetcher::Destination::Iframe;
+        }
+        match self.fetch_wire_request(request, wire, || {}) {
+            Ok(response) => DocumentFetchResult::Response(response),
+            Err(_) => DocumentFetchResult::Failed,
+        }
+    }
 }
 
 impl RemoteFetcher {
@@ -196,57 +233,70 @@ impl RemoteFetcher {
         }
         let wire = netfetcher::Request::from_host(request)
             .ok_or(NativeFetchFailure::InvalidRequest)?;
+        self.fetch_wire_request(request, wire, on_admission)
+    }
+
+    fn fetch_wire_request(
+        &self,
+        request: &ResourceRequest,
+        wire: netfetcher::Request,
+        on_admission: impl FnOnce(),
+    ) -> Result<ResourceFetchResponse, NativeFetchFailure> {
         if self.policy.max_concurrent_fetches == 0 {
             return Err(NativeFetchFailure::NoAdmissionCapacity);
         }
         self.runtime.block_on(async {
             tokio::time::timeout(self.policy.timeout, async {
                 on_admission();
-                let _permit = self.permits.acquire().await.map_err(|_| NativeFetchFailure::NoAdmissionCapacity)?;
-            let response = netfetcher::fetch(wire, &self.context).await;
-            if response.is_network_error() {
-                return Err(NativeFetchFailure::Network);
-            }
-            let final_url = response
-                .url_list
-                .last()
-                .map_or_else(|| request.url.clone(), ToString::to_string);
-            let content_type = response
-                .headers
-                .iter()
-                .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
-                .map(|(_, value)| value.clone());
-            let status = response.status;
-            let headers = response.headers.clone();
-            let response_type = match response.response_type {
-                netfetcher::ResponseType::Basic => "basic",
-                netfetcher::ResponseType::Cors => "cors",
-                netfetcher::ResponseType::Opaque => "opaque",
-                netfetcher::ResponseType::OpaqueRedirect => "opaqueredirect",
-                netfetcher::ResponseType::Error => "error",
-            }
-            .into();
-            let redirected = response.url_list.len() > 1;
-            let mut body = response.body;
-            let mut bytes = Vec::new();
-            while let Some(chunk) = body.next_chunk().await {
-                let chunk = chunk.map_err(|_| NativeFetchFailure::Body)?;
-                if chunk.len() > self.policy.max_response_bytes.saturating_sub(bytes.len()) {
-                    return Err(NativeFetchFailure::ResponseTooLarge);
+                let _permit = self
+                    .permits
+                    .acquire()
+                    .await
+                    .map_err(|_| NativeFetchFailure::NoAdmissionCapacity)?;
+                let response = netfetcher::fetch(wire, &self.context).await;
+                if response.is_network_error() {
+                    return Err(NativeFetchFailure::Network);
                 }
-                bytes.extend_from_slice(&chunk);
-            }
-            Ok(ResourceFetchResponse {
-                final_url,
-                content_type,
-                bytes,
-                status,
-                // netfetcher exposes the numeric status, not the transport reason phrase.
-                status_text: String::new(),
-                headers,
-                response_type,
-                redirected,
-            })
+                let final_url = response
+                    .url_list
+                    .last()
+                    .map_or_else(|| request.url.clone(), ToString::to_string);
+                let content_type = response
+                    .headers
+                    .iter()
+                    .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+                    .map(|(_, value)| value.clone());
+                let status = response.status;
+                let headers = response.headers.clone();
+                let response_type = match response.response_type {
+                    netfetcher::ResponseType::Basic => "basic",
+                    netfetcher::ResponseType::Cors => "cors",
+                    netfetcher::ResponseType::Opaque => "opaque",
+                    netfetcher::ResponseType::OpaqueRedirect => "opaqueredirect",
+                    netfetcher::ResponseType::Error => "error",
+                }
+                .into();
+                let redirected = response.url_list.len() > 1;
+                let mut body = response.body;
+                let mut bytes = Vec::new();
+                while let Some(chunk) = body.next_chunk().await {
+                    let chunk = chunk.map_err(|_| NativeFetchFailure::Body)?;
+                    if chunk.len() > self.policy.max_response_bytes.saturating_sub(bytes.len()) {
+                        return Err(NativeFetchFailure::ResponseTooLarge);
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                Ok(ResourceFetchResponse {
+                    final_url,
+                    content_type,
+                    bytes,
+                    status,
+                    // netfetcher exposes the numeric status, not the transport reason phrase.
+                    status_text: String::new(),
+                    headers,
+                    response_type,
+                    redirected,
+                })
             })
             .await
             .map_err(|_| NativeFetchFailure::Deadline)?
@@ -529,6 +579,87 @@ mod tests {
                 Err(error) => return Err(error.to_string()),
             }
         }
+    }
+
+    #[test]
+    fn document_fetch_top_preserves_http_metadata_and_plain_get() {
+        let body = b"<p>not found document</p>".to_vec();
+        let (origin, task) = policy_http_server(
+            format!(
+                "HTTP/1.1 404 Not Found\r\nContent-Length: {}\r\nContent-Type: text/html\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n",
+                body.len()
+            ),
+            body,
+            std::time::Duration::ZERO,
+        );
+        let fetcher = OrtetFetcher::with_network().unwrap();
+        let request = ResourceRequest::plain_get(format!("{origin}/document"));
+        let DocumentFetchResult::Response(response) =
+            fetcher.fetch_document(&request, DocumentFetchKind::TopLevel)
+        else {
+            panic!("readable HTTP error remains a document response");
+        };
+        assert_eq!(response.status, 404);
+        assert_eq!(response.final_url, request.url);
+        assert!(response.headers.iter().any(
+            |(name, value)| name.eq_ignore_ascii_case("referrer-policy") && value == "no-referrer"
+        ));
+        let wire = task.join().unwrap().unwrap();
+        assert_eq!(wire.method, "GET");
+        assert_eq!(t5_wire_header(&wire, "referer"), None);
+    }
+
+    #[test]
+    fn document_fetch_iframe_uses_nested_cookie_policy_on_the_wire() {
+        let body = b"<p>child</p>".to_vec();
+        let (origin, task) = policy_http_server(
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nSet-Cookie: bad=1; SameSite=Lax; Path=/\r\nConnection: close\r\n\r\n",
+                body.len()
+            ),
+            body,
+            std::time::Duration::ZERO,
+        );
+        let fetcher = RemoteFetcher::new().unwrap();
+        let url = url::Url::parse(&origin).unwrap();
+        fetcher
+            .context
+            .cookies
+            .set_cookie(&url, "seed=1; SameSite=Lax; Path=/");
+        let mut request = ResourceRequest::plain_get(format!("{origin}/child"));
+        request.mode = "navigate".into();
+        request.credentials = "include".into();
+        request.referrer = "http://parent.test/page".into();
+        request.referrer_policy = "origin".into();
+        let DocumentFetchResult::Response(response) =
+            fetcher.fetch_document(&request, DocumentFetchKind::Iframe)
+        else {
+            panic!("remote host must acquire iframe");
+        };
+        assert_eq!(response.bytes, b"<p>child</p>");
+        let wire = task.join().unwrap().unwrap();
+        assert_eq!(t5_wire_header(&wire, "cookie"), None);
+        assert_eq!(t5_wire_header(&wire, "origin"), None);
+        assert_eq!(
+            t5_wire_header(&wire, "referer"),
+            Some("http://parent.test/")
+        );
+        assert_eq!(
+            fetcher
+                .context
+                .cookies
+                .cookies_for(&url, netfetcher::SameSiteContext::same_site()),
+            ["seed=1"]
+        );
+        assert!(matches!(
+            OrtetFetcher::local_only().fetch_document(&request, DocumentFetchKind::Iframe),
+            DocumentFetchResult::Failed
+        ));
+        let local = ResourceRequest::plain_get("data:text/html,local");
+        assert!(matches!(
+            OrtetFetcher::local_only().fetch_document(&local, DocumentFetchKind::Iframe),
+            DocumentFetchResult::Unsupported
+        ));
     }
 
     #[test]

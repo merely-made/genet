@@ -12,7 +12,10 @@
 //! engine components never link a transport.
 
 pub use genet_host_api::ResourceFetchPolicy;
-use genet_host_api::{ResourceFetchResponse, ResourceFetcher, ResourceRequest, ResourceResponse};
+use genet_host_api::{
+    DocumentFetchKind, DocumentFetchResult, ResourceFetchResponse, ResourceFetcher, ResourceRequest,
+    ResourceResponse,
+};
 
 /// The local-scheme [`ResourceFetcher`]: `data:`, `file://`, and bare paths.
 #[derive(Clone, Copy, Debug, Default)]
@@ -89,6 +92,18 @@ impl<F: ResourceFetcher> ResourceFetcher for LocalFetcherWith<F> {
         }
     }
 
+    fn fetch_document(
+        &self,
+        request: &ResourceRequest,
+        kind: DocumentFetchKind,
+    ) -> DocumentFetchResult {
+        if is_local(&request.url) {
+            DocumentFetchResult::Unsupported
+        } else {
+            self.fallback.fetch_document(request, kind)
+        }
+    }
+
     fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
         if is_local(&request.url) {
             LocalFetcher.fetch_request(request)
@@ -141,6 +156,42 @@ mod tests {
     use genet_host_api::{ResourceFetcher, ResourceRequest, ResourceResponse};
 
     use super::{LocalFetcher, is_local};
+
+    #[test]
+    fn local_wrapper_preserves_document_fetch_outcomes() {
+        use genet_host_api::{DocumentFetchKind, DocumentFetchResult, ResourceFetchResponse};
+        struct Remote;
+        impl ResourceFetcher for Remote {
+            fn fetch(&self, _: &str) -> Option<Vec<u8>> {
+                panic!("no byte fallback");
+            }
+            fn fetch_request(&self, _: &ResourceRequest) -> Option<ResourceFetchResponse> {
+                panic!("no generic fallback");
+            }
+            fn fetch_document(
+                &self,
+                _: &ResourceRequest,
+                _: DocumentFetchKind,
+            ) -> DocumentFetchResult {
+                DocumentFetchResult::Failed
+            }
+        }
+        let fetcher = LocalFetcher.with_fallback(Remote);
+        assert!(matches!(
+            fetcher.fetch_document(
+                &ResourceRequest::plain_get("https://site.test/child"),
+                DocumentFetchKind::Iframe
+            ),
+            DocumentFetchResult::Failed
+        ));
+        assert!(matches!(
+            fetcher.fetch_document(
+                &ResourceRequest::plain_get("data:text/html,local"),
+                DocumentFetchKind::Iframe
+            ),
+            DocumentFetchResult::Unsupported
+        ));
+    }
 
     #[test]
     fn missing_local_resource_is_a_clean_miss() {

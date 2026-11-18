@@ -22,6 +22,10 @@ pub(crate) fn referrer_header(
     policy: ReferrerPolicy,
 ) -> Option<String> {
     use ReferrerPolicy::*;
+    // Local documents and non-HTTP protocols can carry private paths or data.
+    if !matches!(referrer.scheme(), "http" | "https") {
+        return None;
+    }
     // An unset policy applies the default (strict-origin-when-cross-origin).
     let policy = match policy {
         Empty => StrictOriginWhenCrossOrigin,
@@ -123,6 +127,26 @@ mod tests {
 
     fn url(s: &str) -> Url {
         Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn http_requests_omit_non_web_referrers() {
+        let target = url("https://example.test/child");
+        for source in [
+            "file:///private/document.html",
+            "data:text/html,parent",
+            "about:blank",
+            "blob:https://example.test/local",
+            "gemini://example.test/private",
+        ] {
+            for policy in [
+                ReferrerPolicy::UnsafeUrl,
+                ReferrerPolicy::NoReferrerWhenDowngrade,
+                ReferrerPolicy::Empty,
+            ] {
+                assert_eq!(referrer_header(&url(source), &target, policy), None);
+            }
+        }
     }
 
     #[test]

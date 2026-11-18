@@ -17,6 +17,7 @@ use script_engine_api::ScriptEngine;
 use script_runtime_api::{FetchHandler, FetchOutcome, FetchRequest, Runtime, ScriptResourceLoader};
 
 use crate::ResourceFetcher;
+use genet_host_api::{DocumentFetchKind, DocumentFetchResult, ResourceFetchResponse};
 
 #[derive(Clone, Default)]
 pub struct ScriptWake {
@@ -366,7 +367,14 @@ impl ScriptResourceBridge {
     }
 
     fn outcome(&self, request: &FetchRequest) -> FetchOutcome {
-        match self.state.fetcher.fetch_request(request) {
+        Self::response_outcome(request, self.state.fetcher.fetch_request(request))
+    }
+
+    fn response_outcome(
+        request: &FetchRequest,
+        response: Option<ResourceFetchResponse>,
+    ) -> FetchOutcome {
+        match response {
             Some(response) => {
                 let mut headers = response.headers;
                 if !headers
@@ -464,6 +472,19 @@ impl ResourceFetcher for ScriptResourceBridge {
         self.state.fetcher.fetch_request(request)
     }
 
+    fn fetch_document(
+        &self,
+        request: &FetchRequest,
+        kind: DocumentFetchKind,
+    ) -> DocumentFetchResult {
+        if self.state.closed.load(Ordering::Acquire) {
+            return DocumentFetchResult::Failed;
+        }
+        // This route acquires synchronously. The host owns transport admission,
+        // while the bridge budget bounds work started on background threads.
+        self.state.fetcher.fetch_document(request, kind)
+    }
+
     fn fetch_response(&self, url: &str) -> Option<genet_host_api::ResourceResponse> {
         self.state.fetcher.fetch_response(url)
     }
@@ -477,6 +498,16 @@ impl FetchHandler for ScriptResourceBridge {
                 .spawn(move || work())
                 .map(|_| ())
         })
+    }
+
+    fn fetch_iframe(&self, request: FetchRequest) -> Option<FetchOutcome> {
+        match ResourceFetcher::fetch_document(self, &request, DocumentFetchKind::Iframe) {
+            DocumentFetchResult::Unsupported => None,
+            DocumentFetchResult::Response(response) => {
+                Some(Self::response_outcome(&request, Some(response)))
+            },
+            DocumentFetchResult::Failed => Some(FetchOutcome::network_error()),
+        }
     }
 
     fn fetch(&self, request: FetchRequest) -> FetchOutcome {

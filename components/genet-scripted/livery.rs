@@ -360,7 +360,7 @@ fn synchronize_live_styles(host: &HostState, state: &mut LiveryState) {
         if arena_changed || live.mutation_cursor < base || live.mutation_cursor > end {
             // The journal cannot prove owner lifetimes across an arena change
             // or a consumed suffix, so start a new acquisition lifetime.
-            live.acquisition = RetainedResourceResolution::default();
+            live.acquisition = RetainedResourceResolution::scripted();
         } else {
             let offset = (live.mutation_cursor - base) as usize;
             live.acquisition.observe_mutations(
@@ -594,7 +594,7 @@ impl LiveryCssom {
         let document_url = document_url.into();
         let (resources, acquisition, mutation_cursor, arena_id) = {
             let host = host.borrow();
-            let mut acquisition = RetainedResourceResolution::default();
+            let mut acquisition = RetainedResourceResolution::scripted();
             let effective_url = host
                 .document_base_url()
                 .unwrap_or_else(|| document_url.clone());
@@ -2705,6 +2705,124 @@ mod tests {
         let rect = cssom.fragment_rect(target).expect("new document fragment");
         assert!((rect[2] - 80.0).abs() < 0.01, "new document's own width: {rect:?}");
         assert_ne!(after.generation_id(), before.generation_id());
+    }
+
+    #[test]
+    fn live_cssom_leaves_frame_acquisition_to_the_runtime() {
+        #[derive(Clone)]
+        struct Fetches(Rc<RefCell<Vec<String>>>);
+        impl ResourceFetcher for Fetches {
+            fn fetch_request(
+                &self,
+                _: &genet_host_api::ResourceRequest,
+            ) -> Option<genet_host_api::ResourceFetchResponse> {
+                None
+            }
+
+            fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+                self.0.borrow_mut().push(url.to_owned());
+                Some(b"body { color: red }".to_vec())
+            }
+        }
+
+        let fetches = Fetches(Rc::new(RefCell::new(Vec::new())));
+        let dom = StaticDocument::parse(
+            "<html><head><link rel=stylesheet href=site.css></head><body>\
+             <iframe src=child.html name=child></iframe><img src=poster.png></body></html>",
+        );
+        let base = "https://example.test/page.html";
+        let static_resources = ResolvedDocumentResources::resolve(&dom, Some(base), &fetches);
+        assert!(
+            fetches
+                .0
+                .borrow()
+                .iter()
+                .any(|url| url.ends_with("child.html"))
+        );
+        assert!(!static_resources.frames[0].source.is_empty());
+        fetches.0.borrow_mut().clear();
+
+        let mut runtime = Runtime::<BoaEngine>::new().expect("runtime");
+        runtime.load_dom(&dom);
+        let cssom = LiveryCssom::install_live(
+            &mut runtime,
+            fetches.clone(),
+            base,
+            ResourceLimits::default(),
+            Device::screen(800.0, 600.0),
+        );
+        assert_eq!(
+            fetches.0.borrow().as_slice(),
+            [
+                "https://example.test/site.css",
+                "https://example.test/poster.png",
+            ]
+        );
+        let resources = cssom.resource_set().expect("resource ledger");
+        assert_eq!(resources.frames.len(), 1);
+        assert_eq!(resources.frames[0].name.as_deref(), Some("child"));
+        assert!(!resources.frames[0].failed);
+        assert!(resources.frames[0].source.is_empty());
+
+        runtime
+            .eval(
+                "document.querySelector('iframe').setAttribute('src', 'next.html');\
+                      document.styleSheets.length;",
+            )
+            .expect("refresh styles");
+        assert_eq!(
+            fetches.0.borrow().len(),
+            2,
+            "refresh only changes frame facts"
+        );
+        let resources = cssom.resource_set().expect("updated frame facts");
+        assert_eq!(
+            resources.frames[0].resolved_url,
+            "https://example.test/next.html"
+        );
+        cssom.frame(&mut runtime, 800, 600).expect("layout refresh");
+        assert_eq!(
+            fetches.0.borrow().len(),
+            2,
+            "layout does not acquire frames"
+        );
+
+        runtime
+            .eval(
+                "document.querySelector('iframe').setAttribute('src', 'site.css');\
+                   document.styleSheets.length;",
+            )
+            .expect("refresh overlapping frame and stylesheet URL");
+        let resources = cssom.resource_set().expect("overlapping frame facts");
+        assert_eq!(
+            resources.frames[0].resolved_url,
+            "https://example.test/site.css"
+        );
+        assert_eq!(
+            fetches.0.borrow().len(),
+            2,
+            "frame changes leave stylesheet acquisition intact"
+        );
+        runtime
+            .eval("document.querySelector('iframe').src = 'poster.png'; document.styleSheets.length;")
+            .expect("refresh overlapping frame and image URL");
+        assert_eq!(
+            fetches.0.borrow().len(),
+            2,
+            "frame changes leave image acquisition intact"
+        );
+        runtime
+            .eval(
+                "document.querySelector('iframe').remove(); document.styleSheets.length;\
+                   var frame = document.createElement('iframe'); frame.src = 'site.css';\
+                   document.body.appendChild(frame); document.styleSheets.length;",
+            )
+            .expect("replace runtime-owned frame with overlapping resource URLs");
+        assert_eq!(
+            fetches.0.borrow().len(),
+            2,
+            "frame lifetimes leave resource acquisition intact"
+        );
     }
 
     #[test]

@@ -372,3 +372,14 @@ large reflection files already sit near the 120 s budget on Vano.
   - **`dom` on Boa:** the same three reaction gains (+3 subtests, two more
     files pass), and no file crossed the budget.
 
+### Matched custom element registry check, 2026-11-18
+
+Four selected Custom Element WPT files ran on Boa and Vano with the same
+corpus and lock. From `fe42f351a24` to `efef89ec882`,
+`CustomElementRegistry.html` improved from 39/46 to 44/46 on each engine.
+The other three files were unchanged, with no assertion losses across the
+selection. The registry still misses the `connectedMoveCallback` lookup and
+shadow-including upgrade order assertions. `Document.createElement` customized
+built-ins remain at 0/4 on both engines. Exact maps and runner provenance are
+in `Code/testing/genet/priorities-20261118/wpt/`.
+

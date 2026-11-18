@@ -57,6 +57,7 @@ async fn cross_site_iframe_does_not_send_lax_navigation_cookie() {
     let frame = server
         .mock("GET", "/iframe")
         .match_header("cookie", mockito::Matcher::Missing)
+        .match_header("origin", mockito::Matcher::Missing)
         .create_async()
         .await;
     let top_level = server
@@ -92,6 +93,7 @@ async fn cross_site_iframe_redirect_limits_cookies_on_every_hop() {
             &self,
             request: crate::transport::WireRequest,
         ) -> crate::transport::TransportFuture<'_> {
+            assert!(super::util::header_val(&request.headers, "origin").is_none());
             let mut headers = vec![
                 ("set-cookie".into(), "lax=new; SameSite=Lax; Path=/".into()),
                 (

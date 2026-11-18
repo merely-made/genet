@@ -22,14 +22,11 @@ Freeze matching current runners for Boa and Vano and compare Streams and relevan
 
 ## Phase S3: Encoding streams
 
-The S3 implementation is present on local integration branch
-`codex/genet-priorities-integrate-20261117` at `fed4552db20`. Fresh November 17
-gates pass with Bole main `b9240e98` and Vano `298c22b7`: 43 Encoding, six
-stream-specific, four transform, two readable and two native decoder-ownership
-checks. The final lock and raw logs live in
-`Code/testing/genet/priorities-20261117/`. Matched WPT and the borrowed-reader
-result-object realm residual remain open. The diagnostic results below
-describe the November 8 source and supplier combination.
+The S3 implementation from `fed4552db20` shipped in `efef89ec882`. The
+November 17 gates passed with Bole main `b9240e98` and Vano `298c22b7`.
+They cover 43 Encoding, six stream-specific, four transform, two readable
+and two native decoder-ownership checks. The lock and logs live in
+`Code/testing/genet/priorities-20261117/`.
 
 `TextDecoderStream` / `TextEncoderStream` were outside the Encoding and original Streams slice. Work with the existing Encoding owner to define incremental state, flush, BOM, fatal errors and boundaries. Done when streaming split-input and cancellation/error controls pass on both engines, matched Encoding/Streams cases are attributed, and ordinary TextDecoder/TextEncoder behavior stays intact.
 
@@ -37,7 +34,27 @@ The 2026-11-08 implementation uses the existing native decoder and private Trans
 
 Locked, offline runtime controls passed on Boa and Vano with diagnostic Bole `ddf4e31b` and Vano `298c22b7`. They cover split input, BOM, fatal write and flush, cancellation, backpressure, Worker use, cross-realm brands and output byte ownership, and the existing Encoding integration cases. The fresh Bole `aa14721c` resolution blocks compilation because it lacks `SimpleJobExecutor::with_continue_on_error`.
 
-Matched Encoding and Streams WPT comparison remains open. A focused diagnostic also found that a borrowed reader method creates the read result object in the method realm on both engines. The endpoints and output bytes follow the constructor realm. The generic read result realm needs separate Streams work.
+A borrowed reader method creates the read result object in the method realm
+on both engines. The endpoints and output bytes follow the constructor realm.
+The generic read result realm needs separate Streams work.
+
+On 2026-11-18, matched disk-mode WPT compared `fe42f351a24` and `efef89ec882`
+with the same lock and corpus and a matching Worker process helper for each
+runner. Each engine evaluated 25 files, including one skipped crashtest.
+
+| Engine | Control assertions | Candidate assertions | Candidate files passing / failing / error |
+|---|---:|---:|---:|
+| Boa | 0/228 | 168/221 | 15 / 6 / 3 |
+| Vano | 0/227 | 172/225 | 16 / 6 / 2 |
+
+Remaining failures include worker helper functions unavailable to tests and
+four borrowed-reader result-object realm assertions on each engine. Both
+comparisons recorded zero lost passes. The Boa batch reached the deadline on
+the detached-realm file, which accounts for four missing labels. An isolated
+rerun passed all four assertions with the same settings. Three other missing
+labels on Boa and two on Vano were duplicate baseline failure occurrences.
+Exact assertion comparisons, excluded manifest variants and runner provenance
+are in `Code/testing/genet/priorities-20261118/wpt/`.
 
 ## Phase S4: native incremental network bodies
 

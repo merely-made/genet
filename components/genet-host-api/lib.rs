@@ -280,6 +280,21 @@ impl Default for ResourceFetchPolicy {
     }
 }
 
+/// Whether acquired bytes become the top document or a nested iframe.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DocumentFetchKind {
+    TopLevel,
+    Iframe,
+}
+
+/// A declined capability is distinct from a terminal acquisition failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DocumentFetchResult {
+    Unsupported,
+    Response(ResourceFetchResponse),
+    Failed,
+}
+
 /// Host-shell resource-fetch contract: turn a URL into bytes for whichever engine
 /// is hosted underneath. Networking is a *platform-integration* concern the shell
 /// owns — kept off the engine, which only consumes host-owned response records.
@@ -300,6 +315,17 @@ pub trait ResourceFetcher {
     /// policy or response metadata. A byte-only implementation must explicitly
     /// return `None`; local plain GETs can use `from_local_plain_get`.
     fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse>;
+
+    /// Acquire a document with its full request policy and response metadata.
+    /// Unsupported leaves the legacy loader authoritative. Failed claims the
+    /// acquisition and must never fall back to a URL-only request.
+    fn fetch_document(
+        &self,
+        _request: &ResourceRequest,
+        _kind: DocumentFetchKind,
+    ) -> DocumentFetchResult {
+        DocumentFetchResult::Unsupported
+    }
 
     /// Fetch `url` with its redirect-final identity and response type. Existing
     /// byte-only hosts remain valid: their requested URL is the final identity and

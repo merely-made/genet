@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::cache::{self, StoredResponse};
 use crate::referrer;
-use crate::request::{CacheMode, Method, ReferrerPolicy};
+use crate::request::{CacheMode, Destination, Method, ReferrerPolicy, RequestMode};
 use crate::{FetchContext, Request, SameSiteContext};
 
 use super::USER_AGENT;
@@ -78,11 +78,14 @@ pub(super) fn assemble_request_headers(
     }
 
     // Append the `Origin` header (WHATWG "append a request Origin header"):
-    // for any non-GET/HEAD method, or a cross-origin request. After a
-    // cross-origin redirect taints the origin, the value becomes "null".
+    // for a non-GET/HEAD method, or a cross-origin request other than a
+    // GET/HEAD iframe navigation. A tainted redirect origin serializes as "null".
     if let Some(origin) = request.origin.as_ref() {
         let cur_cross = origin_tainted || *origin != current_url.origin();
-        let send_origin = !matches!(method, Method::Get | Method::Head) || cur_cross;
+        let iframe_navigation =
+            request.mode == RequestMode::Navigate && request.destination == Destination::Iframe;
+        let send_origin =
+            !matches!(method, Method::Get | Method::Head) || (cur_cross && !iframe_navigation);
         if send_origin && header_val(&req_headers, "origin").is_none() {
             let value = if origin_tainted {
                 "null".to_owned()

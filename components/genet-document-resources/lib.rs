@@ -248,7 +248,7 @@ impl Default for ResourceLimits {
 /// document without a fetch at all, and only `Src` can fail.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FrameSource {
-    /// A `src` attribute, fetched through the document's own resource route.
+    /// A `src` attribute, acquired by the resolver or its owning runtime.
     Src,
     /// A `srcdoc` attribute. Its document URL is `about:srcdoc`.
     SrcDoc,
@@ -258,6 +258,7 @@ pub enum FrameSource {
 
 /// One `<iframe>`'s child document, discovered and (for `src`) fetched
 /// through the same resource route as its parent.
+/// Scripted resolution retains owner facts and leaves `src` acquisition to the runtime.
 ///
 /// This is *one level*. A child's own frames are discovered when the caller
 /// parses `source` into a document and resolves that document's resources —
@@ -275,7 +276,7 @@ pub struct ResolvedFrame {
     /// `about:blank`.
     pub resolved_url: String,
     /// The child document's HTML source. Empty for `about:blank` and for a
-    /// `src` that could not be fetched.
+    /// `src` that could not be fetched or is owned by the runtime.
     pub source: String,
     pub content_type: Option<String>,
     /// True when a `src` was named and the fetch produced nothing. The
@@ -365,6 +366,7 @@ impl ResourceFetcher for ResourceResponseSnapshot {
 /// only responses (including misses) still reachable from the current DOM.
 #[derive(Default)]
 pub struct RetainedResourceResolution {
+    frame_acquisition: FrameAcquisition,
     document_url: Option<String>,
     limits: Option<ResourceLimits>,
     owners: HashMap<u64, ResourceOwnerFact>,
@@ -372,6 +374,13 @@ pub struct RetainedResourceResolution {
     invalidated_owners: HashSet<u64>,
     responses: HashMap<String, Option<ResourceResponse>>,
     resolved: Option<ResolvedDocumentResources>,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum FrameAcquisition {
+    #[default]
+    Resolver,
+    Runtime,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -399,7 +408,7 @@ enum ResourceOwnerFact {
 }
 
 impl ResourceOwnerFact {
-    fn request_url(&self) -> Option<&str> {
+    fn request_url(&self, frame_acquisition: FrameAcquisition) -> Option<&str> {
         match self {
             Self::LinkedStyle { url, .. } => Some(url),
             Self::Resource {
@@ -410,9 +419,10 @@ impl ResourceOwnerFact {
                 srcdoc: None,
                 loading,
                 ..
-            } if loading
-                .as_deref()
-                .is_none_or(|value| !value.trim().eq_ignore_ascii_case("lazy")) =>
+            } if frame_acquisition == FrameAcquisition::Resolver
+                && loading
+                    .as_deref()
+                    .is_none_or(|value| !value.trim().eq_ignore_ascii_case("lazy")) =>
             {
                 url.as_deref()
             },
@@ -420,7 +430,7 @@ impl ResourceOwnerFact {
         }
     }
 
-    fn acquisition_changed(&self, next: &Self) -> bool {
+    fn acquisition_changed(&self, next: &Self, frame_acquisition: FrameAcquisition) -> bool {
         match (self, next) {
             (Self::LinkedStyle { url: old, .. }, Self::LinkedStyle { url: new, .. }) => old != new,
             (
@@ -435,7 +445,9 @@ impl ResourceOwnerFact {
                     ..
                 },
             ) => old != new || old_lazy != new_lazy,
-            (Self::Frame { .. }, Self::Frame { .. }) => self.request_url() != next.request_url(),
+            (Self::Frame { .. }, Self::Frame { .. }) => {
+                self.request_url(frame_acquisition) != next.request_url(frame_acquisition)
+            },
             (Self::InlineStyle(old), Self::InlineStyle(new)) => old != new,
             _ => self != next,
         }
@@ -447,6 +459,14 @@ impl ResourceOwnerFact {
 }
 
 impl RetainedResourceResolution {
+    /// Retain frame owner facts while the script runtime acquires their documents.
+    pub fn scripted() -> Self {
+        Self {
+            frame_acquisition: FrameAcquisition::Runtime,
+            ..Self::default()
+        }
+    }
+
     /// Inserting a previously known owner starts a new acquisition lifetime,
     /// even if a subtree replacement hid its removal from the journal. An
     /// atomic `Moved` mutation deliberately does not have that meaning.
@@ -522,11 +542,11 @@ impl RetainedResourceResolution {
         for (&id, old) in &self.owners {
             let next = next_owners.get(&id);
             if !self.invalidated_owners.contains(&id)
-                && next.is_some_and(|next| !old.acquisition_changed(next))
+                && next.is_some_and(|next| !old.acquisition_changed(next, self.frame_acquisition))
             {
                 continue;
             }
-            if let Some(url) = old.request_url() {
+            if let Some(url) = old.request_url(self.frame_acquisition) {
                 self.responses.remove(url);
             }
             if old.is_stylesheet()
@@ -536,13 +556,13 @@ impl RetainedResourceResolution {
                     self.responses.remove(&url);
                 }
             }
-            if let Some(url) = next.and_then(ResourceOwnerFact::request_url) {
+            if let Some(url) = next.and_then(|next| next.request_url(self.frame_acquisition)) {
                 self.responses.remove(url);
             }
         }
         for (&id, next) in &next_owners {
             if !self.owners.contains_key(&id)
-                && let Some(url) = next.request_url()
+                && let Some(url) = next.request_url(self.frame_acquisition)
             {
                 // A replacement owner at the same URL is a new acquisition.
                 self.responses.remove(url);
@@ -557,7 +577,13 @@ impl RetainedResourceResolution {
                 .or_insert_with(|| fetcher.fetch_response(url))
                 .clone()
         };
-        let resolved = resolve_responses_with_limits(dom, document_url, &mut fetch, limits);
+        let resolved = collect(
+            dom,
+            document_url,
+            Some(&mut fetch),
+            limits,
+            self.frame_acquisition,
+        );
         self.responses.retain(|url, _| reached.contains(url));
         self.owners = next_owners;
         self.owner_order = next_order;
@@ -846,7 +872,13 @@ impl ResolvedDocumentResources {
     where
         D: LayoutDom,
     {
-        collect(dom, document_url, None, ResourceLimits::default())
+        collect(
+            dom,
+            document_url,
+            None,
+            ResourceLimits::default(),
+            FrameAcquisition::Resolver,
+        )
     }
 
     /// Return the text in retained author-sheet order.
@@ -916,7 +948,13 @@ pub fn resolve_responses_with_limits<D>(
 where
     D: LayoutDom,
 {
-    collect(dom, document_url, Some(fetch), limits)
+    collect(
+        dom,
+        document_url,
+        Some(fetch),
+        limits,
+        FrameAcquisition::Resolver,
+    )
 }
 
 fn collect<D>(
@@ -924,6 +962,7 @@ fn collect<D>(
     document_url: Option<&str>,
     mut fetch: Option<&mut ResponseFetcher<'_>>,
     limits: ResourceLimits,
+    frame_acquisition: FrameAcquisition,
 ) -> ResolvedDocumentResources
 where
     D: LayoutDom,
@@ -967,6 +1006,7 @@ where
         &mut fetch,
         &mut cached,
         &mut result,
+        frame_acquisition,
     );
     let sheets = result.stylesheets.clone();
     for sheet in &sheets {
@@ -1509,6 +1549,7 @@ fn collect_document_resources<D>(
     fetch: &mut Option<&mut ResponseFetcher<'_>>,
     cached: &mut HashMap<String, Option<ResourceResponse>>,
     result: &mut ResolvedDocumentResources,
+    frame_acquisition: FrameAcquisition,
 ) where
     D: LayoutDom,
 {
@@ -1524,7 +1565,9 @@ fn collect_document_resources<D>(
         .element_name(node)
         .is_some_and(|name| name.local.as_str().eq_ignore_ascii_case("iframe"))
     {
-        collect_frame(dom, node, document_url, fetch, cached, result);
+        collect_frame(
+            dom, node, document_url, fetch, cached, result, frame_acquisition,
+        );
     }
     let lazy = dom
         .element_name(node)
@@ -1549,7 +1592,9 @@ fn collect_document_resources<D>(
         );
     }
     for child in dom.dom_children(node) {
-        collect_document_resources(dom, child, document_url, fetch, cached, result);
+        collect_document_resources(
+            dom, child, document_url, fetch, cached, result, frame_acquisition,
+        );
     }
 }
 
@@ -1567,6 +1612,7 @@ fn collect_frame<D>(
     fetch: &mut Option<&mut ResponseFetcher<'_>>,
     cached: &mut HashMap<String, Option<ResourceResponse>>,
     result: &mut ResolvedDocumentResources,
+    frame_acquisition: FrameAcquisition,
 ) where
     D: LayoutDom,
 {
@@ -1616,7 +1662,7 @@ fn collect_frame<D>(
     frame.source_kind = FrameSource::Src;
     frame.authored_url = Some(src);
     frame.resolved_url = resolved.clone();
-    if lazy {
+    if lazy || frame_acquisition == FrameAcquisition::Runtime {
         result.frames.push(frame);
         return;
     }

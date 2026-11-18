@@ -8,8 +8,10 @@ under the rulings below.
 
 The bounded P2 eager iframe slice is present on local integration branch
 `codex/genet-priorities-integrate-20261117` at `4b78e564425`, with its historical
-receipt at `39867547c74`. Fresh November 17 gates are pending with Bole main
-`b9240e98` and Vano `298c22b7`. The November 8 receipts below retain their
+receipt at `39867547c74`. Fresh November 17 gates pass with Bole main
+`b9240e98` and Vano `298c22b7`, including the full 28-case frame suite and six
+request-policy regressions. The final qualification entry below records the
+network checks and supplier identities. The November 8 receipts below retain their
 original supplier and host scope.
 
 Mark's brief, 2026-10-20 (ledger, "Conformance targets, 2026-10-20"): asked

@@ -9,9 +9,11 @@ ruled order. Mark's answers from three card rounds are recorded below.
 
 The bounded P2 definition slice is present on local integration branch
 `codex/genet-priorities-integrate-20261117` at `9cef9b62b34`.
-Fresh November 17 gates are pending with Bole main `b9240e98` and Vano
-`298c22b7`. The November 8 diagnostic receipts below retain their original
-supplier scope.
+Fresh November 17 gates pass with Bole main `b9240e98` and Vano
+`298c22b7`: the 16 reaction integration tests, eight custom-element unit tests
+and 14 tag-name regressions. Receipts and the final lock are retained in
+`Code/testing/genet/priorities-20261117/`. The November 8 diagnostic receipts
+below retain their original supplier scope.
 
 Authority: [standards ledger](2026-09-07_standards_to_features_ledger.md) row 14
 (Custom Elements and Shadow DOM, so that Cambium widgets can be hosted inside web

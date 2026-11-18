@@ -27,7 +27,12 @@
 
 #![deny(unsafe_code)]
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+
+mod link_occurrences;
+pub use link_occurrences::{
+    LinkOccurrence, extract_link_occurrences, link_occurrence_orders_for_sources,
+};
 
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
 use sha2::{Digest, Sha256};
@@ -483,23 +488,14 @@ pub fn carries_script<D: LayoutDom>(dom: &D) -> bool {
 /// not navigable targets.
 pub fn extract_links<D: LayoutDom>(dom: &D) -> Vec<Link> {
     let mut out = Vec::new();
-    walk_links(dom, dom.document(), &mut out);
+    link_occurrences::visit_link_nodes(dom, dom.document(), &mut |node, href| {
+        out.push(Link {
+            href,
+            text: text_of(dom, node),
+            rel: attr(dom, node, "rel"),
+        });
+    });
     out
-}
-
-fn walk_links<D: LayoutDom>(dom: &D, id: D::NodeId, out: &mut Vec<Link>) {
-    if local_name(dom, id) == Some("a") {
-        if let Some(href) = attr(dom, id, "href") {
-            out.push(Link {
-                href,
-                text: text_of(dom, id),
-                rel: attr(dom, id, "rel"),
-            });
-        }
-    }
-    for child in dom.dom_children(id) {
-        walk_links(dom, child, out);
-    }
 }
 
 /// The document `<title>` text (whitespace-collapsed), or `None` if absent/empty.
@@ -545,7 +541,10 @@ fn walk_headings<D: LayoutDom>(dom: &D, id: D::NodeId, out: &mut Vec<Heading>) {
 /// `1`–`6` for `h1`–`h6`, else `None`.
 /// Lowercase hex SHA-256, the form fleece's identities and wire records carry.
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn heading_level(name: &str) -> Option<u8> {
@@ -580,15 +579,16 @@ struct TextRange {
 /// one coordinate system.
 struct FleeceTextIndex<Id> {
     text: String,
+    text_len: u64,
     ranges: HashMap<Id, TextRange>,
     source_ranges: Vec<(Id, TextRange)>,
-    grapheme_boundaries: HashSet<u64>,
+    grapheme_boundaries: Vec<(u64, usize)>,
     pending_space: bool,
 }
 
 impl<Id: std::hash::Hash + Eq + Copy> FleeceTextIndex<Id> {
     fn append_text(&mut self, source: &str) -> TextRange {
-        let mut start = self.text.chars().count() as u64;
+        let mut start = self.text_len;
         let mut wrote_content = false;
         for character in source.chars() {
             if character.is_whitespace() {
@@ -596,18 +596,20 @@ impl<Id: std::hash::Hash + Eq + Copy> FleeceTextIndex<Id> {
             } else {
                 if self.pending_space && !self.text.is_empty() && !self.text.ends_with(' ') {
                     self.text.push(' ');
+                    self.text_len += 1;
                     if !wrote_content {
-                        start = self.text.chars().count() as u64;
+                        start = self.text_len;
                     }
                 }
                 self.text.push(character);
+                self.text_len += 1;
                 wrote_content = true;
                 self.pending_space = false;
             }
         }
         TextRange {
             start,
-            end: self.text.chars().count() as u64,
+            end: self.text_len,
         }
     }
 
@@ -644,18 +646,19 @@ impl<Id: std::hash::Hash + Eq + Copy> FleeceTextIndex<Id> {
     fn build<D: LayoutDom<NodeId = Id>>(dom: &D) -> Self {
         let mut index = Self {
             text: String::new(),
+            text_len: 0,
             ranges: HashMap::new(),
             source_ranges: Vec::new(),
-            grapheme_boundaries: HashSet::new(),
+            grapheme_boundaries: Vec::new(),
             pending_space: false,
         };
         index.collect(dom, dom.document());
         let mut boundary = 0_u64;
-        index.grapheme_boundaries.insert(boundary);
-        for grapheme in UnicodeSegmentation::graphemes(index.text.as_str(), true) {
+        for (byte, grapheme) in UnicodeSegmentation::grapheme_indices(index.text.as_str(), true) {
+            index.grapheme_boundaries.push((boundary, byte));
             boundary += grapheme.chars().count() as u64;
-            index.grapheme_boundaries.insert(boundary);
         }
+        index.grapheme_boundaries.push((boundary, index.text.len()));
         index
     }
 
@@ -703,42 +706,12 @@ fn has_reader_excluded_descendant<D: LayoutDom>(dom: &D, id: D::NodeId) -> bool 
             .any(|child| has_reader_excluded_descendant(dom, child))
 }
 
+#[cfg(test)]
 fn text_slice(text: &str, start: u64, end: u64) -> String {
     text.chars()
         .skip(start as usize)
         .take((end - start) as usize)
         .collect()
-}
-
-fn prefix_context(text: &str, end: u64, limit: usize) -> String {
-    let before = text_slice(text, 0, end);
-    let mut remaining = limit;
-    let mut pieces = Vec::new();
-    for grapheme in UnicodeSegmentation::graphemes(before.as_str(), true).rev() {
-        let width = grapheme.chars().count();
-        if width > remaining {
-            break;
-        }
-        pieces.push(grapheme);
-        remaining -= width;
-    }
-    pieces.reverse();
-    pieces.concat()
-}
-
-fn suffix_context(text: &str, start: u64, limit: usize) -> String {
-    let after = text_slice(text, start, text.chars().count() as u64);
-    let mut remaining = limit;
-    let mut result = String::new();
-    for grapheme in UnicodeSegmentation::graphemes(after.as_str(), true) {
-        let width = grapheme.chars().count();
-        if width > remaining {
-            break;
-        }
-        result.push_str(grapheme);
-        remaining -= width;
-    }
-    result
 }
 
 fn anchor_for_node<D: LayoutDom>(
@@ -751,21 +724,27 @@ fn anchor_for_node<D: LayoutDom>(
         return None;
     }
     let range = text_index.range_for(dom, id)?;
-    if !text_index.grapheme_boundaries.contains(&range.start)
-        || !text_index.grapheme_boundaries.contains(&range.end)
-    {
-        return None;
-    }
-    let exact = text_slice(&text_index.text, range.start, range.end);
-    (!exact.is_empty()).then(|| TextAnchor {
+    let boundaries = &text_index.grapheme_boundaries;
+    let byte_at = |position| {
+        let index = boundaries
+            .binary_search_by_key(&position, |&(position, _)| position)
+            .ok()?;
+        Some(boundaries[index].1)
+    };
+    let start = byte_at(range.start)?;
+    let end = byte_at(range.end)?;
+    let context = options.quote_context as u64;
+    let prefix = boundaries.partition_point(|&(pos, _)| pos < range.start.saturating_sub(context));
+    let suffix = boundaries.partition_point(|&(pos, _)| pos <= range.end.saturating_add(context));
+    Some(TextAnchor {
         position: TextPositionSelector {
             start: range.start,
             end: range.end,
         },
         quote: TextQuoteSelector {
-            prefix: prefix_context(&text_index.text, range.start, options.quote_context),
-            exact,
-            suffix: suffix_context(&text_index.text, range.end, options.quote_context),
+            prefix: text_index.text[boundaries[prefix].1..start].into(),
+            exact: text_index.text[start..end].into(),
+            suffix: text_index.text[end..boundaries[suffix - 1].1].into(),
         },
     })
 }

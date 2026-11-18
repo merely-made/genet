@@ -109,6 +109,12 @@ vocabulary reasoning, URL resolution, or remote-context loading.
 
 ## Document metadata and links
 
+`extract_link_occurrences` keeps each hyperlink's zero-based anchor order,
+raw href, anchor text and rel. Its optional text anchor uses the same
+canonical code-point stream as `extract_text`. A link without an anchorable
+range still has an occurrence record. Callers bind these orders to a
+particular source representation before storing or showing them.
+
 Fleece 0.4 retains Open Graph properties as ordered raw evidence and also
 projects each root property with the structured properties that immediately
 follow it. Unknown and malformed properties remain in the raw list rather than

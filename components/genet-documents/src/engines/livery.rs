@@ -2587,6 +2587,7 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                             focus_offset: selection.range.focus_offset,
                         },
                         text: selection.text,
+                        source_nodes: selection.source_nodes,
                     },
                     links,
                 )

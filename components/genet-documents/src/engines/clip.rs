@@ -22,6 +22,7 @@ pub(crate) struct ClipRange<Id> {
 pub(crate) struct ClipSelection<Id> {
     pub(crate) range: ClipRange<Id>,
     pub(crate) text: String,
+    pub(crate) source_nodes: Vec<Id>,
 }
 
 pub(crate) fn content_report<D: LayoutDom>(dom: &D) -> document_session_api::ContentReport {
@@ -139,6 +140,8 @@ where
     }
     let anchor_path = dom_path(dom, selection.range.anchor_node)?;
     let focus_path = dom_path(dom, selection.range.focus_node)?;
+    // These orders refer to the DOM supplying the range. A consumer can
+    // reuse them against an admitted representation of that document.
     let selector = serde_json::json!({
         "type": "dom-range",
         "version": 1,
@@ -151,6 +154,7 @@ where
             "offset": selection.range.focus_offset,
         },
         "quote": selection.text,
+        "link_occurrence_orders": fleece::link_occurrence_orders_for_sources(dom, &selection.source_nodes),
     })
     .to_string();
     let report = content_report(dom);

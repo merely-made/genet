@@ -577,6 +577,7 @@ impl<E: script_engine_api::ScriptEngine + 'static> DocumentSession<Scene>
                             focus_offset: selection.range.focus_offset,
                         },
                         text: selection.text,
+                        source_nodes: selection.source_nodes,
                     },
                     selected_links,
                 )

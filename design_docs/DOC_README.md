@@ -145,7 +145,7 @@ older `docs/` corpus without changing their location or governance.
 | [Reflector identity](2026-09-07_reflector_identity_plan.md) | Wrapper liveness follows node reachability: every wrapper has an opaque root, a connected node's wrapper lives as long as its document, a detached subtree's as long as script holds any one of it. Landed 2026-09-07 with zero census movement over six directories under both harness-collection settings; the receipts are the reproducer set and the restored `ErrorEvent` `toStringTag`, not a score. Residual: the between-tick window for detached trees. |
 | [Host contract ownership](../docs/2026-08-14_web_platform_host_contract_plan.md) | Genet owns retained session contracts; Mere owns surface orchestration and product adapters. The older S0-S5 receipts need a consumer-side status refresh before resuming those lanes. |
 | [Shadow DOM](2026-09-07_shadow_dom_plan.md) | A parentless shadow root in both DOMs, a per-host slot assignment table maintained at the mutation, `flat_children` under Livery's rendering traversals, per-rule tree-scope matching with `:host` / `:host()` / `::slotted()` / `::part()`, event retargeting and `composedPath()`, and the declarative post-parse pass with `<template>.content` in one shared inert document. Landed 2026-09-07/08: `shadow-dom` 6 to 45 all-pass and 24 to 1,512 subtests, +1,761 subtest passes over four directories, one explained pass-to-fail. Residuals: `:host-context()`, `adoptedStyleSheets`, focus delegation, declarative attachment consulting the custom-element registry (which needs parser/script interleaving — Mark's call), and (2026-10-14, residual 11) the accessibility walk skipping shadow trees. Residual 11 is confirmed by a failing-first run and fixed 2026-10-14 on `shadow-a11y-walk` (not merged) under Mark's rulings 11.1–11.3. The projection, name from content and the scroll climbs now follow the flat tree; ID references resolve per tree; `descendant_text` stays on DOM children. Six tests, all 48 `genet-render` tests pass. AccName's two shadow WPT files wait on a `get_computed_label` testdriver hook. *(Annotated 2026-10-14: merged to main as `42cabb5a886`/`bd5f7ca0994`. With the hook on branch `computed-label`, `shadowdom/basic.html` passes 2/2 and `slot.html` 2/4; the gap is `aria-label` on a `<slot>`.)* |
-| [Component model](2026-10-20_component_model_plan.md) | Custom elements, ElementInternals and shadow trees against `dom`, `html/dom`, `custom-elements` and `shadow-dom`; ledger row 14. Planned 2026-10-20 under Mark's rulings, reactions first. The arena records reaction candidates at its mutation point (G5), custom-element state lives on the node, and the `[CEReactions]` members come from a generated table. P1 (reaction stack and timing) is in progress on branch `component-model`, not merged; the plan's Progress holds the matched accounting.
+| [Component model](2026-10-20_component_model_plan.md) | Custom elements, ElementInternals and shadow trees against `dom`, `html/dom`, `custom-elements` and `shadow-dom`; ledger row 14. Planned 2026-10-20 under Mark's rulings, reactions first. The arena records reaction candidates at its mutation point (G5), custom-element state lives on the node, and the `[CEReactions]` members come from a generated table. P1 (reaction stack and timing) is on main via `0853113f75a`; the plan's Progress holds the matched accounting. The bounded P2 definition slice is on local `codex/genet-priorities-integrate-20261117` at `9cef9b62b34`; fresh November 17 gates are pending. Remaining upgrade work stays in P2.
 | [Parser and scripts](2026-11-03_parser_script_frontier_plan.md) | Preserve the live parser/arena and policy contracts. Remaining work is async timing, XML/foreign-script ordering and current headed integration, with exact-case reconciliation before new claims. |
 
 | [iframes and nested browsing contexts](2026-09-08_iframes_plan.md) | Browsing-context tree, parent resource route and child paint-list composition landed 2026-09-08; the original script-free receipts remain dated in the plan. The [Realms continuation](2026-11-03_realms_frontier_plan.md) resolved the runtime decision, implemented child and top-level navigation, and completed scripted headed G5 acceptance on both engines. The current residual inventory lives there; the earlier request for a runtime/WindowProxy decision is superseded. |
@@ -189,7 +189,11 @@ completed corpus census or bounded slice does not close its enclosing feature.
   residuals remain recorded in the plan.
 
 - [WHATWG Streams](archive_docs/2026-11-03/2026-10-06_whatwg_streams_plan.md)
-  ([current remaining work](2026-11-03_streams_frontier_plan.md); dated original receipt follows)
+  ([current remaining work](2026-11-03_streams_frontier_plan.md); dated original receipt follows).
+  S3 Encoding streams are implemented on local
+  `codex/genet-priorities-integrate-20261117` at `fed4552db20`; fresh November 17
+  gates are pending. The November 8 diagnostic qualification remains scoped
+  to its recorded suppliers.
   (**Landed and published, 2026-10-07**): native transfer,
   private Promise reactions and Boa finalizer retention are qualified and
   published. Exact consumer `5a539ae3f40` passes 1,209 tests, three existing
@@ -207,7 +211,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   in their own plan.
 
 - [Web Cryptography `crypto.subtle`](2026-10-20_webcrypto_subtle_plan.md)
-  (**P1 and P2 on branch `webcrypto-subtle`, not merged, 2026-10-20**).
+  (P1 and P2 on main; P3 is AES ciphers and key wrapping).
   - **Rulings.** Mark's answers set:
     - the crates: "RustCrypto 0.11 line (Recommended)";
     - the order: "Weight order (Recommended)";
@@ -227,9 +231,9 @@ completed corpus census or bounded slice does not close its enclosing feature.
   - The suite enumerates to 72,172 reference subtests; the census saw 9,652.
 
 - [HTML forms](2026-10-07_forms_value_validation_submission_plan.md) — Phases A, B and C qualified; Checkpoint C accepted 2026-10-20 on O-PC, two follow-ups named
-  (**A/B qualified and published; C acceptance open, 2026-10-16**): Windows
-  qualification has resumed on O-PC under F11. F12's published redirect-base
-  repair passes the original 285 affected tests there. The closing review's
+  in the acceptance record. The timeout fix and the subsequent runtime repair
+  are on main. F12's published redirect-base repair passes the original 285
+  affected Windows tests. The closing review's
   submission validity, listener-mutation and native-feedback repairs pass
   678 Windows tests with zero failures or ignores; see the
   [repair receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_submission_review_windows.json).
@@ -237,8 +241,6 @@ completed corpus census or bounded slice does not close its enclosing feature.
   browser submission passes 20 cases and the editing-only control after three
   browser host repairs; see the
   [host receipt](../../../testing/genet/design_docs/receipts/2026-10-16_forms_native_browser_windows.json).
-  Windows covering gates, matched WPT/guard maps and final Checkpoint C reporting
-  remain open.
   Earlier A/B results, original and corrected controls, and ThinkPad host
   evidence retain their recorded scope. The old Linux Livery failure allowance
   is historical.
@@ -247,10 +249,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
   (**in progress, 2026-10-20**; Mark briefed the cluster: `fetch`, `referrer-policy`,
   `mixed-content`, `content-security-policy`, `upgrade-insecure-requests`). The census
   measured these in disk mode, where the generated files cannot pass; the lane measures
-  in server mode. P0 instrument landed on branch `fetch-security` (not merged): the
+  in server mode. P0 and P1 are on main via `5ae8455ff15`. In the P0 receipt, the
   runner serves `.https.` tests from the https origin with a per-test page origin,
   `window.isSecureContext`, and a Murm `close_notify` tolerance (Murm branch
-  `fetch-close-notify`, not merged) that lets https bodies be read; server-mode
+  `fetch-close-notify` at that checkpoint) that lets https bodies be read; server-mode
   `referrer-policy` 389 to 720 (Vano) and 391 to 739 (Boa) subtest passes. P1 landed
   too (2026-10-21): a runtime-owned document policy container (referrer policy,
   `upgrade-insecure-requests`, `block-all-mixed-content`) fed by `<meta>` and the
@@ -258,8 +260,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
   `ResourceRequest` fields, and netfetcher gained the 4096-byte referrer cap:
   `referrer-policy` 720 to 908 (Vano) and 739 to 908 (Boa), `upgrade-insecure-requests`
   154 to 178, zero lost passes on either engine. Next: P2 element loads, P3 Fetch
-  Metadata, P4 fetch API residuals; CSP is its own lane. Rulings recorded in Mark's
-  words.
+  Metadata, P4 fetch API residuals; CSP is its own lane. The bounded P2 eager
+  iframe slice is on local `codex/genet-priorities-integrate-20261117` at
+  `4b78e564425`; fresh November 17 gates are pending. Its November 8 diagnostic
+  receipts retain their supplier and host scope. Rulings recorded in Mark's words.
 - [Observers and timing](2026-10-20_observers_and_timing_plan.md)
   (**in progress, 2026-10-20**, branch `observers-timing`, not merged; all phases implemented; IntersectionObserver 0 -> 213/309 and cssom-view 331 -> 569 subtests on both engines; 15 vacuous cssom-view passes recorded as lost, recovered honestly on branch `empty-inline-boxes` 2026-10-22, cssom-view 581/1933 on both engines, 0 lost, paint unmoved, not merged): ledger
   rows 4–6 as one lane, in Mark's ruled order. First, one host clock per process,

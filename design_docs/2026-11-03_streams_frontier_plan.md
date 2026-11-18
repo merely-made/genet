@@ -22,6 +22,11 @@ Freeze matching current runners for Boa and Vano and compare Streams and relevan
 
 ## Phase S3: Encoding streams
 
+The S3 implementation is present on local integration branch
+`codex/genet-priorities-integrate-20261117` at `fed4552db20`. Fresh November 17
+gates are pending with Bole main `b9240e98` and Vano `298c22b7`. The diagnostic
+results below describe the November 8 source and supplier combination.
+
 `TextDecoderStream` / `TextEncoderStream` were outside the Encoding and original Streams slice. Work with the existing Encoding owner to define incremental state, flush, BOM, fatal errors and boundaries. Done when streaming split-input and cancellation/error controls pass on both engines, matched Encoding/Streams cases are attributed, and ordinary TextDecoder/TextEncoder behavior stays intact.
 
 The 2026-11-08 implementation uses the existing native decoder and private TransformStream operations. It carries split UTF-16 surrogates and decoder input across writes, releases decoder state on termination, and checks for pending reads before reapplying transform backpressure.

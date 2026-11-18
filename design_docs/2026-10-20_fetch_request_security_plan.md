@@ -1,9 +1,16 @@
 # Fetch and request-security conformance
 
-**Status (2026-10-21): in progress. P0 and P1 landed on branch `fetch-security` (not
-merged) with matched Vano and Boa accounting, zero lost passes; the Murm fix sits on
-Murm branch `fetch-close-notify` (not merged). P2 (element loads) is next and needs no
-further ruling.** Rulings are recorded unnumbered below until Mark numbers them.
+**Status (2026-11-17): in progress.** Genet P0 and P1 are on main via
+`5ae8455ff15`. Their October branch receipts record matched Vano and Boa
+accounting with zero lost passes. The Murm fix was qualified on its
+`fetch-close-notify` branch at that checkpoint. P2 (element loads) is next
+under the rulings below.
+
+The bounded P2 eager iframe slice is present on local integration branch
+`codex/genet-priorities-integrate-20261117` at `4b78e564425`, with its historical
+receipt at `39867547c74`. Fresh November 17 gates are pending with Bole main
+`b9240e98` and Vano `298c22b7`. The November 8 receipts below retain their
+original supplier and host scope.
 
 Mark's brief, 2026-10-20 (ledger, "Conformance targets, 2026-10-20"): asked
 which conformance targets get briefed next against the 2026-09-29 Vano census

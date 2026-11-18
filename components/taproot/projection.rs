@@ -60,7 +60,8 @@ pub fn matching_prefer_exact_with_projection(
 
 // This is a spelling adapter for the neutral role vocabulary, not DOM role
 // inference. In particular Unknown must not resurrect an unprojected ARIA role.
-pub(super) fn role_token(role: DocumentA11yRole) -> Option<&'static str> {
+/// The selector role spelling for a renderer-neutral document semantic role.
+pub fn role_token(role: DocumentA11yRole) -> Option<&'static str> {
     use DocumentA11yRole::*;
     Some(match role {
         Window => "window",
@@ -634,6 +635,19 @@ mod lookup_tests {
             [inside, fallback]
         );
     }
+    #[test]
+    fn built_in_lookups_leave_host_metadata_unset() {
+        let dom = ScriptedDom::new();
+        let p = projection(&dom);
+        let owner = DocumentLookup::new(&dom, &p);
+        let tree = genet_render::accesskit_tree_from_projection(p.clone());
+        let composed = AccessKitLookup::new(&tree, |_| None);
+        for nodes in [owner.nodes(), composed.nodes()] {
+            assert!(!nodes.is_empty());
+            assert!(nodes.iter().all(|n| n.authored_key.is_none() && n.opaque_address.is_none()));
+        }
+    }
+
     #[test]
     fn composed_lookup_preserves_dom_roles_and_class_attribute_contracts() {
         let mut dom = ScriptedDom::new();

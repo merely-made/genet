@@ -45,7 +45,9 @@ pub use lookup::{
 };
 
 mod projection;
-pub use projection::{matching_prefer_exact_with_projection, matching_with_projection};
+pub use projection::{
+    matching_prefer_exact_with_projection, matching_with_projection, role_token as document_role_token,
+};
 
 /// One retained cambium surface the driver can search and hit-test: its DOM,
 /// where it sits in the window (`[x, y, w, h]`, window-space), and the sheet it

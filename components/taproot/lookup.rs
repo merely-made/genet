@@ -18,6 +18,11 @@ pub struct SemanticNode<'a> {
     pub role: Option<&'static str>,
     pub name: Option<&'a str>,
     pub hidden: bool,
+    /// Key authored in the host's semantic source, when available.
+    pub authored_key: Option<&'a str>,
+    /// An opaque address supplied by the host for this observation.
+    /// Taproot does not parse it or use it as permission to act.
+    pub opaque_address: Option<&'a str>,
 }
 
 /// A read of the owner's complete observation, including composed descendants.
@@ -122,6 +127,8 @@ impl SemanticLookup for DocumentLookup<'_> {
                     role: super::projection::role_token(semantic.role),
                     name: semantic.name.as_deref(),
                     hidden: semantic.state.hidden,
+                    authored_key: None,
+                    opaque_address: None,
                 });
             }
             let children: Vec<_> = self.dom.flat_children(node).collect();
@@ -168,6 +175,8 @@ impl<F: Fn(u64) -> Option<NodeId>> SemanticLookup for AccessKitLookup<'_, F> {
                 role: document_session_api::a11y::accesskit_role_token(node.role()),
                 name: node.label(),
                 hidden: false,
+                authored_key: None,
+                opaque_address: None,
             });
             pending.extend(node.children().iter().rev().copied());
         }

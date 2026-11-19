@@ -93,6 +93,7 @@ pub struct Attribute {
     pub nullable: bool,
     pub readonly: bool,
     pub ext: ExtAttrs,
+    pub type_ext: ExtAttrs,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -367,11 +368,13 @@ impl Parser {
     }
 
     fn attribute(&mut self, readonly: bool, ext: ExtAttrs) -> Option<Attribute> {
-        // A member-level extended attribute may sit on the type
+        // An extended attribute may annotate the type instead of the member
         // (`attribute [LegacyNullToEmptyString] DOMString text`).
-        if self.is_punct('[') {
-            self.balanced('[', ']');
-        }
+        let type_ext = if self.is_punct('[') {
+            parse_ext_attrs(&self.balanced('[', ']'))
+        } else {
+            ExtAttrs::default()
+        };
         let ty = if self.is_punct('(') {
             self.balanced('(', ')');
             "union".to_string()
@@ -410,6 +413,7 @@ impl Parser {
             nullable,
             readonly,
             ext,
+            type_ext,
         })
     }
 }

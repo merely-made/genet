@@ -454,6 +454,44 @@ fn reflected_ranges_on_nova() {
     reflected_ranges_work::<script_engine_nova::NovaEngine>();
 }
 
+fn reflected_null_and_signed_zero<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(
+        r#"
+        var table = document.createElement('table');
+        table.bgColor = null;
+        if (table.bgColor !== '' || table.getAttribute('bgcolor') !== '') {
+          throw new Error('annotated DOMString must store an empty attribute');
+        }
+        table.bgColor = undefined;
+        if (table.bgColor !== 'undefined') throw new Error('undefined must be stringified');
+        table.title = null;
+        if (table.title !== 'null') throw new Error('ordinary DOMString must stringify null');
+        table.setAttribute('bgcolor', 'null');
+        if (table.bgColor !== 'null') throw new Error('raw content attribute must remain a string');
+
+        table.setAttribute('tabindex', '-0');
+        if (!Object.is(table.tabIndex, 0) || table.getAttribute('tabindex') !== '-0') {
+          throw new Error('signed reflection must expose positive zero');
+        }
+        table.setAttribute('tabindex', '-2');
+        if (table.tabIndex !== -2) throw new Error('signed reflection must preserve negative integers');
+        "#,
+    )
+    .expect("null and signed zero reflection");
+}
+
+#[test]
+fn reflected_null_and_signed_zero_on_boa() {
+    reflected_null_and_signed_zero::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_null_and_signed_zero_on_nova() {
+    reflected_null_and_signed_zero::<script_engine_nova::NovaEngine>();
+}
+
 /// Reflected IDL attributes + namespace getters + createElementNS + tree
 /// walker + document.title, against any backend.
 fn dom_reflection_ns_works<E: ScriptEngine>() {

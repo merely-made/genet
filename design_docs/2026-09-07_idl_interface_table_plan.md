@@ -316,6 +316,23 @@ failures concern `tabIndex` negative zero and legacy string null handling.
 The raw maps and assertion comparison are retained in
 `Code/output/genet-reflect-range/`.
 
+## Tabular reflection closeout (2026-11-18)
+
+The generated string bindings preserve `[LegacyNullToEmptyString]` from
+the IDL type. An annotated setter writes an empty content attribute for
+JavaScript `null`. Ordinary string setters still stringify their input. The
+signed integer getter normalizes a parsed `-0` to positive zero while the
+content attribute retains its text. [Web IDL string conversion](https://webidl.spec.whatwg.org/#es-DOMString)
+
+Four focused runtime tests passed across Bole and Vano, covering the prior
+range cases, annotated and ordinary string conversion, and signed zero.
+The generated interface table passed `--check`.
+
+Both engines passed all 6116 assertions in `reflection-tabular.html`. Bole
+gained 16 passes and Vano gained six over the range-only runner. Comparison
+by assertion name and occurrence preserved every prior pass. The runner,
+logs and comparison are retained in `Code/output/genet-tabular-reflection/`.
+
 ## Progress
 
 - **2026-09-07** — Generator written (`support/idl-interface-table`, 1,323

@@ -5643,7 +5643,10 @@
     function parseHtmlLong(s) {
       if (s === null || s === undefined) return null;
       var m = /^[ \t\n\f\r]*([+-]?[0-9]+)/.exec(String(s));
-      return m ? parseInt(m[1], 10) : null;
+      if (!m) return null;
+      var value = parseInt(m[1], 10);
+      // An HTML integer has a single zero, even if its source has a minus sign.
+      return value === 0 ? 0 : value;
     }
     function parseHtmlUnsignedLong(s) {
       if (s === null || s === undefined) return null;
@@ -5675,9 +5678,11 @@
       } else if (kind === 'it') {
         desc.get = function() { var value = (this.getAttribute('type') || '').toLowerCase(); return ['hidden','text','search','tel','url','email','password','date','month','week','time','datetime-local','number','range','color','checkbox','radio','file','submit','image','reset','button'].indexOf(value) >= 0 ? value : 'text'; };
         desc.set = function(value) { this.setAttribute('type', String(value)); };
-      } else if (kind === 's') {
+      } else if (kind === 's' || kind === 's-null-empty') {
         desc.get = function() { var v = this.getAttribute(attr); return v === null ? '' : v; };
-        desc.set = function(v) { this.setAttribute(attr, String(v)); };
+        desc.set = function(v) {
+          this.setAttribute(attr, kind === 's-null-empty' && v === null ? '' : String(v));
+        };
       } else if (kind === 'tc') {
         desc.get = function() { return this.textContent || ''; };
         desc.set = function(v) { this.textContent = String(v); };

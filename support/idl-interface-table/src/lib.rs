@@ -30,7 +30,8 @@ pub const OUTPUT_PATH: &str = "components/script-runtime-api/dom/html_interfaces
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reflected {
     pub idl: String,
-    /// s=DOMString, tc=textContent, b=boolean, e=enumerated, l=long,
+    /// s=DOMString, s-null-empty=LegacyNullToEmptyString, tc=textContent,
+    /// b=boolean, e=enumerated, l=long,
     /// ul=unsigned long, t=DOMTokenList, u=URL.
     pub kind: &'static str,
     pub attr: Option<String>,
@@ -411,6 +412,7 @@ fn classify(a: &Attribute) -> Option<Reflected> {
             return None;
         }
         match a.ty.as_str() {
+            "DOMString" if a.type_ext.has("LegacyNullToEmptyString") => "s-null-empty",
             "DOMString" | "USVString" => "s",
             "boolean" => "b",
             "long" => "l",

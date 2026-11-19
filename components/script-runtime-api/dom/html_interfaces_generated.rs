@@ -480,7 +480,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
         reflected: &[
             ReflectedAttribute {
                 idl: "text",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: None,
                 keywords: &[],
                 missing: None,
@@ -489,7 +489,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "link",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: None,
                 keywords: &[],
                 missing: None,
@@ -498,7 +498,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "vLink",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("vlink"),
                 keywords: &[],
                 missing: None,
@@ -507,7 +507,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "aLink",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("alink"),
                 keywords: &[],
                 missing: None,
@@ -516,7 +516,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "bgColor",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
@@ -1292,7 +1292,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "border",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: None,
                 keywords: &[],
                 missing: None,
@@ -1447,7 +1447,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "marginHeight",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("marginheight"),
                 keywords: &[],
                 missing: None,
@@ -1456,7 +1456,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "marginWidth",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("marginwidth"),
                 keywords: &[],
                 missing: None,
@@ -1694,7 +1694,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "border",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: None,
                 keywords: &[],
                 missing: None,
@@ -2028,7 +2028,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "bgColor",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
@@ -2037,7 +2037,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "cellPadding",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("cellpadding"),
                 keywords: &[],
                 missing: None,
@@ -2046,7 +2046,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "cellSpacing",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("cellspacing"),
                 keywords: &[],
                 missing: None,
@@ -2234,7 +2234,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "bgColor",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
@@ -2362,7 +2362,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "bgColor",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
@@ -3675,7 +3675,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "marginHeight",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("marginheight"),
                 keywords: &[],
                 missing: None,
@@ -3684,7 +3684,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "marginWidth",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: Some("marginwidth"),
                 keywords: &[],
                 missing: None,
@@ -3724,7 +3724,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
         reflected: &[
             ReflectedAttribute {
                 idl: "color",
-                kind: "s",
+                kind: "s-null-empty",
                 attr: None,
                 keywords: &[],
                 missing: None,

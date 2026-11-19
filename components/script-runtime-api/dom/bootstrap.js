@@ -3476,7 +3476,78 @@
     };
   }
 
+  function documentUrlBase(doc, reader) {
+    if (reader(doc.__ref, 'primary') === 'true') return reader(doc.__ref);
+    // Secondary Documents share an arena with the primary Document, but
+    // resolve their own first HTML base against their about:blank URL.
+    var fallback = reader(doc.__ref, 'document');
+    var bases = doc.querySelectorAll('base[href]');
+    for (var i = 0; i < bases.length; i++) {
+      if (bases[i].namespaceURI !== XHTML_NS) continue;
+      try {
+        var base = new URL(bases[i].getAttribute('href'), fallback);
+        if (base.protocol !== 'data:' && base.protocol !== 'javascript:') return base.href;
+      } catch (_) {}
+      break;
+    }
+    return fallback;
+  }
+
+  function toUSVString(value) {
+    if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+    return String(value).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g,
+      function(pair) { return pair.length === 2 ? pair : '\uFFFD'; });
+  }
+
+  function installHyperlinkMembers(proto, tag) {
+    function checkReceiver(element) {
+      if (!privateSetHas(domNodes, element) || element.namespaceURI !== XHTML_NS || element.localName !== tag) {
+        throw new TypeError('Illegal invocation');
+      }
+    }
+    function components(element, href) {
+      if (href === null) return null;
+      var doc = ownerDocumentOf(element);
+      var base = documentUrlBase(doc, privateGet(nodeBaseReaders, doc));
+      var parsed = __parseDocumentUrl(doc.__ref, href, base, 'components');
+      return parsed ? JSON.parse(parsed) : null;
+    }
+    function href() {
+      checkReceiver(this);
+      var input = this.getAttribute('href');
+      var parsed = components(this, input);
+      return parsed ? parsed.href : input === null ? '' : toUSVString(input);
+    }
+    gcDefineProperty(proto, 'href', { configurable: true, enumerable: true,
+      get: href,
+      set: function(value) { checkReceiver(this); this.setAttribute('href', toUSVString(value)); }
+    });
+    proto.toString = function() { return href.call(this); };
+    ['origin', 'protocol', 'username', 'password', 'host', 'hostname', 'port', 'pathname', 'search', 'hash'].forEach(function(name) {
+      var descriptor = { configurable: true, enumerable: true,
+        get: function() {
+          checkReceiver(this);
+          var parsed = components(this, this.getAttribute('href'));
+          return parsed ? parsed[name] : name === 'protocol' ? ':' : '';
+        }
+      };
+      if (name !== 'origin') descriptor.set = function(value) {
+        checkReceiver(this);
+        var text = toUSVString(value);
+        var parsed = components(this, this.getAttribute('href'));
+        if (!parsed) return;
+        var href = __setHyperlinkUrlComponent(parsed.href, name, text);
+        if (href) this.setAttribute('href', href);
+      };
+      gcDefineProperty(proto, name, descriptor);
+    });
+  }
+
   function installHtmlInterfaceMembers(name, proto) {
+    if (name === 'HTMLAnchorElement' || name === 'HTMLAreaElement') {
+      installHyperlinkMembers(proto, name === 'HTMLAnchorElement' ? 'a' : 'area');
+      return;
+    }
     if (['HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement', 'HTMLButtonElement',
          'HTMLFieldSetElement', 'HTMLOutputElement', 'HTMLObjectElement'].indexOf(name) >= 0) {
       var validationKind = { HTMLInputElement: 'input', HTMLTextAreaElement: 'textarea',
@@ -5816,35 +5887,12 @@
       } else if (kind === 'form-action') {
         desc.get = function() {
           var doc = ownerDocumentOf(this);
-          var reader = nodeBaseReaders.get(doc);
+          var reader = privateGet(nodeBaseReaders, doc);
           var v = this.getAttribute(attr);
           if (v === null || v === '') return reader(doc.__ref, 'document');
-          var base = reader(doc.__ref);
-          // Secondary documents share an arena with the primary document.
-          // Their own base is anchored to their about:blank document URL.
-          if (reader(doc.__ref, 'primary') === 'false') {
-            base = reader(doc.__ref, 'document');
-            var bases = doc.querySelectorAll('base[href]');
-            var firstBase = null;
-            for (var n = 0; n < bases.length; n++) {
-              if (bases[n].namespaceURI === XHTML_NS) { firstBase = bases[n]; break; }
-            }
-            if (firstBase) {
-              try {
-                var parsedBase = new URL(firstBase.getAttribute('href'), base);
-                if (parsedBase.protocol !== 'data:' && parsedBase.protocol !== 'javascript:') base = parsedBase.href;
-              } catch (_) {}
-            }
-          }
-          return __resolveFormAction(doc.__ref, v, base);
+          return __parseDocumentUrl(doc.__ref, v, documentUrlBase(doc, reader), 'href');
         };
-        desc.set = function(v) {
-          // Web IDL USVString replaces unpaired UTF-16 surrogates.
-          if (typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
-          var value = String(v).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g,
-            function(pair) { return pair.length === 2 ? pair : '\uFFFD'; });
-          this.setAttribute(attr, value);
-        };
+        desc.set = function(v) { this.setAttribute(attr, toUSVString(v)); };
       } else if (kind === 'u') {
         // url: reflect the content attribute resolved against the document base URL
         // (absent -> ""); the raw string is stored on set. `__resolve_url` returns the

@@ -491,6 +491,30 @@ used URL expectations precomputed with Node's WHATWG URL parser and kept all
 The frozen runner, raw maps, diagnostic fixture, and assertion comparison are
 retained in `Code/output/genet-action-reflection/`.
 
+## Hyperlink URL components (2026-11-19)
+
+Anchors and areas now read `href`, `origin`, and the individual URL components
+from the current `href` content attribute and its owner document's base and
+query encoding. Setting a component serializes the adjusted URL back into
+`href`. Setting `href` itself stores the converted Web IDL string, and the
+element stringifier reads the same value as the `href` getter. [HTML hyperlink URL APIs](https://html.spec.whatwg.org/multipage/links.html#api-for-hyperlink-elements)
+
+Ten focused runtime tests passed on Bole and Vano. They cover hyperlink
+component mutations, empty query and fragment components, invalid URLs,
+adoption, and the existing form-action and location URL behavior. The
+generated table passed `--check`.
+
+The five URL getter and setter fixtures under
+`html/semantics/links/links-created-by-a-and-area-elements` improved from
+10/139 to 139/139 assertions on both engines. The other eight fixtures in
+that directory retain their prior statuses.
+
+The unmodified `reflection-forms.html` improved from 8008/8271 to 8170/8271
+on both engines. All 120 action assertions that depended on the anchor
+getters now pass, as do 42 additional `input.src` assertions. The fixture has
+101 remaining failures and zero regressions. The frozen runner, raw maps,
+and assertion comparison are retained in `Code/output/genet-hyperlink-reflection/`.
+
 ## Progress
 
 - **2026-09-07** — Generator written (`support/idl-interface-table`, 1,323

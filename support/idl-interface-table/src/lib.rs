@@ -424,6 +424,10 @@ pub struct GenShape {
 
 /// Classify one IDL attribute as a reflected attribute, or `None`.
 fn classify(a: &Attribute, interface: &str) -> Option<Reflected> {
+    // These href accessors share the URL record used by the hyperlink mixins.
+    if a.name == "href" && matches!(interface, "HTMLAnchorElement" | "HTMLAreaElement") {
+        return None;
+    }
     let name = |e: Option<&str>| e.map(str::to_string);
     let explicit = name(a.ext.value("Reflect"))
         .or_else(|| name(a.ext.value("ReflectURL")))

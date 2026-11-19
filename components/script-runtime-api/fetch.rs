@@ -372,7 +372,7 @@ impl<E: ScriptEngine> NativeFn<E> for UrlWith {
 /// reads): `href`, `protocol` (scheme + `:`), `username`, `password`, `host`
 /// (host + `:port`), `hostname`, `port`, `origin`, `pathname`, `search` (with a
 /// leading `?`), `hash` (with a leading `#`).
-fn url_components_json(u: &url::Url) -> String {
+pub(crate) fn url_components_json(u: &url::Url) -> String {
     let host = match (u.host_str(), u.port()) {
         (Some(h), Some(p)) => format!("{h}:{p}"),
         (Some(h), None) => h.to_owned(),
@@ -399,15 +399,9 @@ fn url_components_json(u: &url::Url) -> String {
     s.push_str(",\"pathname\":");
     push_json_str(&mut s, u.path());
     s.push_str(",\"search\":");
-    push_json_str(
-        &mut s,
-        &u.query().map(|q| format!("?{q}")).unwrap_or_default(),
-    );
+    push_json_str(&mut s, url::quirks::search(u));
     s.push_str(",\"hash\":");
-    push_json_str(
-        &mut s,
-        &u.fragment().map(|f| format!("#{f}")).unwrap_or_default(),
-    );
+    push_json_str(&mut s, url::quirks::hash(u));
     s.push('}');
     s
 }

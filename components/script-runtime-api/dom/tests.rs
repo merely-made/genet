@@ -1419,6 +1419,50 @@ fn dom_url_reflection_works<E: ScriptEngine>() {
     );
 }
 
+fn hyperlink_url_components_work<E: ScriptEngine>() {
+    use genet_static_dom::StaticDocument;
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.set_base_url("https://example.test/page").unwrap();
+    rt.load_dom(&StaticDocument::parse(
+        "<html><head><base href='https://example.test:8443/links/'></head><body></body></html>",
+    ));
+    rt.eval(
+        r#"
+        function check(ok, label) { if (!ok) throw new Error(label); }
+        ['a', 'area'].forEach(function(tag) {
+          var link = document.createElement(tag);
+          check(link.href === '' && link.protocol === ':' && link.origin === '', 'missing ' + tag);
+          link.setAttribute('href', '../index?#');
+          check(link.href === 'https://example.test:8443/index?#' && link.search === '' && link.hash === '', 'empty components ' + tag);
+          check(link.protocol === 'https:' && link.host === 'example.test:8443' && link.port === '8443', 'host and scheme ' + tag);
+          link.hostname = '[::1]'; link.search = '??q'; link.hash = '##f';
+          check(link.toString() === 'https://[::1]:8443/index??q##f' && link.getAttribute('href') === link.href, 'component writes ' + tag);
+          link.href = 'http://[';
+          link.pathname = '/NO';
+          check(link.href === 'http://[' && link.protocol === ':' && link.host === '', 'invalid ' + tag);
+          link.href = 'item';
+          var doc = document.implementation.createHTMLDocument('new owner');
+          var base = doc.createElement('base');
+          base.setAttribute('href', 'https://other.test/new/');
+          doc.head.appendChild(base); doc.adoptNode(link);
+          check(link.pathname === '/new/item' && link.origin === 'https://other.test', 'adopted ' + tag);
+        });
+        "#,
+    )
+    .expect("hyperlink URL component reflection");
+}
+
+#[test]
+fn hyperlink_url_components_on_boa() {
+    hyperlink_url_components_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn hyperlink_url_components_on_nova() {
+    hyperlink_url_components_work::<script_engine_nova::NovaEngine>();
+}
+
 /// Form action URL reflection uses the owner document URL for missing and empty
 /// values, and the current document base for nonempty values.
 fn form_action_url_reflection_works<E: ScriptEngine>() {

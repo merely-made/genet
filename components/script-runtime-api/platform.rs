@@ -171,9 +171,11 @@ impl<E: ScriptEngine> NativeFn<E> for NodeBaseURI {
     }
 }
 
-/// Resolve a form action using its owner document's encoding for URL queries.
-struct ResolveFormAction;
-impl<E: ScriptEngine> NativeFn<E> for ResolveFormAction {
+/// Parse a URL using its owner document's encoding for URL queries. Return
+/// components for hyperlinks, or the serialized URL with the raw input fallback
+/// for form actions.
+struct ParseDocumentUrl;
+impl<E: ScriptEngine> NativeFn<E> for ParseDocumentUrl {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let doc = cx.arg(0);
         let node = cx.owned_node(&doc)?.ok_or_else(|| cx.error("Document receiver required"))?;
@@ -209,10 +211,59 @@ impl<E: ScriptEngine> NativeFn<E> for ResolveFormAction {
             std::borrow::Cow::Owned(out)
         };
         let base = url::Url::parse(&base).ok();
-        let result = url::Url::options().base_url(base.as_ref())
-            .encoding_override(Some(encode)).parse(&input)
-            .map(|url| url.to_string()).unwrap_or(input);
+        let format = cx.arg(3);
+        let format = cx.value_to_string(&format)?;
+        let parsed = url::Url::options()
+            .base_url(base.as_ref())
+            .encoding_override(Some(encode))
+            .parse(&input);
+        let result = if format == "components" {
+            parsed.map(|url| crate::fetch::url_components_json(&url)).unwrap_or_default()
+        } else {
+            parsed.map(|url| url.to_string()).unwrap_or(input)
+        };
         cx.make_string(&result)
+    }
+}
+
+/// Update a parsed hyperlink URL, returning an empty string for setters whose
+/// preconditions prohibit writing back to the href content attribute.
+struct SetHyperlinkUrlComponent;
+impl<E: ScriptEngine> NativeFn<E> for SetHyperlinkUrlComponent {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        use url::quirks;
+
+        let href = cx.arg(0);
+        let href = cx.value_to_string(&href)?;
+        let name = cx.arg(1);
+        let name = cx.value_to_string(&name)?;
+        let value = cx.arg(2);
+        let value = cx.value_to_string(&value)?;
+        let Ok(mut url) = url::Url::parse(&href) else {
+            return cx.make_string("");
+        };
+        match name.as_str() {
+            "host" | "hostname" | "pathname" if url.cannot_be_a_base() => return cx.make_string(""),
+            "username" | "password" | "port"
+                if quirks::hostname(&url).is_empty() || url.scheme() == "file" =>
+            {
+                return cx.make_string("");
+            },
+            _ => {},
+        }
+        match name.as_str() {
+            "protocol" => { let _ = quirks::set_protocol(&mut url, &value); },
+            "username" => { let _ = quirks::set_username(&mut url, &value); },
+            "password" => { let _ = quirks::set_password(&mut url, &value); },
+            "host" => { let _ = quirks::set_host(&mut url, &value); },
+            "hostname" => { let _ = quirks::set_hostname(&mut url, &value); },
+            "port" => { let _ = quirks::set_port(&mut url, &value); },
+            "pathname" => quirks::set_pathname(&mut url, &value),
+            "search" => quirks::set_search(&mut url, &value),
+            "hash" => quirks::set_hash(&mut url, &value),
+            _ => return cx.make_string(""),
+        }
+        cx.make_string(url.as_str())
     }
 }
 
@@ -607,7 +658,8 @@ pub(crate) fn install_platform_surface<E: ScriptEngine>(
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.set_function::<LocationField>("__locationField", 1)?;
     engine.set_function::<NodeBaseURI>("__nodeBaseURI", 2)?;
-    engine.set_function::<ResolveFormAction>("__resolveFormAction", 3)?;
+    engine.set_function::<ParseDocumentUrl>("__parseDocumentUrl", 4)?;
+    engine.set_function::<SetHyperlinkUrlComponent>("__setHyperlinkUrlComponent", 3)?;
     engine.set_function::<AncestorOrigins>("__ancestorOrigins", 1)?;
     engine.set_function::<EnvironmentOrigin>("__environmentOrigin", 1)?;
     engine.set_function::<HistoryPush>("__historyPush", 3)?;

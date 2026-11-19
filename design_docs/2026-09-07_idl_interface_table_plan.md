@@ -281,9 +281,9 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- Enumerated attributes still take the limited-enum-with-`""` shape: per
-  attribute *invalid*-value defaults remain unimplemented, and the keyword sets
-  are override data rather than generated.
+- Enumerated attributes such as `enctype`, `encoding`, and `formEnctype`
+  still need their specified defaults. Keyword sets come from prose and
+  are maintained in the generator's override table.
 - The three case-sensitivity subtests in F6.
 - The generator reads `html.idl`, `dom.idl` and `cssom.idl`. `SVG.idl`,
   `uievents.idl` and the rest of the 338 vendored IDL files are untouched;
@@ -415,6 +415,28 @@ All 11 assertions for each of the six meter properties moved from fail to
 pass, with zero regressions and 671 failures remaining in the fixture.
 The frozen runner, raw maps, and assertion comparison are retained in
 `Code/output/genet-meter-reflection/`.
+
+## Form method enumeration defaults (2026-11-19)
+
+`form.method` returns `"get"` for missing or invalid content. The `formMethod`
+getter on `input` and `button` returns `""` when its attribute is missing and
+`"get"` when it is present and invalid, including when it is empty. All three
+getters match `get`, `post`, and `dialog` using ASCII case-insensitive matching
+and return the canonical lowercase keyword. Assignment reflects the Web IDL
+`DOMString` value into the content attribute, preserving spelling and whitespace.
+[HTML form submission attributes](https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#form-submission-attributes)
+[HTML reflection rules](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes)
+
+The focused regression failed before the change and passed afterward on Bole
+and Vano. It covers missing, empty, and invalid content, attribute removal,
+`dialog` on all three elements, mixed-case keywords, and DOMString coercion.
+The generated table passed `--check`.
+
+`reflection-forms.html` improved from 7600/8271 to 7787/8271 on each engine.
+Every failing method assertion moved to pass, with 57 gains for `form.method`,
+60 for `input.formMethod`, and 70 for `button.formMethod`. The fixture has
+484 remaining failures and zero regressions. The frozen runner, raw maps,
+and assertion comparison are retained in `Code/output/genet-method-reflection/`.
 
 ## Progress
 

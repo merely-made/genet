@@ -416,6 +416,41 @@ fn validation_pseudo_classes_match_in_js_selectors_on_boa() {
     );
 }
 
+fn reflected_form_methods_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      [['form','method','get'], ['input','formMethod',''], ['button','formMethod','']].forEach(function(c) {
+        var e = document.createElement(c[0]), p = c[1], a = p.toLowerCase();
+        function check(ok, label) { if (!ok) throw new Error(c[0]+'.'+p+': '+label); }
+        check(e[p] === c[2], 'missing');
+        [['get','get'], ['PoSt','post'], ['DIALOG','dialog'], ['', 'get'],
+         ['invalid','get'], [' post ','get'], ['Ket','get']].forEach(function(x) {
+          e.setAttribute(a, x[0]);
+          check(e[p] === x[1], 'attribute '+x[0]+' got '+e[p]);
+          check(e.getAttribute(a) === x[0], 'attribute preserved');
+        });
+        e[p] = 'PoSt'; check(e[p] === 'post' && e.getAttribute(a) === 'PoSt', 'setter');
+        e[p] = null; check(e[p] === 'get' && e.getAttribute(a) === 'null', 'DOMString null');
+        e[p] = { toString: function() { return 'DIALOG'; } };
+        check(e[p] === 'dialog' && e.getAttribute(a) === 'DIALOG', 'DOMString object');
+        var threw = false; try { e[p] = Symbol('x'); } catch (err) { threw = err instanceof TypeError; }
+        check(threw && e.getAttribute(a) === 'DIALOG', 'DOMString Symbol');
+        e.removeAttribute(a); check(e[p] === c[2], 'removed');
+      });
+    "#).expect("form method reflection");
+}
+
+#[test]
+fn reflected_form_methods_on_boa() {
+    reflected_form_methods_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_form_methods_on_nova() {
+    reflected_form_methods_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_ranges_work<E: ScriptEngine>() {
     use genet_static_dom::StaticDocument;
     let mut rt = Runtime::<E>::new().expect("runtime");

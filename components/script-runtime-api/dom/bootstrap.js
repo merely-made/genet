@@ -5712,20 +5712,24 @@
       } else if (kind === 'b') {
         desc.get = function() { return this.hasAttribute(attr); };
         desc.set = function(v) { this.toggleAttribute(attr, !!v); };
-      } else if (kind === 'e') {
+      } else if (kind === 'e' || kind === 'e-form-method') {
         // Enumerated: canonicalize the stored token (ASCII case-insensitive) against
         // the allowed keyword set; unknown/absent returns the missing-value default
         // (`miss`, default ""). This is the limited-enum-with-"" case, which covers
-        // most reflected enums; per-attribute invalid-value defaults are later work.
+        // most reflected enums; e-form-method uses 'get' for invalid values.
         var kw = keywords || [];
         var missing = miss || '';
+        var formMethod = kind === 'e-form-method';
         desc.get = function() {
           var v = this.getAttribute(attr);
           if (v === null) return missing;
-          v = String(v).toLowerCase();
-          return kw.indexOf(v) !== -1 ? v : missing;
+          v = formMethod ? asciiLower(String(v)) : String(v).toLowerCase();
+          return kw.indexOf(v) !== -1 ? v : formMethod ? 'get' : missing;
         };
-        desc.set = function(v) { this.setAttribute(attr, String(v)); };
+        desc.set = function(v) {
+          if (formMethod && typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+          this.setAttribute(attr, String(v));
+        };
       } else if (kind === 'l') {
         var longMissing = miss === null || miss === undefined ? -1 : toLong(miss);
         desc.get = function() { var n = parseHtmlLong(this.getAttribute(attr)); return n === null ? longMissing : n; };

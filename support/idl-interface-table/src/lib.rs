@@ -66,6 +66,10 @@ impl Reflected {
         self.missing = Some(m.to_string());
         self
     }
+    fn form_method(mut self) -> Self {
+        self.kind = "e-form-method";
+        self
+    }
     fn keywords(mut self, k: &[&'static str]) -> Self {
         self.kind = "e";
         self.keywords = k.to_vec();
@@ -86,6 +90,7 @@ const REFERRER_POLICY: &[&str] = &[
     "unsafe-url",
 ];
 const CROSS_ORIGIN: &[&str] = &["anonymous", "use-credentials"];
+const FORM_METHOD: &[&str] = &["get", "post", "dialog"];
 const ENCTYPE: &[&str] = &[
     "application/x-www-form-urlencoded",
     "multipart/form-data",
@@ -277,13 +282,25 @@ pub const OVERRIDES: &[Override] = &[
         "HTMLFormElement",
         "method",
         "enum",
-        s("method").keywords(&["get", "post", "dialog"])
+        s("method").keywords(FORM_METHOD).missing("get").form_method()
     ),
     set!(
         "HTMLInputElement",
         "autocomplete",
         "enum",
         s("autocomplete").keywords(ON_OFF)
+    ),
+    set!(
+        "HTMLInputElement",
+        "formMethod",
+        "enum",
+        s("formMethod").attr("formmethod").keywords(FORM_METHOD).form_method()
+    ),
+    set!(
+        "HTMLButtonElement",
+        "formMethod",
+        "enum",
+        s("formMethod").attr("formmethod").keywords(FORM_METHOD).form_method()
     ),
     set!(
         "HTMLInputElement",

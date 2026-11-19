@@ -405,12 +405,15 @@ fn classify(a: &Attribute) -> Option<Reflected> {
         .or_else(|| name(a.ext.value("ReflectURL")))
         .or_else(|| name(a.ext.value("ReflectPositiveWithFallback")))
         .or_else(|| name(a.ext.value("ReflectNonNegative")))
+        .or_else(|| name(a.ext.value("ReflectPositive")))
         .or_else(|| name(a.ext.value("ReflectSetter")));
     let default = a.ext.value("ReflectDefault").map(str::to_string);
     let kind: &'static str = if a.ext.has("ReflectURL") {
         "u"
     } else if a.ext.has("ReflectPositiveWithFallback") && a.ty == "unsigned long" && !a.nullable {
         "ul-positive-fallback"
+    } else if a.ext.has("ReflectPositive") && a.ty == "double" && !a.nullable {
+        "d-positive"
     } else if a.ext.has("ReflectNonNegative") && a.ty == "long" && !a.nullable {
         "l-nonnegative"
     } else if a.ext.has("Reflect") {
@@ -443,6 +446,7 @@ fn classify(a: &Attribute) -> Option<Reflected> {
         "ul-positive-fallback" => Some(default.unwrap_or_else(|| "1".to_string())),
         "l" | "ul" => Some(default.unwrap_or_else(|| "0".to_string())),
         "l-nonnegative" => Some(default.unwrap_or_else(|| "-1".to_string())),
+        "d-positive" => Some(default.unwrap_or_else(|| "0".to_string())),
         _ => default,
     };
     let range = a.ext.value("ReflectRange").map(|v| {

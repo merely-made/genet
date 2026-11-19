@@ -281,8 +281,8 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- `[ReflectPositive]` still needs a generated binding for `<meter>`'s
-  positive `double`.
+- The `meter` properties use `[ReflectSetter]` and still need element-specific
+  getters.
 - Enumerated attributes still take the limited-enum-with-`""` shape: per
   attribute *invalid*-value defaults remain unimplemented, and the keyword sets
   are override data rather than generated.
@@ -368,6 +368,29 @@ All 72 assertions for each of the four element and property pairs moved
 from fail to pass. The other assertions retained their status, including the
 827 existing failures. The frozen runner, raw maps and comparison are in
 `Code/output/genet-nonnegative-reflection/`.
+
+## Positive progress maximum reflection (2026-11-19)
+
+The generated table installs `HTMLProgressElement.max` as a positive `double`
+with a default of `1.0`. The getter parses the content attribute using HTML's
+floating-point rules and falls back to `1.0` when the parsed value is missing,
+invalid, or nonpositive. The setter first converts to Web IDL `double`, which
+rejects nonfinite values with `TypeError`. It writes the numeric string for a
+positive value and skips the attribute write for zero or a negative value.
+[HTML reflection rules](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes)
+[Web IDL `double` conversion](https://webidl.spec.whatwg.org/#es-double)
+
+The focused test failed before the binding was installed and passed on both
+Bole and Vano after the fix. It exercises ASCII whitespace, numeric prefixes,
+incomplete exponents, underflow, overflow, and finite double limits. It also
+checks attribute preservation after ignored assignments and conversion errors.
+The generated interface table passed `--check`.
+
+`reflection-forms.html` improved from 7444/8271 to 7534/8271 assertions on
+each engine. All 90 `progress.max` assertions moved from fail to pass, with
+zero regressions and 737 failures remaining in the fixture. The frozen
+runner, raw maps, and assertion comparison are retained in
+`Code/output/genet-progress-reflection/`.
 
 ## Progress
 

@@ -530,6 +530,45 @@ fn reflected_nonnegative_on_nova() {
     reflected_nonnegative_work::<script_engine_nova::NovaEngine>();
 }
 
+fn reflected_positive_double_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      var e = document.createElement('progress');
+      function check(ok, label) { if (!ok) throw new Error('progress.max: ' + label); }
+      check(e instanceof HTMLProgressElement && e.max === 1, 'missing');
+      [['',1], ['bad',1], ['0',1], ['-0',1], ['-2',1], ['Infinity',1],
+       ['1e999',1], ['1e-999',1], ['\v2',1], ['\u00a02',1],
+       ['\t\n\f\r 2',2], ['+2.5tail',2.5], [' .5e+2x',50],
+       ['2e+',2], ['2.e2',200], ['5e-324',5e-324], ['1.7976931348623157e308',1.7976931348623157e308]].forEach(function(x) {
+        e.setAttribute('max', x[0]);
+        check(e.max === x[1] && e.getAttribute('max') === x[0], 'get ' + x[0] + ' got ' + e.max);
+      });
+      [[2.5,'2.5'], ['3.25','3.25'], [true,'1'], [5e-324,'5e-324']].forEach(function(x) {
+        e.max = x[0]; check(e.getAttribute('max') === x[1] && e.max === Number(x[0]), 'set ' + x[0]);
+      });
+      [0, -0, -2, null, false].forEach(function(v) {
+        e.setAttribute('max', 'preserved'); e.max = v;
+        check(e.getAttribute('max') === 'preserved', 'ignore ' + v);
+      });
+      [NaN, Infinity, -Infinity, BigInt(1), Symbol()].forEach(function(v) {
+        e.setAttribute('max', 'preserved'); var typeError = false;
+        try { e.max = v; } catch (err) { typeError = err instanceof TypeError; }
+        check(typeError && e.getAttribute('max') === 'preserved', 'reject ' + String(v));
+      });
+    "#).expect("positive double reflection");
+}
+
+#[test]
+fn reflected_positive_double_on_boa() {
+    reflected_positive_double_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_positive_double_on_nova() {
+    reflected_positive_double_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_null_and_signed_zero<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(

@@ -45,8 +45,8 @@
 //! (`t`, e.g. `relList`) and `url` (`u`, e.g. `href` / `src`, resolved against the
 //! document base URL) kinds alongside DOMString / boolean / enumerated / long.
 //! Verified by `dom_fragment_clone`, `dom_collections_works`,
-//! `dom_tokenlist_dataset_works`, `dom_url_reflection_works`. Only the `double`
-//! reflected kind remains. See
+//! `dom_tokenlist_dataset_works`, `dom_url_reflection_works`. Positive double
+//! reflection is supported for `progress.max`. See
 //! `docs/2026-05-26_pluggable_engines_testharness_plan.md`.
 
 use crate::OwnerResolvedCx as _;

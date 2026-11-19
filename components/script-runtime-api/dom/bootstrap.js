@@ -5637,8 +5637,8 @@
   // table of [idlName, attr, kind]; kinds: s=DOMString, tc=textContent, b=boolean, e=enumerated
   // (approximate: lowercased pass-through, '' default — keyword canonicalization
   // deferred), l=long, t=tokenlist (a DOMTokenList over the attribute), u=url
-  // (resolved against the document base URL via `__resolve_url`). Only `double` is
-  // deferred. All over the existing get/set/has/toggle/removeAttribute.
+  // (resolved against the document base URL via `__resolve_url`). All over the
+  // existing get/set/has/toggle/removeAttribute.
   function installReflectedAttributes(proto, attrs) {
     function parseHtmlLong(s) {
       if (s === null || s === undefined) return null;
@@ -5652,6 +5652,15 @@
       if (s === null || s === undefined) return null;
       var m = /^[ \t\n\f\r]*([0-9]+)/.exec(String(s));
       return m ? parseInt(m[1], 10) : null;
+    }
+    function parseHtmlDouble(s) {
+      if (s === null || s === undefined) return null;
+      // HTML permits a numeric prefix, including a trailing decimal point and
+      // an incomplete exponent (which is ignored), and only ASCII whitespace.
+      var m = /^[ \t\n\f\r]*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)/.exec(String(s));
+      if (!m) return null;
+      var n = +m[1];
+      return isFinite(n) ? n : null;
     }
     function parseBoundedUnsigned(s, max) {
       var match = s === null ? null : /^[ \t\n\f\r]*([+-]?)([0-9]+)/.exec(String(s));
@@ -5716,6 +5725,18 @@
         var longMissing = miss === null || miss === undefined ? -1 : toLong(miss);
         desc.get = function() { var n = parseHtmlLong(this.getAttribute(attr)); return n === null ? longMissing : n; };
         desc.set = function(v) { this.setAttribute(attr, String(toLong(v))); };
+      } else if (kind === 'd-positive') {
+        var doubleMissing = miss === null || miss === undefined ? 0 : +miss;
+        desc.get = function() {
+          var n = parseHtmlDouble(this.getAttribute(attr));
+          return n !== null && n > 0 ? n : doubleMissing;
+        };
+        desc.set = function(v) {
+          // Web IDL double conversion rejects BigInt, Symbol, and non-finite values.
+          var n = +v;
+          if (!isFinite(n)) throw new TypeError('Value must be finite');
+          if (n > 0) this.setAttribute(attr, String(n));
+        };
       } else if (kind === 'l-nonnegative') {
         var nonnegativeMissing = miss === null || miss === undefined ? -1 : toLong(miss);
         desc.get = function() {

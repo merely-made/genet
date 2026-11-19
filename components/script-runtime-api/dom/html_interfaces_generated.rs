@@ -3199,7 +3199,17 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
         name: "HTMLProgressElement",
         parent: "HTMLElement",
         tags: &["progress"],
-        reflected: &[],
+        reflected: &[
+            ReflectedAttribute {
+                idl: "max",
+                kind: "d-positive",
+                attr: None,
+                keywords: &[],
+                missing: Some("1.0"),
+                range: None,
+                readonly: false,
+            },
+        ],
         members: &[],
         exposed: &["Window"],
         html_constructor: true,

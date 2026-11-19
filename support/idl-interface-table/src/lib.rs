@@ -399,7 +399,7 @@ pub struct GenShape {
 }
 
 /// Classify one IDL attribute as a reflected attribute, or `None`.
-fn classify(a: &Attribute) -> Option<Reflected> {
+fn classify(a: &Attribute, interface: &str) -> Option<Reflected> {
     let name = |e: Option<&str>| e.map(str::to_string);
     let explicit = name(a.ext.value("Reflect"))
         .or_else(|| name(a.ext.value("ReflectURL")))
@@ -429,6 +429,12 @@ fn classify(a: &Attribute) -> Option<Reflected> {
             "DOMTokenList" => "t",
             _ => return None,
         }
+    } else if interface == "HTMLMeterElement"
+        && a.ext.has("ReflectSetter")
+        && a.ty == "double"
+        && !a.nullable
+    {
+        "meter-double"
     } else if a.ext.has("ReflectSetter") && a.ty == "USVString" {
         // The getter is prose (it resolves against the base URL) — which is
         // exactly what the runtime's `u` kind does.
@@ -553,7 +559,7 @@ pub fn build(wpt: &Path) -> Result<(Vec<GenInterface>, Vec<GenShape>), String> {
             if !seen.insert(a.name.clone()) {
                 continue;
             }
-            if let Some(refl) = classify(a) {
+            if let Some(refl) = classify(a, &i.name) {
                 reflected.push(refl);
             }
         }

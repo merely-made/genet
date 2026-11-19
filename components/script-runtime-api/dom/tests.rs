@@ -569,6 +569,49 @@ fn reflected_positive_double_on_nova() {
     reflected_positive_double_work::<script_engine_nova::NovaEngine>();
 }
 
+fn meter_reflection_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      var e = document.createElement('meter');
+      function check(ok, label) { if (!ok) throw new Error('meter: ' + label); }
+      check(e.min === 0 && e.max === 1 && e.value === 0 && e.low === 0 && e.high === 1 && e.optimum === 0.5, 'defaults');
+      e.min = 2; e.max = 10; e.value = 20; e.low = 8; e.high = 3; e.optimum = -5;
+      check(e.value === 10 && e.low === 8 && e.high === 8 && e.optimum === 2, 'clamping');
+      check(e.getAttribute('value') === '20' && e.getAttribute('high') === '3' && e.getAttribute('optimum') === '-5', 'setter stores raw');
+      e.low = 4; e.max = 30;
+      check(e.value === 20 && e.high === 4 && e.optimum === 2, 'mutation recalculates');
+      e.setAttribute('min', '  -4tail'); e.setAttribute('max', 'bad');
+      e.removeAttribute('low'); e.removeAttribute('high'); e.removeAttribute('optimum'); e.removeAttribute('value');
+      check(e.min === -4 && e.max === 1 && e.value === 0 && e.low === -4 && e.high === 1 && e.optimum === -1.5, 'parsing and defaults');
+      check(e.getAttribute('min') === '  -4tail', 'getter preserves raw');
+      e.min = 1e308; e.max = 1.6e308;
+      check(e.optimum === 1.3e308, 'large midpoint');
+      e.min = 5e-324; e.max = 1e-323;
+      check(e.optimum === 1e-323, 'subnormal midpoint');
+      e.min = -1e308; e.max = 1e308;
+      check(e.optimum === 0, 'opposite midpoint');
+      ['value','min','max','low','high','optimum'].forEach(function(p) {
+        e[p] = -2.5; check(e.getAttribute(p) === '-2.5', p + ' finite setter');
+        [NaN, Infinity, -Infinity, BigInt(1), Symbol()].forEach(function(v) {
+          e.setAttribute(p, 'preserved'); var threw = false;
+          try { e[p] = v; } catch (err) { threw = err instanceof TypeError; }
+          check(threw && e.getAttribute(p) === 'preserved', p + ' invalid setter');
+        });
+      });
+    "#).expect("meter reflection");
+}
+
+#[test]
+fn meter_reflection_on_boa() {
+    meter_reflection_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn meter_reflection_on_nova() {
+    meter_reflection_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_null_and_signed_zero<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(

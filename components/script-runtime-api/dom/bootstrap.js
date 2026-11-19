@@ -5660,7 +5660,12 @@
       var m = /^[ \t\n\f\r]*([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)/.exec(String(s));
       if (!m) return null;
       var n = +m[1];
-      return isFinite(n) ? n : null;
+      return isFinite(n) ? (n === 0 ? 0 : n) : null;
+    }
+    function toDouble(v) {
+      var n = +v;
+      if (!isFinite(n)) throw new TypeError('Value must be finite');
+      return n;
     }
     function parseBoundedUnsigned(s, max) {
       var match = s === null ? null : /^[ \t\n\f\r]*([+-]?)([0-9]+)/.exec(String(s));
@@ -5725,6 +5730,34 @@
         var longMissing = miss === null || miss === undefined ? -1 : toLong(miss);
         desc.get = function() { var n = parseHtmlLong(this.getAttribute(attr)); return n === null ? longMissing : n; };
         desc.set = function(v) { this.setAttribute(attr, String(toLong(v))); };
+      } else if (kind === 'meter-double') {
+        desc.get = function() {
+          var element = this;
+          function number(name, fallback) {
+            var n = parseHtmlDouble(element.getAttribute(name));
+            return n === null ? fallback : n;
+          }
+          var min = number('min', 0);
+          if (idl === 'min') return min;
+          var max = Math.max(min, number('max', 1));
+          if (idl === 'max') return max;
+          if (idl === 'low' || idl === 'high') {
+            var low = Math.min(max, Math.max(min, number('low', min)));
+            return idl === 'low' ? low : Math.min(max, Math.max(low, number('high', max)));
+          }
+          var candidate;
+          if (idl === 'value') {
+            candidate = number('value', 0);
+          } else {
+            var sum = min + max;
+            var midpoint = isFinite(sum) ? sum / 2 : min / 2 + max / 2;
+            candidate = number('optimum', midpoint);
+          }
+          return Math.min(max, Math.max(min, candidate));
+        };
+        desc.set = function(v) {
+          this.setAttribute(attr, String(toDouble(v)));
+        };
       } else if (kind === 'd-positive') {
         var doubleMissing = miss === null || miss === undefined ? 0 : +miss;
         desc.get = function() {
@@ -5733,8 +5766,7 @@
         };
         desc.set = function(v) {
           // Web IDL double conversion rejects BigInt, Symbol, and non-finite values.
-          var n = +v;
-          if (!isFinite(n)) throw new TypeError('Value must be finite');
+          var n = toDouble(v);
           if (n > 0) this.setAttribute(attr, String(n));
         };
       } else if (kind === 'l-nonnegative') {

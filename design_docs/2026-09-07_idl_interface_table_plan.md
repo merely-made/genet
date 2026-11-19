@@ -281,8 +281,6 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- The `meter` properties use `[ReflectSetter]` and still need element-specific
-  getters.
 - Enumerated attributes still take the limited-enum-with-`""` shape: per
   attribute *invalid*-value defaults remain unimplemented, and the keyword sets
   are override data rather than generated.
@@ -391,6 +389,32 @@ each engine. All 90 `progress.max` assertions moved from fail to pass, with
 zero regressions and 737 failures remaining in the fixture. The frozen
 runner, raw maps, and assertion comparison are retained in
 `Code/output/genet-progress-reflection/`.
+
+## Meter setter reflection and computed getters (2026-11-19)
+
+The generated bindings install six `HTMLMeterElement` setters that apply Web
+IDL `double` conversion and serialize the resulting finite number to the
+corresponding content attribute.
+The getters compute their values from the current attributes. `min` defaults
+to 0 and `max` defaults to 1, with `max` raised to `min` when needed. `value`,
+`low`, and `optimum` clamp to the effective `min` and `max`. `high` clamps to
+the effective `low` and `max`. Their defaults are 0, `min`, the midpoint of
+`min` and `max`, and `max`, respectively, before clamping.
+[HTML meter element](https://html.spec.whatwg.org/multipage/form-elements.html#the-meter-element)
+[Web IDL `double` conversion](https://webidl.spec.whatwg.org/#es-double)
+
+The focused regression failed before the fix and passed afterward on Bole
+and Vano. It covers defaults, recalculation after mutations, out-of-range
+attribute preservation, rejected conversions, and finite and subnormal
+midpoint cases. The generated table passed `--check`.
+
+Both engines passed all 50 assertions in `meter.html` and all 12 in
+`meter-leading-plus-sign.html`, up from 1/50 and 0/12, respectively.
+`reflection-forms.html` improved from 7534/8271 to 7600/8271 on each engine.
+All 11 assertions for each of the six meter properties moved from fail to
+pass, with zero regressions and 671 failures remaining in the fixture.
+The frozen runner, raw maps, and assertion comparison are retained in
+`Code/output/genet-meter-reflection/`.
 
 ## Progress
 

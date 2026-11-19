@@ -5653,6 +5653,15 @@
       var m = /^[ \t\n\f\r]*([0-9]+)/.exec(String(s));
       return m ? parseInt(m[1], 10) : null;
     }
+    function parseBoundedUnsigned(s, max) {
+      var match = s === null ? null : /^[ \t\n\f\r]*([+-]?)([0-9]+)/.exec(String(s));
+      if (!match) return null;
+      var parsed = 0, digits = match[2];
+      for (var i = 0; i < digits.length; i++) {
+        parsed = Math.min(max + 1, parsed * 10 + digits.charCodeAt(i) - 48);
+      }
+      return match[1] === '-' && parsed !== 0 ? null : parsed;
+    }
     function toLong(v) {
       v = Number(v);
       if (!isFinite(v)) return 0;
@@ -5707,30 +5716,25 @@
         var longMissing = miss === null || miss === undefined ? -1 : toLong(miss);
         desc.get = function() { var n = parseHtmlLong(this.getAttribute(attr)); return n === null ? longMissing : n; };
         desc.set = function(v) { this.setAttribute(attr, String(toLong(v))); };
-      } else if (kind === 'ul') {
+      } else if (kind === 'ul' || kind === 'ul-positive-fallback') {
         var unsignedMissing = miss === null || miss === undefined ? 0 : toUnsignedLong(miss);
         desc.get = function() {
-          if (!range) { var n = parseHtmlUnsignedLong(this.getAttribute(attr)); return n === null ? unsignedMissing : n; }
-          var raw = this.getAttribute(attr);
-          var match = raw === null ? null : /^[ \t\n\f\r]*([+-]?)([0-9]+)/.exec(String(raw));
-          var parsed = 0;
-          if (match) {
-            // Saturate while parsing so arbitrarily long integers remain clampable.
-            var digits = match[2];
-            for (var i = 0; i < digits.length; i++) {
-              parsed = Math.min(range[1] + 1, parsed * 10 + digits.charCodeAt(i) - 48);
-            }
+          if (kind === 'ul-positive-fallback') {
+            var positive = parseBoundedUnsigned(this.getAttribute(attr), 2147483647);
+            return positive === null || positive < 1 || positive > 2147483647 ? unsignedMissing : positive;
           }
-          if (!match || (match[1] === '-' && parsed !== 0)) {
+          if (!range) { var n = parseHtmlUnsignedLong(this.getAttribute(attr)); return n === null ? unsignedMissing : n; }
+          var parsed = parseBoundedUnsigned(this.getAttribute(attr), range[1]);
+          if (parsed === null) {
             return miss === null || miss === undefined ? range[0] : unsignedMissing;
           }
           return Math.min(range[1], Math.max(range[0], parsed));
         };
         desc.set = function(v) {
-          if (!range) { this.setAttribute(attr, String(toUnsignedLong(v))); return; }
+          if (kind !== 'ul-positive-fallback' && !range) { this.setAttribute(attr, String(toUnsignedLong(v))); return; }
           // Web IDL unsigned long conversion precedes HTML's setter fallback.
           var n = v >>> 0;
-          this.setAttribute(attr, String(n > 2147483647 ? unsignedMissing : n));
+          this.setAttribute(attr, String(n > 2147483647 || (kind === 'ul-positive-fallback' && n === 0) ? unsignedMissing : n));
         };
       } else if (kind === 't') {
         // tokenlist: a DOMTokenList over the content attribute (e.g. relList -> rel).

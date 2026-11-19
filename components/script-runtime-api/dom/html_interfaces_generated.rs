@@ -3017,6 +3017,15 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
         tags: &["textarea"],
         reflected: &[
             ReflectedAttribute {
+                idl: "cols",
+                kind: "ul-positive-fallback",
+                attr: None,
+                keywords: &[],
+                missing: Some("20"),
+                range: None,
+                readonly: false,
+            },
+            ReflectedAttribute {
                 idl: "dirName",
                 kind: "s",
                 attr: Some("dirname"),
@@ -3067,6 +3076,15 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
+                readonly: false,
+            },
+            ReflectedAttribute {
+                idl: "rows",
+                kind: "ul-positive-fallback",
+                attr: None,
+                keywords: &[],
+                missing: Some("2"),
                 range: None,
                 readonly: false,
             },

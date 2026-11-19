@@ -281,10 +281,8 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- `[ReflectNonNegative]`, `[ReflectPositive]` and
-  `[ReflectPositiveWithFallback]` produce nothing, so `maxLength`, `minLength`,
-  `<textarea>`'s `cols`/`rows` and `<meter>`'s `double` limits stay absent, as
-  before.
+- `[ReflectNonNegative]` and `[ReflectPositive]` still need generated
+  bindings for `maxLength`, `minLength` and `<meter>`'s positive `double`.
 - Enumerated attributes still take the limited-enum-with-`""` shape: per
   attribute *invalid*-value defaults remain unimplemented, and the keyword sets
   are override data rather than generated.
@@ -332,6 +330,26 @@ Both engines passed all 6116 assertions in `reflection-tabular.html`. Bole
 gained 16 passes and Vano gained six over the range-only runner. Comparison
 by assertion name and occurrence preserved every prior pass. The runner,
 logs and comparison are retained in `Code/output/genet-tabular-reflection/`.
+
+## Textarea positive reflection with fallback (2026-11-19)
+
+The generated table installs `HTMLTextAreaElement.cols` and `.rows` with
+defaults of 20 and 2. The getter accepts parsed values from 1 through
+2147483647 and returns the default for missing, invalid and out-of-range
+text. A property assignment converts to Web IDL `unsigned long` first, then
+writes the default when the converted value is outside that interval. The
+bounded integer parser also serves the existing `[ReflectRange]` getters.
+[HTML reflection rules](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes)
+
+Six focused runtime tests passed across Bole and Vano. They cover the new
+textarea boundaries and the existing range, legacy string and signed-zero
+cases. The generated-table drift test passed.
+
+`reflection-forms.html` improved from 7016/8271 to 7156/8271 on each engine.
+All 70 `cols` assertions and all 70 `rows` assertions moved from fail to pass.
+Every other assertion retained its status, including the 1115 existing
+failures. The frozen runner, raw maps and assertion comparison are retained
+in `Code/output/genet-textarea-reflection/`.
 
 ## Progress
 

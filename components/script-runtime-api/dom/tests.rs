@@ -454,6 +454,39 @@ fn reflected_ranges_on_nova() {
     reflected_ranges_work::<script_engine_nova::NovaEngine>();
 }
 
+fn reflected_positive_fallback_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      [['cols',20], ['rows',2]].forEach(function(c) {
+        var e = document.createElement('textarea'), p = c[0], fallback = c[1];
+        function check(ok, label) { if (!ok) throw new Error(p + ': ' + label); }
+        check(e instanceof HTMLTextAreaElement && e[p] === fallback, 'identity and missing');
+        [['bad',fallback], ['',fallback], ['0',fallback], ['-0',fallback], ['-1',fallback],
+         ['+1',1], ['  2x',2], ['2147483647',2147483647], ['2147483648',fallback],
+         ['99999999999999999999999999999999999999',fallback]].forEach(function(x) {
+          e.setAttribute(p,x[0]); check(e[p] === x[1], 'get ' + x[0] + ' got ' + e[p]);
+          check(e.getAttribute(p) === x[0], 'raw ' + x[0]);
+        });
+        [[0,fallback], [-1,fallback], [1,1], [2147483647,2147483647],
+         [2147483648,fallback], [4294967296,fallback], [4294967297,1], [-4294967295,1],
+         [1.9,1], [NaN,fallback]].forEach(function(x) {
+          e[p] = x[0]; check(e.getAttribute(p) === String(x[1]) && e[p] === x[1], 'set ' + x[0]);
+        });
+      });
+    "#).expect("positive fallback reflection");
+}
+
+#[test]
+fn reflected_positive_fallback_on_boa() {
+    reflected_positive_fallback_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_positive_fallback_on_nova() {
+    reflected_positive_fallback_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_null_and_signed_zero<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(

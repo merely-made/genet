@@ -37,6 +37,7 @@ pub struct Reflected {
     pub attr: Option<String>,
     pub keywords: Vec<&'static str>,
     pub missing: Option<String>,
+    pub invalid: Option<String>,
     pub range: Option<(u32, u32)>,
     pub readonly: bool,
 }
@@ -52,6 +53,7 @@ fn r(idl: &str, kind: &'static str) -> Reflected {
         attr: None,
         keywords: Vec::new(),
         missing: None,
+        invalid: None,
         range: None,
         readonly: false,
     }
@@ -66,8 +68,8 @@ impl Reflected {
         self.missing = Some(m.to_string());
         self
     }
-    fn form_method(mut self) -> Self {
-        self.kind = "e-form-method";
+    fn invalid(mut self, value: &str) -> Self {
+        self.invalid = Some(value.to_string());
         self
     }
     fn keywords(mut self, k: &[&'static str]) -> Self {
@@ -91,8 +93,9 @@ const REFERRER_POLICY: &[&str] = &[
 ];
 const CROSS_ORIGIN: &[&str] = &["anonymous", "use-credentials"];
 const FORM_METHOD: &[&str] = &["get", "post", "dialog"];
+const URLENCODED: &str = "application/x-www-form-urlencoded";
 const ENCTYPE: &[&str] = &[
-    "application/x-www-form-urlencoded",
+    URLENCODED,
     "multipart/form-data",
     "text/plain",
 ];
@@ -270,19 +273,19 @@ pub const OVERRIDES: &[Override] = &[
         "HTMLFormElement",
         "enctype",
         "enum",
-        s("enctype").keywords(ENCTYPE)
+        s("enctype").keywords(ENCTYPE).missing(URLENCODED).invalid(URLENCODED)
     ),
     set!(
         "HTMLFormElement",
         "encoding",
         "enum",
-        s("encoding").attr("enctype").keywords(ENCTYPE)
+        s("encoding").attr("enctype").keywords(ENCTYPE).missing(URLENCODED).invalid(URLENCODED)
     ),
     set!(
         "HTMLFormElement",
         "method",
         "enum",
-        s("method").keywords(FORM_METHOD).missing("get").form_method()
+        s("method").keywords(FORM_METHOD).missing("get").invalid("get")
     ),
     set!(
         "HTMLInputElement",
@@ -294,25 +297,25 @@ pub const OVERRIDES: &[Override] = &[
         "HTMLInputElement",
         "formMethod",
         "enum",
-        s("formMethod").attr("formmethod").keywords(FORM_METHOD).form_method()
+        s("formMethod").attr("formmethod").keywords(FORM_METHOD).invalid("get")
     ),
     set!(
         "HTMLButtonElement",
         "formMethod",
         "enum",
-        s("formMethod").attr("formmethod").keywords(FORM_METHOD).form_method()
+        s("formMethod").attr("formmethod").keywords(FORM_METHOD).invalid("get")
     ),
     set!(
         "HTMLInputElement",
         "formEnctype",
         "enum",
-        s("formEnctype").attr("formenctype").keywords(ENCTYPE)
+        s("formEnctype").attr("formenctype").keywords(ENCTYPE).invalid(URLENCODED)
     ),
     set!(
         "HTMLButtonElement",
         "formEnctype",
         "enum",
-        s("formEnctype").attr("formenctype").keywords(ENCTYPE)
+        s("formEnctype").attr("formenctype").keywords(ENCTYPE).invalid(URLENCODED)
     ),
     set!(
         "HTMLButtonElement",
@@ -485,6 +488,7 @@ fn classify(a: &Attribute, interface: &str) -> Option<Reflected> {
         attr,
         keywords: Vec::new(),
         missing,
+        invalid: None,
         range,
         readonly: a.readonly,
     })
@@ -772,6 +776,10 @@ pub fn emit(
                 o.push_str(&format!(
                     "                missing: {},\n",
                     rust_opt(a.missing.as_ref())
+                ));
+                o.push_str(&format!(
+                    "                invalid: {},\n",
+                    rust_opt(a.invalid.as_ref())
                 ));
                 o.push_str(&format!(
                     "                range: {},\n",

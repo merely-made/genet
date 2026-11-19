@@ -451,6 +451,45 @@ fn reflected_form_methods_on_nova() {
     reflected_form_methods_work::<script_engine_nova::NovaEngine>();
 }
 
+fn reflected_form_encodings_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      var fallback = 'application/x-www-form-urlencoded';
+      [['form','enctype','enctype',fallback], ['form','encoding','enctype',fallback],
+       ['input','formEnctype','formenctype',''], ['button','formEnctype','formenctype','']].forEach(function(c) {
+        var e = document.createElement(c[0]), p = c[1], a = c[2];
+        function check(ok, label) { if (!ok) throw new Error(c[0]+'.'+p+': '+label); }
+        check(e[p] === c[3], 'missing');
+        [['APPLICATION/X-WWW-FORM-URLENCODED',fallback], ['MultiPart/Form-Data','multipart/form-data'],
+         ['TEXT/PLAIN','text/plain'], ['',fallback], ['invalid',fallback], [' text/plain ',fallback]].forEach(function(x) {
+          e.setAttribute(a, x[0]); check(e[p] === x[1], 'attribute '+x[0]+' got '+e[p]);
+          check(e.getAttribute(a) === x[0], 'attribute preserved');
+        });
+        e[p] = 'TeXt/PlAiN'; check(e[p] === 'text/plain' && e.getAttribute(a) === 'TeXt/PlAiN', 'setter');
+        if (c[0] === 'form') {
+          check(e.enctype === 'text/plain' && e.encoding === 'text/plain' && !e.hasAttribute('encoding'), 'alias');
+        }
+        e[p] = null; check(e[p] === fallback && e.getAttribute(a) === 'null', 'DOMString null');
+        e[p] = { toString: function() { return 'MULTIPART/FORM-DATA'; } };
+        check(e[p] === 'multipart/form-data' && e.getAttribute(a) === 'MULTIPART/FORM-DATA', 'DOMString object');
+        var threw = false; try { e[p] = Symbol('x'); } catch (err) { threw = err instanceof TypeError; }
+        check(threw && e.getAttribute(a) === 'MULTIPART/FORM-DATA', 'DOMString Symbol');
+        e.removeAttribute(a); check(e[p] === c[3], 'removed');
+      });
+    "#).expect("form encoding reflection");
+}
+
+#[test]
+fn reflected_form_encodings_on_boa() {
+    reflected_form_encodings_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_form_encodings_on_nova() {
+    reflected_form_encodings_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_ranges_work<E: ScriptEngine>() {
     use genet_static_dom::StaticDocument;
     let mut rt = Runtime::<E>::new().expect("runtime");

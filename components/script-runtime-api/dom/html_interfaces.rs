@@ -36,6 +36,7 @@ pub(crate) struct ReflectedAttribute {
     pub(crate) attr: Option<&'static str>,
     pub(crate) keywords: &'static [&'static str],
     pub(crate) missing: Option<&'static str>,
+    pub(crate) invalid: Option<&'static str>,
     pub(crate) range: Option<(u32, u32)>,
     pub(crate) readonly: bool,
 }
@@ -127,6 +128,10 @@ fn push_reflected_attribute(out: &mut String, attr: &ReflectedAttribute) {
     push_string_array(out, attr.keywords);
     out.push_str(",missing:");
     push_optional_js_string(out, attr.missing);
+    if let Some(invalid) = attr.invalid {
+        out.push_str(",invalid:");
+        push_js_string(out, invalid);
+    }
     if let Some((min, max)) = attr.range {
         out.push_str(&format!(",range:[{min},{max}]"));
     }

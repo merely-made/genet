@@ -5686,7 +5686,7 @@
       if (!isFinite(v) || v < 0) return 0;
       return Math.floor(v) >>> 0;
     }
-    function def(idl, kind, attr, keywords, miss, range, readonly) {
+    function def(idl, kind, attr, keywords, miss, invalid, range, readonly) {
       // Reflected HTML content-attribute names are lowercase (tabIndex ->
       // tabindex); this also keeps get/set consistent with HTML setAttribute,
       // which lowercases. Explicit names passed in are already lowercase.
@@ -5712,22 +5712,24 @@
       } else if (kind === 'b') {
         desc.get = function() { return this.hasAttribute(attr); };
         desc.set = function(v) { this.toggleAttribute(attr, !!v); };
-      } else if (kind === 'e' || kind === 'e-form-method') {
+      } else if (kind === 'e') {
         // Enumerated: canonicalize the stored token (ASCII case-insensitive) against
         // the allowed keyword set; unknown/absent returns the missing-value default
         // (`miss`, default ""). This is the limited-enum-with-"" case, which covers
-        // most reflected enums; e-form-method uses 'get' for invalid values.
+        // most reflected enums. An explicit invalid default selects the HTML
+        // enum path with ASCII matching and DOMString conversion.
         var kw = keywords || [];
         var missing = miss || '';
-        var formMethod = kind === 'e-form-method';
+        var htmlEnum = invalid !== null && invalid !== undefined;
+        var invalidDefault = htmlEnum ? invalid : missing;
         desc.get = function() {
           var v = this.getAttribute(attr);
           if (v === null) return missing;
-          v = formMethod ? asciiLower(String(v)) : String(v).toLowerCase();
-          return kw.indexOf(v) !== -1 ? v : formMethod ? 'get' : missing;
+          v = htmlEnum ? asciiLower(String(v)) : String(v).toLowerCase();
+          return kw.indexOf(v) !== -1 ? v : invalidDefault;
         };
         desc.set = function(v) {
-          if (formMethod && typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+          if (htmlEnum && typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
           this.setAttribute(attr, String(v));
         };
       } else if (kind === 'l') {
@@ -5835,7 +5837,7 @@
     }
     for (var i = 0; i < attrs.length; i++) {
       var a = attrs[i];
-      def(a.idl, a.kind, a.attr, a.keywords || [], a.missing, a.range, !!a.readonly);
+      def(a.idl, a.kind, a.attr, a.keywords || [], a.missing, a.invalid, a.range, !!a.readonly);
     }
   }
 

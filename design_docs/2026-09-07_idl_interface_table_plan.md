@@ -281,9 +281,9 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- Enumerated attributes such as `enctype`, `encoding`, and `formEnctype`
-  still need their specified defaults. Keyword sets come from prose and
-  are maintained in the generator's override table.
+- Enumerated attributes such as `form.autocomplete` still need their specified
+  defaults. Keyword sets come from prose and are maintained in the generator's
+  override table.
 - The three case-sensitivity subtests in F6.
 - The generator reads `html.idl`, `dom.idl` and `cssom.idl`. `SVG.idl`,
   `uievents.idl` and the rest of the 338 vendored IDL files are untouched;
@@ -437,6 +437,33 @@ Every failing method assertion moved to pass, with 57 gains for `form.method`,
 60 for `input.formMethod`, and 70 for `button.formMethod`. The fixture has
 484 remaining failures and zero regressions. The frozen runner, raw maps,
 and assertion comparison are retained in `Code/output/genet-method-reflection/`.
+
+## Form encoding enumeration defaults (2026-11-19)
+
+`form.enctype` and its `encoding` alias read and write the same `enctype`
+content attribute. Both getters return `application/x-www-form-urlencoded`
+when the attribute is missing or invalid. The `formEnctype` getter on `input`
+and `button` returns `""` when `formenctype` is missing and
+`application/x-www-form-urlencoded` when it is present and invalid, including
+when it is empty. The getters match the three MIME keywords using ASCII
+case-insensitive comparison. The setters store the converted DOMString with
+its original case and whitespace. The generated table carries separate
+missing and invalid defaults for the encoding and method bindings.
+[HTML form submission attributes](https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#form-submission-attributes)
+[HTML reflection rules](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes)
+
+The focused encoding regression failed before the fix on both engines.
+Afterward, both the encoding and method tests passed on Bole and Vano. They
+cover missing, empty, and invalid content, bidirectional alias writes,
+attribute removal, mixed-case keywords, and DOMString conversion. The
+generated table passed `--check`.
+
+`reflection-forms.html` improved from 7787/8271 to 8005/8271 on each engine.
+All failing encoding assertions moved to pass. `form.enctype` and
+`form.encoding` gained 55 each, and `input.formEnctype` and
+`button.formEnctype` gained 54 each. The fixture has 266 remaining failures
+and zero regressions. The frozen runner, raw maps, and assertion comparison
+are retained in `Code/output/genet-encoding-reflection/`.
 
 ## Progress
 

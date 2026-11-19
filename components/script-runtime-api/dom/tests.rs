@@ -487,6 +487,49 @@ fn reflected_positive_fallback_on_nova() {
     reflected_positive_fallback_work::<script_engine_nova::NovaEngine>();
 }
 
+fn reflected_nonnegative_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      ['input', 'textarea'].forEach(function(tag) {
+        ['maxLength', 'minLength'].forEach(function(prop) {
+          var e = document.createElement(tag), attr = prop.toLowerCase();
+          function check(ok, label) { if (!ok) throw new Error(tag + '.' + prop + ': ' + label); }
+          check(e[prop] === -1, 'missing');
+          [['',-1], ['bad',-1], ['-1',-1], ['-0',0], ['+0',0], ['  +12xyz',12],
+           ['2147483647',2147483647], ['2147483648',-1],
+           ['999999999999999999999999999999999999999999',-1]].forEach(function(x) {
+            e.setAttribute(attr, x[0]);
+            check(e[prop] === x[1] && e.getAttribute(attr) === x[0], 'raw ' + x[0]);
+          });
+          [[0,0], [1.9,1], [2147483647,2147483647], [4294967296,0],
+           [4294967297,1], [-4294967295,1], [NaN,0], [Infinity,0]].forEach(function(x) {
+            e[prop] = x[0];
+            check(e[prop] === x[1] && e.getAttribute(attr) === String(x[1]), 'set ' + x[0]);
+          });
+          [-1, 2147483648, 4294967295].forEach(function(v) {
+            e.setAttribute(attr, 'preserved');
+            var name = ''; try { e[prop] = v; } catch (err) { name = err.name; }
+            check(name === 'IndexSizeError' && e.getAttribute(attr) === 'preserved', 'reject ' + v);
+          });
+          var typeError = false;
+          try { e[prop] = BigInt(1); } catch (err) { typeError = err instanceof TypeError; }
+          check(typeError && e.getAttribute(attr) === 'preserved', 'BigInt conversion');
+        });
+      });
+    "#).expect("nonnegative reflection");
+}
+
+#[test]
+fn reflected_nonnegative_on_boa() {
+    reflected_nonnegative_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_nonnegative_on_nova() {
+    reflected_nonnegative_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_null_and_signed_zero<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(

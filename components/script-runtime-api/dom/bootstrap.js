@@ -5716,6 +5716,18 @@
         var longMissing = miss === null || miss === undefined ? -1 : toLong(miss);
         desc.get = function() { var n = parseHtmlLong(this.getAttribute(attr)); return n === null ? longMissing : n; };
         desc.set = function(v) { this.setAttribute(attr, String(toLong(v))); };
+      } else if (kind === 'l-nonnegative') {
+        var nonnegativeMissing = miss === null || miss === undefined ? -1 : toLong(miss);
+        desc.get = function() {
+          var n = parseBoundedUnsigned(this.getAttribute(attr), 2147483647);
+          return n === null || n > 2147483647 ? nonnegativeMissing : n;
+        };
+        desc.set = function(v) {
+          // Unary plus performs Web IDL ToNumber, including rejecting BigInt.
+          var n = (+v) | 0;
+          if (n < 0) throw new DOMException('Value must be nonnegative', 'IndexSizeError');
+          this.setAttribute(attr, String(n));
+        };
       } else if (kind === 'ul' || kind === 'ul-positive-fallback') {
         var unsignedMissing = miss === null || miss === undefined ? 0 : toUnsignedLong(miss);
         desc.get = function() {

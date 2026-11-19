@@ -281,8 +281,8 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- `[ReflectNonNegative]` and `[ReflectPositive]` still need generated
-  bindings for `maxLength`, `minLength` and `<meter>`'s positive `double`.
+- `[ReflectPositive]` still needs a generated binding for `<meter>`'s
+  positive `double`.
 - Enumerated attributes still take the limited-enum-with-`""` shape: per
   attribute *invalid*-value defaults remain unimplemented, and the keyword sets
   are override data rather than generated.
@@ -350,6 +350,24 @@ All 70 `cols` assertions and all 70 `rows` assertions moved from fail to pass.
 Every other assertion retained its status, including the 1115 existing
 failures. The frozen runner, raw maps and assertion comparison are retained
 in `Code/output/genet-textarea-reflection/`.
+
+## Nonnegative length reflection (2026-11-19)
+
+The generated table now installs `maxLength` and `minLength` on `input` and
+`textarea`. Reads accept parsed integers from 0 through 2147483647 and use
+`-1` for missing, invalid, negative or oversized content. A setter converts to
+Web IDL `long`, rejects a negative result with `IndexSizeError`, and writes
+other values through the element's attribute mutation path. [HTML reflection rules](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes)
+
+All eight focused reflection tests passed across Bole and Vano, including
+the new length boundary cases and earlier reflection variants. The generated
+interface table passed `--check`.
+
+`reflection-forms.html` improved from 7156/8271 to 7444/8271 on each engine.
+All 72 assertions for each of the four element and property pairs moved
+from fail to pass. The other assertions retained their status, including the
+827 existing failures. The frozen runner, raw maps and comparison are in
+`Code/output/genet-nonnegative-reflection/`.
 
 ## Progress
 

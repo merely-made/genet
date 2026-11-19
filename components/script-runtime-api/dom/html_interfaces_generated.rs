@@ -27,6 +27,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -35,6 +36,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -43,6 +45,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -51,6 +54,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("accesskey"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -58,7 +62,8 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 kind: "ul",
                 attr: Some("headingoffset"),
                 keywords: &[],
-                missing: Some("0"),
+                missing: None,
+                range: Some((0, 8)),
                 readonly: false,
             },
             ReflectedAttribute {
@@ -67,6 +72,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("headingreset"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -75,6 +81,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -83,6 +90,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["ltr", "rtl", "auto"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -91,6 +99,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -99,6 +108,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("-1"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -107,6 +117,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -136,6 +147,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -165,6 +177,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -184,6 +197,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -192,6 +206,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -211,6 +226,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -219,6 +235,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -227,6 +244,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("rel"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -235,6 +253,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -243,6 +262,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -251,6 +271,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -259,6 +280,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -267,6 +289,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -275,6 +298,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("imagesrcset"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -283,6 +307,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("imagesizes"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -291,6 +316,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -299,6 +325,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -307,6 +334,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -315,6 +343,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -323,6 +352,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -331,6 +361,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("crossorigin"),
                 keywords: &["anonymous", "use-credentials"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -339,6 +370,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("referrerpolicy"),
                 keywords: &["", "no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -358,6 +390,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -366,6 +399,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("http-equiv"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -374,6 +408,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -382,6 +417,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -390,6 +426,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -409,6 +446,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -417,6 +455,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -425,6 +464,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -444,6 +484,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -452,6 +493,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -460,6 +502,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("vlink"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -468,6 +511,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("alink"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -476,6 +520,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -484,6 +529,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -503,6 +549,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -522,6 +569,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -541,6 +589,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -549,6 +598,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -557,6 +607,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("noshade"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -565,6 +616,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -573,6 +625,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -592,6 +645,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
         ],
@@ -611,6 +665,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -630,6 +685,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -638,6 +694,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("1"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -646,6 +703,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -654,6 +712,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -673,6 +732,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -681,6 +741,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -700,6 +761,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -719,6 +781,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -727,6 +790,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -746,6 +810,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -765,6 +830,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -784,6 +850,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -792,6 +859,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -800,6 +868,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -808,6 +877,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -816,6 +886,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("rel"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -824,6 +895,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -832,6 +904,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -840,6 +913,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -848,6 +922,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -856,6 +931,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -864,6 +940,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -872,6 +949,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -880,6 +958,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -888,6 +967,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("referrerpolicy"),
                 keywords: &["", "no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -896,6 +976,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -915,6 +996,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -934,6 +1016,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("datetime"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -963,6 +1046,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -982,6 +1066,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -990,6 +1075,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("datetime"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1019,6 +1105,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1027,6 +1114,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1035,6 +1123,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1043,6 +1132,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1051,6 +1141,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1059,6 +1150,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1067,6 +1159,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
         ],
@@ -1086,6 +1179,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1094,6 +1188,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1102,6 +1197,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1110,6 +1206,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1118,6 +1215,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("usemap"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1126,6 +1224,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("ismap"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1134,6 +1233,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1142,6 +1242,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1150,6 +1251,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1158,6 +1260,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1166,6 +1269,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1174,6 +1278,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1182,6 +1287,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("longdesc"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1190,6 +1296,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1198,6 +1305,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("crossorigin"),
                 keywords: &["anonymous", "use-credentials"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1206,6 +1314,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("referrerpolicy"),
                 keywords: &["", "no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1214,6 +1323,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["async", "sync", "auto"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1222,6 +1332,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["lazy", "eager"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1241,6 +1352,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1249,6 +1361,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1257,6 +1370,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -1265,6 +1379,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1273,6 +1388,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("allowfullscreen"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1281,6 +1397,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1289,6 +1406,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1297,6 +1415,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1305,6 +1424,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1313,6 +1433,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("frameborder"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1321,6 +1442,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("longdesc"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1329,6 +1451,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("marginheight"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1337,6 +1460,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("marginwidth"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1345,6 +1469,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("referrerpolicy"),
                 keywords: &["", "no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1353,6 +1478,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["lazy", "eager"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1372,6 +1498,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1380,6 +1507,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1388,6 +1516,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1396,6 +1525,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1404,6 +1534,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1412,6 +1543,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1431,6 +1563,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1439,6 +1572,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1447,6 +1581,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1455,6 +1590,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1463,6 +1599,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1471,6 +1608,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1479,6 +1617,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1487,6 +1626,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1495,6 +1635,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1503,6 +1644,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1511,6 +1653,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1519,6 +1662,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1527,6 +1671,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("codebase"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1535,6 +1680,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("codetype"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1543,6 +1689,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("usemap"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1551,6 +1698,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1570,6 +1718,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1578,6 +1727,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1586,6 +1736,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1594,6 +1745,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1602,6 +1754,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["subtitles", "captions", "descriptions", "chapters", "metadata"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1621,6 +1774,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1629,6 +1783,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1637,6 +1792,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1645,6 +1801,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1653,6 +1810,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("muted"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1661,6 +1819,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("crossorigin"),
                 keywords: &["anonymous", "use-credentials"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1669,6 +1828,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["none", "metadata", "auto"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1688,6 +1848,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1707,6 +1868,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1715,6 +1877,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1723,6 +1886,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1731,6 +1895,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1739,6 +1904,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1747,6 +1913,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1755,6 +1922,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1763,6 +1931,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("rel"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -1771,6 +1940,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("nohref"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1779,6 +1949,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1787,6 +1958,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("referrerpolicy"),
                 keywords: &["", "no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1806,6 +1978,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1814,6 +1987,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1822,6 +1996,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1830,6 +2005,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1838,6 +2014,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1846,6 +2023,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1854,6 +2032,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1862,6 +2041,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("cellpadding"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1870,6 +2050,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("cellspacing"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1889,6 +2070,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1908,6 +2090,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("1"),
+                range: Some((1, 1000)),
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1916,6 +2099,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1924,6 +2108,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("char"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1932,6 +2117,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("charoff"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1940,6 +2126,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("valign"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1948,6 +2135,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -1967,6 +2155,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1975,6 +2164,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("char"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1983,6 +2173,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("charoff"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -1991,6 +2182,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("valign"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2010,6 +2202,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2018,6 +2211,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("char"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2026,6 +2220,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("charoff"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2034,6 +2229,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("valign"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2042,6 +2238,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2061,6 +2258,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("colspan"),
                 keywords: &[],
                 missing: Some("1"),
+                range: Some((1, 1000)),
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2069,6 +2267,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("rowspan"),
                 keywords: &[],
                 missing: Some("1"),
+                range: Some((0, 65534)),
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2077,6 +2276,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2085,6 +2285,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2093,6 +2294,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2101,6 +2303,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2109,6 +2312,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2117,6 +2321,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2125,6 +2330,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("char"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2133,6 +2339,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("charoff"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2141,6 +2348,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("nowrap"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2149,6 +2357,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("valign"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2157,6 +2366,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2165,6 +2375,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["row", "col", "rowgroup", "colgroup"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2184,6 +2395,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("accept-charset"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2192,6 +2404,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2200,6 +2413,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2208,6 +2422,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("novalidate"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2216,6 +2431,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2224,6 +2440,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2232,6 +2449,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("rel"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -2240,6 +2458,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["on", "off"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2248,6 +2467,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2256,6 +2476,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("enctype"),
                 keywords: &["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2264,6 +2485,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["get", "post", "dialog"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2283,6 +2505,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("for"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2302,6 +2525,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2310,6 +2534,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2318,6 +2543,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2326,6 +2552,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("checked"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2334,6 +2561,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("dirname"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2342,6 +2570,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2350,6 +2579,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formaction"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2358,6 +2588,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formnovalidate"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2366,6 +2597,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formtarget"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2374,6 +2606,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2382,6 +2615,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2390,6 +2624,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2398,6 +2633,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2406,6 +2642,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2414,6 +2651,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2422,6 +2660,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("readonly"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2430,6 +2669,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2438,6 +2678,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("20"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2446,6 +2687,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2454,6 +2696,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2462,6 +2705,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("value"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2470,6 +2714,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2478,6 +2723,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("usemap"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2486,6 +2732,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["on", "off"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2494,6 +2741,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formenctype"),
                 keywords: &["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2502,6 +2750,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2510,6 +2759,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2518,6 +2768,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2537,6 +2788,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2545,6 +2797,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formaction"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2553,6 +2806,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formnovalidate"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2561,6 +2815,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formtarget"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2569,6 +2824,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2577,6 +2833,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2585,6 +2842,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("formenctype"),
                 keywords: &["application/x-www-form-urlencoded", "multipart/form-data", "text/plain"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2593,6 +2851,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["submit", "reset", "button"],
                 missing: Some("submit"),
+                range: None,
                 readonly: false,
             },
         ],
@@ -2612,6 +2871,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2620,6 +2880,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2628,6 +2889,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2636,6 +2898,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2644,6 +2907,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2652,6 +2916,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["on", "off"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2681,6 +2946,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2689,6 +2955,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2708,6 +2975,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2716,6 +2984,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("selected"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2724,6 +2993,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2732,6 +3002,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2751,6 +3022,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("dirname"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2759,6 +3031,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2767,6 +3040,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2775,6 +3049,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2783,6 +3058,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("readonly"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2791,6 +3067,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2799,6 +3076,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2807,6 +3085,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &["on", "off"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2815,6 +3094,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2823,6 +3103,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2842,6 +3123,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("for"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -2850,6 +3132,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2889,6 +3172,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2897,6 +3181,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2916,6 +3201,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2945,6 +3231,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2953,6 +3240,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2972,6 +3260,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -2991,6 +3280,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -2999,6 +3289,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3007,6 +3298,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("nomodule"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3015,6 +3307,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3023,6 +3316,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: true,
             },
             ReflectedAttribute {
@@ -3031,6 +3325,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3039,6 +3334,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3047,6 +3343,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3055,6 +3352,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("for"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3063,6 +3361,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("crossorigin"),
                 keywords: &["anonymous", "use-credentials"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3071,6 +3370,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("referrerpolicy"),
                 keywords: &["", "no-referrer", "no-referrer-when-downgrade", "same-origin", "origin", "strict-origin", "origin-when-cross-origin", "strict-origin-when-cross-origin", "unsafe-url"],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3079,6 +3379,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3098,6 +3399,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("shadowrootdelegatesfocus"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3106,6 +3408,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("shadowrootclonable"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3114,6 +3417,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("shadowrootserializable"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3122,6 +3426,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("shadowrootcustomelementregistry"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3141,6 +3446,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3160,6 +3466,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("300"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3168,6 +3475,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("150"),
+                range: None,
                 readonly: false,
             },
         ],
@@ -3187,6 +3495,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3195,6 +3504,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("bgcolor"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3203,6 +3513,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3211,6 +3522,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3219,6 +3531,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3227,6 +3540,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("scrollamount"),
                 keywords: &[],
                 missing: Some("6"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3235,6 +3549,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("scrolldelay"),
                 keywords: &[],
                 missing: Some("85"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3243,6 +3558,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("truespeed"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3251,6 +3567,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3259,6 +3576,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3278,6 +3596,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3286,6 +3605,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3305,6 +3625,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3313,6 +3634,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3321,6 +3643,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3329,6 +3652,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("frameborder"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3337,6 +3661,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("longdesc"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3345,6 +3670,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("noresize"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3353,6 +3679,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("marginheight"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3361,6 +3688,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("marginwidth"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3380,6 +3708,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3399,6 +3728,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3407,6 +3737,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3415,6 +3746,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3434,6 +3766,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3442,6 +3775,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3450,6 +3784,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3458,6 +3793,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("valuetype"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],
@@ -3477,6 +3813,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3485,6 +3822,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3493,6 +3831,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: None,
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
             ReflectedAttribute {
@@ -3501,6 +3840,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
                 attr: Some("playsinline"),
                 keywords: &[],
                 missing: None,
+                range: None,
                 readonly: false,
             },
         ],

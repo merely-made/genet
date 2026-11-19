@@ -36,6 +36,7 @@ pub struct Reflected {
     pub attr: Option<String>,
     pub keywords: Vec<&'static str>,
     pub missing: Option<String>,
+    pub range: Option<(u32, u32)>,
     pub readonly: bool,
 }
 
@@ -50,6 +51,7 @@ fn r(idl: &str, kind: &'static str) -> Reflected {
         attr: None,
         keywords: Vec::new(),
         missing: None,
+        range: None,
         readonly: false,
     }
 }
@@ -429,15 +431,24 @@ fn classify(a: &Attribute) -> Option<Reflected> {
         None => None,
     };
     let missing = match kind {
+        "ul" if a.ext.has("ReflectRange") => default,
         "l" | "ul" => Some(default.unwrap_or_else(|| "0".to_string())),
         _ => default,
     };
+    let range = a.ext.value("ReflectRange").map(|v| {
+        let (min, max) = v.split_once(',').expect("ReflectRange requires two bounds");
+        let min = min.parse::<u32>().expect("invalid ReflectRange minimum");
+        let max = max.parse::<u32>().expect("invalid ReflectRange maximum");
+        assert!(kind == "ul" && min <= max, "invalid ReflectRange attribute");
+        (min, max)
+    });
     Some(Reflected {
         idl: a.name.clone(),
         kind,
         attr,
         keywords: Vec::new(),
         missing,
+        range,
         readonly: a.readonly,
     })
 }
@@ -724,6 +735,13 @@ pub fn emit(
                 o.push_str(&format!(
                     "                missing: {},\n",
                     rust_opt(a.missing.as_ref())
+                ));
+                o.push_str(&format!(
+                    "                range: {},\n",
+                    match a.range {
+                        Some((min, max)) => format!("Some(({min}, {max}))"),
+                        None => "None".to_string(),
+                    }
                 ));
                 o.push_str(&format!("                readonly: {},\n", a.readonly));
                 o.push_str("            },\n");

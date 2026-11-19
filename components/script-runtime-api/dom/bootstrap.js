@@ -5660,7 +5660,7 @@
       if (!isFinite(v) || v < 0) return 0;
       return Math.floor(v) >>> 0;
     }
-    function def(idl, kind, attr, keywords, miss, readonly) {
+    function def(idl, kind, attr, keywords, miss, range, readonly) {
       // Reflected HTML content-attribute names are lowercase (tabIndex ->
       // tabindex); this also keeps get/set consistent with HTML setAttribute,
       // which lowercases. Explicit names passed in are already lowercase.
@@ -5704,8 +5704,29 @@
         desc.set = function(v) { this.setAttribute(attr, String(toLong(v))); };
       } else if (kind === 'ul') {
         var unsignedMissing = miss === null || miss === undefined ? 0 : toUnsignedLong(miss);
-        desc.get = function() { var n = parseHtmlUnsignedLong(this.getAttribute(attr)); return n === null ? unsignedMissing : n; };
-        desc.set = function(v) { this.setAttribute(attr, String(toUnsignedLong(v))); };
+        desc.get = function() {
+          if (!range) { var n = parseHtmlUnsignedLong(this.getAttribute(attr)); return n === null ? unsignedMissing : n; }
+          var raw = this.getAttribute(attr);
+          var match = raw === null ? null : /^[ \t\n\f\r]*([+-]?)([0-9]+)/.exec(String(raw));
+          var parsed = 0;
+          if (match) {
+            // Saturate while parsing so arbitrarily long integers remain clampable.
+            var digits = match[2];
+            for (var i = 0; i < digits.length; i++) {
+              parsed = Math.min(range[1] + 1, parsed * 10 + digits.charCodeAt(i) - 48);
+            }
+          }
+          if (!match || (match[1] === '-' && parsed !== 0)) {
+            return miss === null || miss === undefined ? range[0] : unsignedMissing;
+          }
+          return Math.min(range[1], Math.max(range[0], parsed));
+        };
+        desc.set = function(v) {
+          if (!range) { this.setAttribute(attr, String(toUnsignedLong(v))); return; }
+          // Web IDL unsigned long conversion precedes HTML's setter fallback.
+          var n = v >>> 0;
+          this.setAttribute(attr, String(n > 2147483647 ? unsignedMissing : n));
+        };
       } else if (kind === 't') {
         // tokenlist: a DOMTokenList over the content attribute (e.g. relList -> rel).
         // Every one of these is [SameObject, PutForwards=value] in IDL, so
@@ -5736,7 +5757,7 @@
     }
     for (var i = 0; i < attrs.length; i++) {
       var a = attrs[i];
-      def(a.idl, a.kind, a.attr, a.keywords || [], a.missing, !!a.readonly);
+      def(a.idl, a.kind, a.attr, a.keywords || [], a.missing, a.range, !!a.readonly);
     }
   }
 

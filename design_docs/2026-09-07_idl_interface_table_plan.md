@@ -281,10 +281,6 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- `[ReflectRange=(a, b)]` is parsed but not applied: `colSpan`, `rowSpan`,
-  `span` and `headingOffset` take their `[ReflectDefault]` and are not clamped.
-  This matches the pre-lane behaviour exactly; clamping is reflection-algorithm
-  work, which this lane deliberately does not do.
 - `[ReflectNonNegative]`, `[ReflectPositive]` and
   `[ReflectPositiveWithFallback]` produce nothing, so `maxLength`, `minLength`,
   `<textarea>`'s `cols`/`rows` and `<meter>`'s `double` limits stay absent, as
@@ -297,6 +293,28 @@ three are the case-preservation limit recorded in F6.
   `uievents.idl` and the rest of the 338 vendored IDL files are untouched;
   extending the shape pass to them is the obvious next slice and is not
   scheduled.
+
+## `[ReflectRange]` follow-through (2026-11-17)
+
+The generator passes the IDL bounds through the Rust table to the JavaScript
+property descriptor. `headingOffset` uses 0–8, `span` and `colSpan` use 1–1000,
+and `rowSpan` uses 0–65534. The getter clamps valid nonnegative integers and
+uses the reflected default or lower bound for missing or invalid text. The
+setter stores the value produced by the ordinary unsigned-long reflection
+rules. [HTML reflection rules](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes)
+
+The focused runtime control passed on Bole and Vano after failing on both in
+the pre-fix run. It covers the bounds, defaults, retained attribute text,
+unsigned conversion, and integers larger than the engine's integer parser
+could handle. The checked-in table passes the generator's `--check`.
+
+The `reflection-tabular.html` WPT passed 6100/6116 assertions on Bole and
+6110/6116 on Vano, up from 6022/6116 and 6032/6116 on the prior frozen runner.
+Each engine gained all 78 previously failing range assertions and preserved
+every prior pass. The 16 remaining Bole failures and six remaining Vano
+failures concern `tabIndex` negative zero and legacy string null handling.
+The raw maps and assertion comparison are retained in
+`Code/output/genet-reflect-range/`.
 
 ## Progress
 

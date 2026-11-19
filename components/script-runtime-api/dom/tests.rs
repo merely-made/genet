@@ -416,6 +416,44 @@ fn validation_pseudo_classes_match_in_js_selectors_on_boa() {
     );
 }
 
+fn reflected_ranges_work<E: ScriptEngine>() {
+    use genet_static_dom::StaticDocument;
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.load_dom(&StaticDocument::parse("<html><body></body></html>"));
+    rt.eval(r#"
+      var cases = [['div','headingOffset',0,8,0], ['col','span',1,1000,1],
+                   ['colgroup','span',1,1000,1], ['td','colSpan',1,1000,1],
+                   ['td','rowSpan',0,65534,1]];
+      cases.forEach(function(c) {
+        var e = document.createElement(c[0]), p = c[1], a = p.toLowerCase();
+        function check(ok, label) { if (!ok) throw new Error(c[0]+'.'+p+': '+label); }
+        check(e[p] === c[4], 'missing');
+        [['bad',c[4]], ['0',c[2]], ['+2',2], ['-0',c[2]], ['-1',c[4]],
+         [String(c[2]),c[2]], [String(c[3]),c[3]], [String(c[3]+1),c[3]], ['2147483648',c[3]],
+         ['9999999999999999999999999999999999999999',c[3]]].forEach(function(x) {
+          e.setAttribute(a,x[0]); check(e[p] === x[1], 'get '+x[0]+' got '+e[p]);
+          check(e.getAttribute(a) === x[0], 'raw '+x[0]);
+        });
+        e[p] = 0; check(e.getAttribute(a) === '0' && e[p] === c[2], 'setter zero');
+        e[p] = c[3]+1; check(e.getAttribute(a) === String(c[3]+1) && e[p] === c[3], 'setter above range');
+        e[p] = -1; check(e.getAttribute(a) === String(c[4]), 'setter negative fallback');
+        e[p] = 4294967297; check(e.getAttribute(a) === '1', 'setter modulo');
+        e[p] = 2147483648; check(e.getAttribute(a) === String(c[4]), 'setter overflow fallback');
+      });
+    "#).expect("range reflection");
+}
+
+#[test]
+fn reflected_ranges_on_boa() {
+    reflected_ranges_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_ranges_on_nova() {
+    reflected_ranges_work::<script_engine_nova::NovaEngine>();
+}
+
 /// Reflected IDL attributes + namespace getters + createElementNS + tree
 /// walker + document.title, against any backend.
 fn dom_reflection_ns_works<E: ScriptEngine>() {

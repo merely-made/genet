@@ -2612,7 +2612,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "action",
-                kind: "u",
+                kind: "form-action",
                 attr: None,
                 keywords: &[],
                 missing: None,
@@ -2804,7 +2804,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "formAction",
-                kind: "u",
+                kind: "form-action",
                 attr: Some("formaction"),
                 keywords: &[],
                 missing: None,
@@ -3075,7 +3075,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "formAction",
-                kind: "u",
+                kind: "form-action",
                 attr: Some("formaction"),
                 keywords: &[],
                 missing: None,

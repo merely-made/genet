@@ -142,6 +142,10 @@ macro_rules! set {
 ///   still gives a non-zero missing-value default.
 /// * `union` — the IDL type is a union the reflection kinds do not model.
 pub const OVERRIDES: &[Override] = &[
+    // Action URL reflection has document-URL defaults unlike ordinary URL reflection.
+    set!("HTMLFormElement", "action", "prose", r("action", "form-action")),
+    set!("HTMLInputElement", "formAction", "prose", r("formAction", "form-action").attr("formaction")),
+    set!("HTMLButtonElement", "formAction", "prose", r("formAction", "form-action").attr("formaction")),
     // enum: keyword sets and missing-value defaults are prose, not IDL.
     set!(
         "HTMLElement",

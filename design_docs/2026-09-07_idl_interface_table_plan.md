@@ -465,6 +465,32 @@ All failing encoding assertions moved to pass. `form.enctype` and
 and zero regressions. The frozen runner, raw maps, and assertion comparison
 are retained in `Code/output/genet-encoding-reflection/`.
 
+## Form action URL reflection (2026-11-19)
+
+`form.action`, `input.formAction`, and `button.formAction` return the owner
+document's URL when the corresponding attribute is missing or empty. A
+nonempty value resolves against that document's effective base URL. A value
+that fails URL parsing is returned as a scalar-value string. The setters
+store the Web IDL `USVString` value without resolving it.
+[HTML form submission attributes](https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#form-submission-attributes)
+[Web IDL `USVString` conversion](https://webidl.spec.whatwg.org/#es-USVString)
+
+The focused test failed before the fix and passed afterward on Bole and Vano.
+It covers missing and empty values with a live `<base>`, relative resolution
+after base changes, adoption into auxiliary and frame documents, raw attribute
+writes, invalid URL fallback, scalar conversion, and legacy query encoding.
+The freshly built generator passed `--check`.
+
+The unmodified `reflection-forms.html` improved from 8005/8271 to 8008/8271
+on both engines, gaining the three missing-attribute defaults with zero
+regressions. The fixture builds its expected URLs from anchor component
+getters that Genet has yet to implement, which affects the 120 remaining
+action assertions. An isolated copy restricted to the three action properties
+used URL expectations precomputed with Node's WHATWG URL parser and kept all
+132 named action assertions. It moved from 129/132 to 132/132 on both engines.
+The frozen runner, raw maps, diagnostic fixture, and assertion comparison are
+retained in `Code/output/genet-action-reflection/`.
+
 ## Progress
 
 - **2026-09-07** — Generator written (`support/idl-interface-table`, 1,323

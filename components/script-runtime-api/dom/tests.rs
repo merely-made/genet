@@ -1419,6 +1419,68 @@ fn dom_url_reflection_works<E: ScriptEngine>() {
     );
 }
 
+/// Form action URL reflection uses the owner document URL for missing and empty
+/// values, and the current document base for nonempty values.
+fn form_action_url_reflection_works<E: ScriptEngine>() {
+    use genet_static_dom::StaticDocument;
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.set_base_url("https://example.test/dir/page?query#fragment").unwrap();
+    rt.load_dom(&StaticDocument::parse("<html><head><base href='https://cdn.test/a/'></head><body><form id='f' action='submit'><input id='i'><button id='b'></button></form></body></html>"));
+    rt.eval(r#"
+      function check(x, label) { if (!x) throw new Error(label); }
+      var f = document.getElementById('f'), i = document.getElementById('i'), b = document.getElementById('b');
+      var doc = 'https://example.test/dir/page?query#fragment';
+      check(i.formAction === doc && b.formAction === doc, 'missing submitter action');
+      f.removeAttribute('action'); check(f.action === doc, 'missing form action');
+      [ [f,'action','action'], [i,'formAction','formaction'], [b,'formAction','formaction'] ].forEach(function(c) {
+        var e=c[0], p=c[1], a=c[2];
+        e.setAttribute(a, ''); check(e[p] === doc, 'empty ' + p);
+        e[p] = '../next?q#f'; check(e.getAttribute(a) === '../next?q#f', 'raw ' + p);
+        check(e[p] === 'https://cdn.test/next?q#f', 'resolved ' + p);
+        e.setAttribute(a, 'http://['); check(e[p] === 'http://[', 'invalid ' + p);
+        e[p] = '\uD800'; check(e.getAttribute(a) === '\uFFFD', 'USVString ' + p);
+        e[p] = 'path';
+      });
+      document.querySelector('base').href = 'https://other.test/new/';
+      check(f.action === 'https://other.test/new/path' && i.formAction === f.action && b.formAction === f.action, 'live base');
+      f.action = 'parent'; i.removeAttribute('formaction'); b.removeAttribute('formaction');
+      check(i.formAction === doc && b.formAction === doc, 'no inheritance');
+      var other = document.implementation.createHTMLDocument('other');
+      other.adoptNode(i); check(i.formAction === 'about:blank', 'adopted missing');
+      i.formAction = 'http://['; check(i.formAction === 'http://[', 'adopted invalid');
+      var frame = document.createElement('iframe'); document.body.appendChild(frame);
+      var child = frame.contentDocument; child.adoptNode(b);
+      check(b.formAction === 'about:blank', 'frame document URL');
+      b.formAction = 'inherited'; check(b.formAction === 'https://other.test/new/inherited', 'frame inherited base');
+    "#).expect("form action URL reflection");
+    rt.set_document_encoding(crate::DocumentEncoding {
+        encoding: encoding_rs::WINDOWS_1252,
+        confidence: crate::EncodingConfidence::Certain,
+    });
+    rt.eval(r#"f.action = '?q=é'; if (f.action !== 'https://other.test/new/?q=%E9') throw new Error('legacy query');"#)
+        .expect("legacy-encoded form action");
+    rt.eval(r#"f.action = '?q=☃'; if (f.action !== 'https://other.test/new/?q=%26%239731%3B') throw new Error('legacy unmappable query');"#)
+        .expect("legacy unmappable form action");
+    rt.eval("f.action = '?q=é';").unwrap();
+    rt.set_document_encoding(crate::DocumentEncoding {
+        encoding: encoding_rs::UTF_16LE,
+        confidence: crate::EncodingConfidence::Certain,
+    });
+    rt.eval(r#"if (f.action !== 'https://other.test/new/?q=%C3%A9') throw new Error('UTF-16 output encoding');"#)
+        .expect("UTF-16 form action");
+}
+
+#[test]
+fn form_action_url_reflection_on_boa() {
+    form_action_url_reflection_works::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(target_pointer_width = "64")]
+#[test]
+fn form_action_url_reflection_on_nova() {
+    form_action_url_reflection_works::<script_engine_nova::NovaEngine>();
+}
+
 #[test]
 fn dom_collections_on_boa() {
     dom_collections_works::<script_engine_boa::BoaEngine>();

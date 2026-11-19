@@ -5813,6 +5813,38 @@
         // assigning to the IDL attribute writes the content attribute.
         desc.get = function() { return makeDOMTokenList(this, attr); };
         desc.set = function(v) { this.setAttribute(attr, String(v)); };
+      } else if (kind === 'form-action') {
+        desc.get = function() {
+          var doc = ownerDocumentOf(this);
+          var reader = nodeBaseReaders.get(doc);
+          var v = this.getAttribute(attr);
+          if (v === null || v === '') return reader(doc.__ref, 'document');
+          var base = reader(doc.__ref);
+          // Secondary documents share an arena with the primary document.
+          // Their own base is anchored to their about:blank document URL.
+          if (reader(doc.__ref, 'primary') === 'false') {
+            base = reader(doc.__ref, 'document');
+            var bases = doc.querySelectorAll('base[href]');
+            var firstBase = null;
+            for (var n = 0; n < bases.length; n++) {
+              if (bases[n].namespaceURI === XHTML_NS) { firstBase = bases[n]; break; }
+            }
+            if (firstBase) {
+              try {
+                var parsedBase = new URL(firstBase.getAttribute('href'), base);
+                if (parsedBase.protocol !== 'data:' && parsedBase.protocol !== 'javascript:') base = parsedBase.href;
+              } catch (_) {}
+            }
+          }
+          return __resolveFormAction(doc.__ref, v, base);
+        };
+        desc.set = function(v) {
+          // Web IDL USVString replaces unpaired UTF-16 surrogates.
+          if (typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
+          var value = String(v).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g,
+            function(pair) { return pair.length === 2 ? pair : '\uFFFD'; });
+          this.setAttribute(attr, value);
+        };
       } else if (kind === 'u') {
         // url: reflect the content attribute resolved against the document base URL
         // (absent -> ""); the raw string is stored on set. `__resolve_url` returns the

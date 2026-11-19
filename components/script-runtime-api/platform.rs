@@ -17,7 +17,7 @@ use std::rc::Rc;
 use layout_dom_api::LayoutDom;
 use script_engine_api::{CallCx, NativeFn, ScriptEngine};
 
-use crate::HostState;
+use crate::{HostState, OwnerResolvedCx};
 
 /// Hide a parsed Scroll-to-Text Fragment directive from every script-visible
 /// document URL surface. The ordinary element fragment before `:~:` remains
@@ -135,7 +135,8 @@ struct NodeBaseURI;
 impl<E: ScriptEngine> NativeFn<E> for NodeBaseURI {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let selector = cx.arg(1);
-        let fallback = cx.value_to_string(&selector)? == "fallback";
+        let selector = cx.value_to_string(&selector)?;
+        let fallback = selector == "fallback";
         let value = cx.arg(0);
         let raw = cx
             .reflector_data(&value)
@@ -151,13 +152,67 @@ impl<E: ScriptEngine> NativeFn<E> for NodeBaseURI {
             return Err(cx.error("DOM node is no longer live"));
         };
         let host = host.borrow();
-        let base = if fallback {
+        if selector == "primary" {
+            return cx.make_string(if id == host.dom.document() { "true" } else { "false" });
+        }
+        let base = if selector == "document" {
+            if id == host.dom.document() {
+                Some(script_visible_document_url(host.base_url.as_deref().unwrap_or("about:blank")))
+            } else {
+                Some("about:blank".into())
+            }
+        } else if fallback {
             host.fallback_base_url().map(str::to_owned)
         } else {
             host.document_base_url()
         }
         .unwrap_or_else(|| "about:blank".into());
         cx.make_string(&base)
+    }
+}
+
+/// Resolve a form action using its owner document's encoding for URL queries.
+struct ResolveFormAction;
+impl<E: ScriptEngine> NativeFn<E> for ResolveFormAction {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let doc = cx.arg(0);
+        let node = cx.owned_node(&doc)?.ok_or_else(|| cx.error("Document receiver required"))?;
+        let encoding = node.with_dom(|dom| dom.document_encoding(node.id()))
+            .ok_or_else(|| cx.error("Document receiver required"))?.encoding;
+        let encoding = encoding.output_encoding();
+        let input_arg = cx.arg(1);
+        let input = cx.value_to_string(&input_arg)?;
+        let base_arg = cx.arg(2);
+        let base = cx.value_to_string(&base_arg)?;
+        let encode: &dyn for<'a> Fn(&'a str) -> std::borrow::Cow<'a, [u8]> = &|s| {
+            let (bytes, _, had_errors) = encoding.encode(s);
+            if !had_errors { return bytes; }
+            // The query parser has already split on '#', so numeric references
+            // here are encoding_rs's replacements for unmappable code points.
+            let mut out = Vec::with_capacity(bytes.len());
+            let mut i = 0;
+            while i < bytes.len() {
+                if bytes.get(i..i + 2) == Some(b"&#") {
+                    let mut end = i + 2;
+                    while end < bytes.len() && bytes[end].is_ascii_digit() { end += 1; }
+                    if end > i + 2 && bytes.get(end) == Some(&b';') {
+                        out.extend_from_slice(b"%26%23");
+                        out.extend_from_slice(&bytes[i + 2..end]);
+                        out.extend_from_slice(b"%3B");
+                        i = end + 1;
+                        continue;
+                    }
+                }
+                out.push(bytes[i]);
+                i += 1;
+            }
+            std::borrow::Cow::Owned(out)
+        };
+        let base = url::Url::parse(&base).ok();
+        let result = url::Url::options().base_url(base.as_ref())
+            .encoding_override(Some(encode)).parse(&input)
+            .map(|url| url.to_string()).unwrap_or(input);
+        cx.make_string(&result)
     }
 }
 
@@ -552,6 +607,7 @@ pub(crate) fn install_platform_surface<E: ScriptEngine>(
 ) -> Result<(), crate::SurfaceError<E::Error>> {
     engine.set_function::<LocationField>("__locationField", 1)?;
     engine.set_function::<NodeBaseURI>("__nodeBaseURI", 2)?;
+    engine.set_function::<ResolveFormAction>("__resolveFormAction", 3)?;
     engine.set_function::<AncestorOrigins>("__ancestorOrigins", 1)?;
     engine.set_function::<EnvironmentOrigin>("__environmentOrigin", 1)?;
     engine.set_function::<HistoryPush>("__historyPush", 3)?;

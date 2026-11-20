@@ -1231,6 +1231,30 @@ text inputs and textareas, under the UA sheet, `border-box` and
 
 ---
 
+### Image-button sizing (2026-11-20)
+
+`replaced_intrinsic_size` in `components/genet-livery/src/layout.rs` reads
+decoded image dimensions for `img`. The form-control sizing path gives
+`input type=image` no intrinsic size. With image availability and metadata
+from [Fetch P2](2026-10-20_fetch_request_security_plan.md#image-button-resource-loading-2026-11-20),
+feed the image's natural dimensions and aspect ratio into replaced-element
+sizing, and refresh layout when the current image changes. The
+`input.width` and `.height` getters need the natural-size result for image
+buttons without a rendered box, with valid dimension attributes taking
+precedence. Rendered buttons read the content box. Qualify loaded, unavailable,
+hidden and detached buttons on both engines, with explicit attribute
+overrides, aspect-ratio sizing and a source change.
+[HTML input dimensions](https://html.spec.whatwg.org/multipage/input.html#dom-input-width)
+· [HTML dimension attributes](https://html.spec.whatwg.org/multipage/embedded-content-other.html#dimension-attributes)
+
+The [IDL reflection closeout](archive_docs/2026-11-20/2026-09-07_idl_interface_table_plan.md#input-width-and-height-reflection-2026-11-20)
+also records an independent sizing discrepancy. The pre-fix probe on both
+engines reported a 64 px border-box height with an authored and computed
+height of 40 px and 16 px of vertical padding and borders. The measured
+content height was 48 px. Reproduce that fixture and trace the used height
+through Livery and Buckram. The existing getter test checks the measured
+content box. Probe evidence lives in `Code/output/genet-input-dimensions/baseline/`.
+
 ## T4. Retained fragments inside layer scopes
 
 **Status, 2026-09-16:** implemented and measured in netrender, committed as

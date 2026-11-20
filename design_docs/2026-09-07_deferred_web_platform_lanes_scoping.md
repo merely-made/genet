@@ -9,7 +9,7 @@ and names the proof a promoted execution plan must carry.
 
 **Parent:** [Web platform WPT census](2026-09-06_web_platform_wpt_census.md).
 The [harness repair](2026-09-07_wpt_harness_repair_plan.md),
-[IDL interfaces](2026-09-07_idl_interface_table_plan.md),
+[IDL interfaces](archive_docs/2026-11-20/2026-09-07_idl_interface_table_plan.md),
 [cheap globals](2026-11-03_globals_clone_timing_frontier_plan.md),
 [MutationObserver](archive_docs/2026-11-16/2026-09-07_mutation_observer_plan.md),
 [XMLHttpRequest](2026-09-07_xhr_plan.md), and
@@ -643,3 +643,14 @@ not declare the listed historical residuals to be current reproduced defects.
 The five held plans and the active RTC source/receipt remain with their current
 owners. A carry into this inventory does not close their implementation,
 conformance, runtime, human or platform checkpoints.
+
+## Deferred IDL shape coverage (2026-11-20)
+
+`support/idl-interface-table` uses `html.idl` for the HTML table and
+`dom.idl`, `cssom.idl` and `selection-api.idl` for additional interface
+shapes. Evaluating `svg.idl`, `uievents.idl` and other vendored inputs remains
+unscheduled. A promoted plan should name the interface groups, preserve
+working bootstrap implementations, and check interface exposure and
+feature-detection behavior on both engines. The
+[original generator plan](archive_docs/2026-11-20/2026-09-07_idl_interface_table_plan.md)
+records the scope of the initial landing.

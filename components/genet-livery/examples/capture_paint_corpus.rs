@@ -73,6 +73,7 @@ fn kind(cmd: &PaintCmd) -> &'static str {
         PaintCmd::DrawRepeatingImage(_) => "DrawRepeatingImage",
         PaintCmd::DrawExternalTexture(_) => "DrawExternalTexture",
         PaintCmd::DrawShadow(_) => "DrawShadow",
+        PaintCmd::DrawBackdropBlur(_) => "DrawBackdropBlur",
         PaintCmd::PushShadow(_) => "PushShadow",
         PaintCmd::PopAllShadows => "PopAllShadows",
         PaintCmd::HitTest(_) => "HitTest",

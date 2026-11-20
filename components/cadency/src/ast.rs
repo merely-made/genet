@@ -290,6 +290,16 @@ impl<P> Selector<P> {
     pub fn depends_on_structure(&self) -> bool {
         self.any_simple(&|s| matches!(s, Simple::Empty | Simple::Nth(_) | Simple::Only { .. }))
     }
+
+    pub fn depends_on_text_content(&self) -> bool {
+        self.any_simple(&|s| matches!(s, Simple::Empty))
+    }
+
+    pub fn tests_attribute(&self, name: &str) -> bool {
+        self.any_simple(
+            &|s| matches!(s, Simple::Attribute(attr) if attr.name_lower.as_ref() == name),
+        )
+    }
 }
 
 /// A comma-separated selector list.

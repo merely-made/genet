@@ -611,6 +611,14 @@ impl StyleSet {
         self.rules.iter().any(StyleRule::has_structural_dependency)
     }
 
+    pub(crate) fn depends_on_text_content(&self) -> bool {
+        self.rules.iter().any(StyleRule::depends_on_text_content)
+    }
+
+    pub(crate) fn tests_attribute(&self, name: &str) -> bool {
+        self.rules.iter().any(|rule| rule.tests_attribute(name))
+    }
+
     pub(crate) fn has_container_queries(&self) -> bool {
         self.rules.iter().any(StyleRule::has_container_query)
     }
@@ -774,6 +782,20 @@ where
 {
     pub fn get(&self, id: Id) -> Option<&ComputedValues> {
         self.values.get(&id)
+    }
+
+    pub(crate) fn title_used_in_generated_content(&self, id: Id) -> bool
+    where
+        Id: Copy,
+    {
+        use buckram::PseudoElement::{After, Before, Marker};
+        use livery::values::{Content, ContentItem};
+        [Before, After, Marker].iter().any(|pseudo| {
+            self.generated.get(&(id, *pseudo)).is_some_and(|(style, _)| {
+                matches!(&style.content, Content::Items(items) if items.iter().any(|item|
+                    matches!(item, ContentItem::Attribute(name) if name.eq_ignore_ascii_case("title"))))
+            })
+        })
     }
 
     /// Current computed background sources, including generated boxes. The

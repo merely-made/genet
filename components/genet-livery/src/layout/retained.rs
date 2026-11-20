@@ -17,11 +17,16 @@ use super::*;
 /// full-document path until their side planes have an equivalent replacement
 /// primitive. Its local text frame is shaped with the document's retained
 /// text system, then merged into the outside frame at publication.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one formatting attempt borrows the current and previous layout inputs"
+)]
 pub(crate) fn layout_retained_formatting_root<D>(
     dom: &D,
     styles: &StylePlane<D::NodeId>,
     previous_styles: &StylePlane<D::NodeId>,
     previous: &LiveryLayout<D::NodeId>,
+    box_tree: &mut Option<GeneratedBoxTree<D::NodeId>>,
     node: D::NodeId,
     text: &mut TextSystem,
     image_sources: &dyn crate::ImageSourceLookup,
@@ -34,16 +39,32 @@ where
         return Ok(RetainedRootFormatting::Unsupported);
     }
 
-    let boxes = GeneratedBoxTree::from_dom(dom, styles);
-    let Some(root_box) = retained_root_box(&boxes, node) else {
+    let boxes = box_tree.get_or_insert_with(|| GeneratedBoxTree::from_dom(dom, styles));
+    let Some(root_box) = retained_root_box(boxes, node) else {
         // An inline-formatting node (text under a block container) cannot be
         // a root; its nearest admitted ancestor can.
         return Ok(RetainedRootFormatting::PromoteParent);
     };
+    if boxes[root_box].formatting_context == Some(FormattingContextKind::Inline)
+        && ((!std::ptr::eq(styles, previous_styles) && styles != previous_styles)
+            || !styles.get(node).is_some_and(|style| {
+                // Only isolated line formatting can reuse the parent's box
+                // without replaying floats from preceding siblings.
+                boxes[root_box].display.inside == Some(DisplayInside::FlowRoot)
+                    || [style.overflow_x, style.overflow_y].iter().any(|overflow| {
+                        matches!(
+                            overflow,
+                            CssOverflow::Hidden | CssOverflow::Auto | CssOverflow::Scroll
+                        )
+                    })
+            }))
+    {
+        return Ok(RetainedRootFormatting::PromoteParent);
+    }
     let table_root = boxes[root_box].display.internal_table == Some(InternalTableRole::Wrapper);
-    if !(table_root && supports_retained_table_root_formatting(&boxes, root_box)
-        || !table_root && supports_retained_root_formatting(&boxes, root_box))
-        || !retained_ancestor_styles_unchanged(&boxes, styles, previous_styles, root_box)
+    if !(table_root && supports_retained_table_root_formatting(boxes, root_box)
+        || !table_root && supports_retained_root_formatting(boxes, root_box))
+        || !retained_ancestor_styles_unchanged(boxes, styles, previous_styles, root_box)
     {
         return Ok(RetainedRootFormatting::Unsupported);
     }
@@ -86,7 +107,7 @@ where
     let mut state = InlineBuildState {
         dom,
         styles,
-        boxes: &boxes,
+        boxes,
         atomic: &atomic,
         text_batch: text_batch::TextBatch::new(text.shaping_options().record_timings),
         tree: {
@@ -99,7 +120,7 @@ where
         pending_tables: Vec::new(),
         pending_table_handoff: None,
     };
-    let parent_font_size = inherited_font_size(&boxes, styles, root_box);
+    let parent_font_size = inherited_font_size(boxes, styles, root_box);
     let Some(formatted_root) = state.build_box(
         root_box,
         None,
@@ -145,7 +166,7 @@ where
                 text,
                 dom,
                 styles,
-                &boxes,
+                boxes,
                 &atomic,
                 &mut intrinsic_sizes,
                 known,
@@ -170,7 +191,7 @@ where
     let tables = table_paint.fragments();
     collect_inline_fragments(
         &state.tree,
-        &boxes,
+        boxes,
         formatter_root,
         FragmentCursor {
             origin: Point { x: 0.0, y: 0.0 },
@@ -220,6 +241,9 @@ where
     fragments.flush_overflow();
     drop(state);
 
+    let boxes = box_tree
+        .take()
+        .expect("formatted with the current box tree");
     let mut fresh = LiveryLayout::new(
         previous.viewport,
         LayoutResult::new(boxes.into_tree(), fragments),
@@ -245,15 +269,21 @@ pub(in crate::layout) fn supports_retained_root_formatting<Id>(
 where
     Id: Copy + Eq + Hash,
 {
-    fn visit<Id>(boxes: &GeneratedBoxTree<Id>, box_id: BoxId) -> bool
+    fn visit<Id>(boxes: &GeneratedBoxTree<Id>, box_id: BoxId, marker_owner: Option<Id>) -> bool
     where
         Id: Copy + Eq + Hash,
     {
         let css_box = &boxes[box_id];
-        if !matches!(
+        let marker = matches!(
             css_box.origin,
-            BoxOrigin::Element(_) | BoxOrigin::Text(_) | BoxOrigin::Anonymous { .. }
-        ) {
+            BoxOrigin::Pseudo { owner, pseudo: buckram::PseudoElement::Marker } if Some(owner) == marker_owner
+        );
+        if !marker
+            && !matches!(
+                css_box.origin,
+                BoxOrigin::Element(_) | BoxOrigin::Text(_) | BoxOrigin::Anonymous { .. }
+            )
+        {
             return false;
         }
         if css_box.positioning != PositioningScheme::Static {
@@ -263,6 +293,7 @@ where
             return false;
         }
         if css_box.display.outside == Some(DisplayOutside::Inline)
+            && !marker
             && !matches!(css_box.origin, BoxOrigin::Text(_))
         {
             return false;
@@ -274,10 +305,15 @@ where
             .children()
             .iter()
             .copied()
-            .all(|child| visit(boxes, child))
+            .all(|child| visit(boxes, child, marker_owner))
     }
 
-    visit(boxes, root)
+    let marker_owner = if boxes[root].display.list_item {
+        boxes.origin_node(root)
+    } else {
+        None
+    };
+    visit(boxes, root, marker_owner)
 }
 
 pub(in crate::layout) fn retained_root_box<Id>(
@@ -300,6 +336,19 @@ where
                 | FormattingContextKind::Grid
         )
     ) {
+        Some(principal)
+    } else if boxes[principal].formatting_context == Some(FormattingContextKind::Inline)
+        && boxes[principal].display.outside == Some(DisplayOutside::Block)
+        && matches!(
+            boxes[principal].display.inside,
+            Some(DisplayInside::Flow | DisplayInside::FlowRoot)
+        )
+        && boxes[principal].parent().is_some_and(|parent| {
+            boxes[parent].formatting_context == Some(FormattingContextKind::Block)
+        })
+    {
+        // A block in ordinary block flow can own its inline lines, including
+        // a list marker. Flex/grid item baselines belong to their parent.
         Some(principal)
     } else {
         None

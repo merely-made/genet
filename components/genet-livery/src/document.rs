@@ -32,9 +32,8 @@ use crate::{
     StylePlane, StyleSet, TextDirective, TextRange, TextRect, TextSelection, TextSystem,
     emit_paint_list_with_text_system_scrolled_with_images_and_document_base, hit_test_with_scroll,
     layout::{
-        RetainedRootFormatting, StickyScrollport, layout_retained_formatting_root,
-        layout_with_text_system, resolve_container_query_styles,
-        resolve_container_query_styles_with_images, retained_table_owner,
+        StickyScrollport, formatting_damage_root, layout_with_text_system, reformat_retained_root,
+        resolve_container_query_styles, resolve_container_query_styles_with_images,
     },
     resolve_styles,
 };
@@ -96,52 +95,6 @@ struct LayoutState<Id> {
     fragments: LiveryLayout<Id>,
     content_width: f32,
     content_height: f32,
-}
-
-fn nodes_in_subtree<D>(dom: &D, root: D::NodeId) -> HashSet<D::NodeId>
-where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq + Hash,
-{
-    fn visit<D>(dom: &D, node: D::NodeId, nodes: &mut HashSet<D::NodeId>)
-    where
-        D: LayoutDom,
-        D::NodeId: Copy + Eq + Hash,
-    {
-        nodes.insert(node);
-        for child in dom.flat_children(node) {
-            visit(dom, child, nodes);
-        }
-    }
-
-    let mut nodes = HashSet::new();
-    visit(dom, root, &mut nodes);
-    nodes
-}
-
-fn text_sources_in_dom_order<D>(dom: &D) -> Vec<D::NodeId>
-where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq + Hash,
-{
-    fn visit<D>(dom: &D, node: D::NodeId, sources: &mut Vec<D::NodeId>)
-    where
-        D: LayoutDom,
-        D::NodeId: Copy + Eq + Hash,
-    {
-        // Native controls retain their current text under the element's ID.
-        // Keep those virtual sources in DOM order during subtree replacement.
-        if dom.kind(node) == NodeKind::Text || dom.form_control_state(node).is_some() {
-            sources.push(node);
-        }
-        for child in dom.dom_children(node) {
-            visit(dom, child, sources);
-        }
-    }
-
-    let mut sources = Vec::new();
-    visit(dom, dom.document(), &mut sources);
-    sources
 }
 
 /// One retained transition on the generic clock (harvest H2): any

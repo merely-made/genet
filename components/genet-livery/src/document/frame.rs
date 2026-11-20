@@ -81,24 +81,7 @@ where
         let Some(layout) = self.layout.as_ref() else {
             return self.dom.document();
         };
-        let mut candidate = Some(node);
-        while let Some(current) = candidate {
-            if layout
-                .fragments
-                .boxes()
-                .boxes_for_node(current)
-                .iter()
-                .any(|box_id| {
-                    layout.fragments.boxes()[*box_id]
-                        .formatting_context
-                        .is_some()
-                })
-            {
-                return current;
-            }
-            candidate = self.dom.parent(current);
-        }
-        self.dom.document()
+        formatting_damage_root(&self.dom, &layout.fragments, node)
     }
 
     pub(in crate::document) fn insert_damage_root(
@@ -340,72 +323,41 @@ where
         if self.transitions.is_empty()
             && self.keyframe_animation.is_none()
             && !self.style_set.has_container_queries()
-            && let (Some(root), Some(previous)) = (local_root, self.layout.as_ref())
+            && let (Some(root), Some(previous)) = (local_root, self.layout.as_mut())
+            && reformat_retained_root(
+                &self.dom,
+                &styles,
+                &previous.styles,
+                &mut previous.fragments,
+                root,
+                &mut self.text,
+                &crate::DocumentImageSources::new(
+                    &self.image_sources,
+                    self.style_set.document_base_url(),
+                ),
+            )?
         {
-            let dom_text_order = text_sources_in_dom_order(&self.dom);
-            let mut candidate =
-                retained_table_owner(previous.fragments.boxes(), root).unwrap_or(root);
-            loop {
-                let mut replaced_nodes = nodes_in_subtree(&self.dom, candidate);
-                replaced_nodes.extend(previous.fragments.generated_subtree_nodes(candidate));
-                match layout_retained_formatting_root(
-                    &self.dom,
-                    &styles,
-                    &previous.styles,
-                    &previous.fragments,
-                    candidate,
-                    &mut self.text,
-                    &crate::DocumentImageSources::new(
-                        &self.image_sources,
-                        self.style_set.document_base_url(),
-                    ),
-                )? {
-                    RetainedRootFormatting::Formatted(mut local) => {
-                        local.reconcile_identifiers(&previous.fragments);
-                        // Only a formatted candidate gets a copy. Failed and
-                        // promoted roots leave the retained layout untouched.
-                        let mut fragments = previous.fragments.clone();
-                        if fragments.replace_reconciled_local_formatting_subtree_from(
-                            &local,
-                            candidate,
-                            &replaced_nodes,
-                            &dom_text_order,
-                        ) {
-                            let (content_width, content_height) =
-                                self.document_content_extent(&styles, &fragments);
-                            let layout = self
-                                .layout
-                                .as_mut()
-                                .expect("the retained root formatter had a source layout");
-                            layout.styles = styles;
-                            layout.fragments = fragments;
-                            layout.content_width = content_width;
-                            layout.content_height = content_height;
-                            self.identity_source = None;
-                            self.layout_dirty = false;
-                            self.layout_generation = self.layout_generation.saturating_add(1);
-                            #[cfg(test)]
-                            {
-                                self.retained_root_relayout_generation =
-                                    self.retained_root_relayout_generation.saturating_add(1);
-                            }
-                            self.clamp_scroll();
-                            self.clamp_nested_scroll();
-                            self.generation = self.generation.saturating_add(1);
-                            let _ = layout_span.take();
-                            return self.paint_active_layout(width, height);
-                        }
-                        break;
-                    },
-                    RetainedRootFormatting::PromoteParent => {
-                        let Some(parent) = self.dom.parent(candidate) else {
-                            break;
-                        };
-                        candidate = parent;
-                    },
-                    RetainedRootFormatting::Unsupported => break,
-                }
+            let (content_width, content_height) = self.document_content_extent(
+                &styles,
+                &self.layout.as_ref().expect("reformatted above").fragments,
+            );
+            let layout = self.layout.as_mut().expect("reformatted above");
+            layout.styles = styles;
+            layout.content_width = content_width;
+            layout.content_height = content_height;
+            self.identity_source = None;
+            self.layout_dirty = false;
+            self.layout_generation = self.layout_generation.saturating_add(1);
+            #[cfg(test)]
+            {
+                self.retained_root_relayout_generation =
+                    self.retained_root_relayout_generation.saturating_add(1);
             }
+            self.clamp_scroll();
+            self.clamp_nested_scroll();
+            self.generation = self.generation.saturating_add(1);
+            let _ = layout_span.take();
+            return self.paint_active_layout(width, height);
         }
 
         self.retain_layout_identity();

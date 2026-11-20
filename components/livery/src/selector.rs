@@ -106,6 +106,20 @@ impl SelectorList {
         self.structural_dependency
     }
 
+    pub(crate) fn depends_on_text_content(&self) -> bool {
+        self.selectors
+            .selectors()
+            .iter()
+            .any(cadency::Selector::depends_on_text_content)
+    }
+
+    pub(crate) fn tests_attribute(&self, name: &str) -> bool {
+        self.selectors
+            .selectors()
+            .iter()
+            .any(|selector| selector.tests_attribute(name))
+    }
+
     pub fn has_generated_pseudo(&self) -> bool {
         self.generated_dependency
     }

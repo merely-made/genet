@@ -51,13 +51,11 @@ where
     where
         D: LayoutDom<NodeId = Id>,
     {
-        /// The box-tree descent's one entry per DOM level. It keeps a whole
-        /// cloned `ComputedValues` alive in every frame while it walks the
-        /// children, which is most of why a level is expensive; see
-        /// [`crate::with_recursion_stack`].
+        /// Grow the stack on demand for deeply nested documents.
         fn collect<D>(
             dom: &D,
             styles: &StylePlane<D::NodeId>,
+            default_style: &ComputedValues,
             node: D::NodeId,
             inherited: Option<&ComputedValues>,
             formatting_parent: Option<&ComputedValues>,
@@ -67,13 +65,22 @@ where
             D::NodeId: Copy + Eq + Hash,
         {
             crate::with_recursion_stack(move || {
-                collect_on_this_stack(dom, styles, node, inherited, formatting_parent, output)
+                collect_on_this_stack(
+                    dom,
+                    styles,
+                    default_style,
+                    node,
+                    inherited,
+                    formatting_parent,
+                    output,
+                )
             })
         }
 
         fn collect_on_this_stack<D>(
             dom: &D,
             styles: &StylePlane<D::NodeId>,
+            default_style: &ComputedValues,
             node: D::NodeId,
             inherited: Option<&ComputedValues>,
             formatting_parent: Option<&ComputedValues>,
@@ -85,11 +92,19 @@ where
             match dom.kind(node) {
                 NodeKind::Document | NodeKind::DocumentFragment => {
                     for child in dom.flat_children(node) {
-                        collect(dom, styles, child, inherited, formatting_parent, output);
+                        collect(
+                            dom,
+                            styles,
+                            default_style,
+                            child,
+                            inherited,
+                            formatting_parent,
+                            output,
+                        );
                     }
                 },
                 NodeKind::Element => {
-                    let computed = styles.get(node).cloned().unwrap_or_default();
+                    let computed = styles.get(node).unwrap_or(default_style);
                     let mut children = Vec::new();
                     // An `<iframe>`'s content model is transparent for legacy
                     // reasons, but its fallback children are never rendered:
@@ -103,7 +118,7 @@ where
                         // still comes from the nearest generated parent box.
                         let child_formatting_parent = (computed.display
                             != ComputedDisplay::Contents)
-                            .then_some(&computed)
+                            .then_some(computed)
                             .or(formatting_parent);
                         if !is_replaced_element(dom, node) {
                             generated_text_input(
@@ -118,8 +133,9 @@ where
                             collect(
                                 dom,
                                 styles,
+                                default_style,
                                 child,
-                                Some(&computed),
+                                Some(computed),
                                 child_formatting_parent,
                                 &mut children,
                             );
@@ -138,14 +154,14 @@ where
                         BoxTreeInput::new(
                             BoxOrigin::Element(node),
                             display_role(computed.display, is_replaced_element(dom, node)),
-                            flow_axes(&computed),
+                            flow_axes(computed),
                             positioning_scheme(computed.position),
                             is_replaced_element(dom, node),
                             children,
                         )
                         .with_float(float_side(computed.float))
                         .with_containing_block_establishment(containing_block_establishment(
-                            &computed,
+                            computed,
                             is_replaced_element(dom, node),
                             formatting_parent.is_some_and(|parent| {
                                 matches!(
@@ -180,7 +196,16 @@ where
         }
 
         let mut roots = Vec::new();
-        collect(dom, styles, dom.document(), None, None, &mut roots);
+        let default_style = ComputedValues::default();
+        collect(
+            dom,
+            styles,
+            &default_style,
+            dom.document(),
+            None,
+            None,
+            &mut roots,
+        );
         Self {
             tree: generate_box_tree(roots),
         }

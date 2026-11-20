@@ -138,10 +138,6 @@ path = "components/genet-livery/src/document.rs"
 reason = "Retained Livery document ownership. Existing source-size debt; a responsibility split must preserve ClickOutcome, LinkTarget, LayoutDamageKind and existing module visibility."
 
 [[exception]]
-path = "components/genet-livery/src/document/frame.rs"
-reason = "The retained frame: layout damage tracking and the paint pipeline. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
-
-[[exception]]
 path = "components/genet-livery/src/document/tests.rs"
 reason = "Document tests. Existing source-size debt; a responsibility split must preserve existing entry points, fixture identity and module visibility."
 

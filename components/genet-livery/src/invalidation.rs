@@ -16,7 +16,7 @@ use std::{
     hash::Hash,
 };
 
-use layout_dom_api::{DomMutation, LayoutDom, NodeKind, QualName};
+use layout_dom_api::{DomMutation, LayoutDom, LocalName, Namespace, NodeKind, QualName};
 use livery::{ComputedValues, custom::CustomProperties, media::Device};
 
 use crate::style::{SubtreeStyleContext, resolve_subtree};
@@ -156,9 +156,23 @@ where
 
         let sibling_dependencies = style_set.has_sibling_dependencies();
         let structural_dependencies = style_set.has_structural_dependencies();
+        let text_dependencies = style_set.depends_on_text_content();
         let mut roots = Vec::new();
 
         for mutation in mutations {
+            // HTML title is metadata unless a selector tests it or a
+            // generated box on this element reads it through attr().
+            if let DomMutation::AttributeChanged { node, name, .. } = mutation
+                && name.ns == Namespace::from("")
+                && name.local == LocalName::from("title")
+                && dom.element_name(*node).is_some_and(|name| {
+                    matches!(name.ns.as_str(), "" | "http://www.w3.org/1999/xhtml")
+                })
+                && !style_set.tests_attribute("title")
+                && !self.plane.title_used_in_generated_content(*node)
+            {
+                continue;
+            }
             for_each_mutation_dependency(dom, mutation, |dependency| match dependency {
                 MutationDependency::Element(node) => {
                     push_element_hint(dom, &mut roots, node, sibling_dependencies);
@@ -171,12 +185,12 @@ where
                     node,
                     boundary,
                 } => {
-                    if structural_dependencies {
-                        // A text mutation only broadens a structural selector
-                        // when it still has a parent in the live tree.
-                        if kind != StructureKind::Text || dom.parent(node).is_some() {
+                    if kind == StructureKind::Text {
+                        if text_dependencies && dom.parent(node).is_some() {
                             push_element_hint(dom, &mut roots, boundary, sibling_dependencies);
                         }
+                    } else if structural_dependencies {
+                        push_element_hint(dom, &mut roots, boundary, sibling_dependencies);
                     } else if matches!(
                         kind,
                         StructureKind::Inserted | StructureKind::Replaced | StructureKind::Moved
@@ -339,8 +353,21 @@ pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
             if !dom.is_live(*node) {
                 return;
             }
-            emit_form_tree(dom, *node, &mut affected);
-            emit_select_owners(dom, *node, &mut affected);
+            // Text can feed select/option values or textarea defaults. It
+            // cannot change control membership, form ownership or radio groups.
+            if let Some(control) = std::iter::successors(dom.parent(*node), |id| dom.parent(*id))
+                .find(|id| {
+                    dom.element_name(*id).is_some_and(|name| {
+                        name.ns.as_str() == "http://www.w3.org/1999/xhtml"
+                            && matches!(name.local.as_str(), "select" | "option" | "textarea")
+                    })
+                })
+            {
+                affected(MutationDependency::Element(control));
+                emit_form_tree(dom, control, &mut affected);
+                emit_select_owners(dom, control, &mut affected);
+                emit_validity_owners(dom, control, &mut affected);
+            }
             affected(MutationDependency::Structure {
                 kind: StructureKind::Text,
                 node: *node,

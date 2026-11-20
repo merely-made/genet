@@ -832,6 +832,14 @@ impl StyleRule {
         self.selectors.has_structural_dependency() || self.tree_counting
     }
 
+    pub fn depends_on_text_content(&self) -> bool {
+        self.selectors.depends_on_text_content()
+    }
+
+    pub fn tests_attribute(&self, name: &str) -> bool {
+        self.selectors.tests_attribute(name)
+    }
+
     pub fn has_container_query(&self) -> bool {
         self.container.is_some()
     }

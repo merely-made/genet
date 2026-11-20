@@ -79,13 +79,14 @@ use crate::{
 };
 
 mod atomic_basis;
-mod generated_image;
 mod build_block;
 mod build_inline;
+mod generated_image;
 mod hit_testing;
 mod positioned;
 mod query;
 mod retained;
+mod retained_session;
 mod tables;
 mod taffy_style;
 #[cfg(test)]
@@ -107,7 +108,7 @@ use taffy_style::*;
 use transaction::*;
 // The transaction and retained-root entries keep their crate and public
 // paths: lib.rs, the document and its frame reach them as `layout::<name>`.
-pub(crate) use retained::{layout_retained_formatting_root, retained_table_owner};
+pub(crate) use retained_session::{formatting_damage_root, reformat_retained_root};
 pub use transaction::{
     estimated_used_value_context, layout, layout_with_text_system,
     used_value_context_with_text_system,

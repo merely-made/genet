@@ -19,7 +19,10 @@ use std::{
 use layout_dom_api::{DomMutation, LayoutDom, LocalName, Namespace, NodeKind, QualName};
 use livery::{ComputedValues, custom::CustomProperties, media::Device};
 
-use crate::style::{SubtreeStyleContext, resolve_subtree};
+use crate::style::{
+    SubtreeStyleContext, children_inherit_explicitly, resolve_root_children, resolve_root_element,
+    resolve_subtree,
+};
 use crate::{InteractionStates, SelectorTree, StylePlane, StyleSet, resolve_styles};
 
 /// One pre-mutation attribute value retained for invalidation diagnostics.
@@ -158,6 +161,10 @@ where
         let structural_dependencies = style_set.has_structural_dependencies();
         let text_dependencies = style_set.depends_on_text_content();
         let mut roots = Vec::new();
+        // Elements hinted by their own `style` attribute when no selector
+        // tests it: that cannot change matching here or among siblings.
+        let mut inline_roots = Vec::new();
+        let mut style_tested = None;
         let mut form_trees = FormTrees::default();
 
         for mutation in mutations {
@@ -174,8 +181,24 @@ where
             {
                 continue;
             }
+            let inline_style = match mutation {
+                DomMutation::AttributeChanged { node, name, .. }
+                    if name.ns.is_empty()
+                        && &*name.local == "style"
+                        && dom.is_live(*node)
+                        && dom.kind(*node) == NodeKind::Element
+                        && !*style_tested
+                            .get_or_insert_with(|| style_set.tests_attribute("style")) =>
+                {
+                    Some(*node)
+                },
+                _ => None,
+            };
             for_each_mutation_dependency(dom, mutation, &mut form_trees, |dependency| {
                 match dependency {
+                    MutationDependency::Element(node) if inline_style == Some(node) => {
+                        inline_roots.push(node);
+                    },
                     MutationDependency::Element(node) => {
                         push_element_hint(dom, &mut roots, node, sibling_dependencies);
                     },
@@ -213,7 +236,9 @@ where
         // innerHTML can retire old ids before the mutation is observed.
         self.plane.retain(|id| dom.is_live(id));
         roots.retain(|id| dom.is_live(*id));
-        coalesce_roots(dom, &mut roots);
+        inline_roots.retain(|id| dom.is_live(*id));
+        let may_stop = inline_style_roots(&mut roots, inline_roots);
+        coalesce_roots(dom, &mut roots, &may_stop);
         let selector_tree = SelectorTree::for_roots(
             dom,
             states,
@@ -223,8 +248,31 @@ where
         let selector_elements = selector_tree.len();
         let context = (!roots.is_empty()).then(|| SubtreeStyleContext::new(dom, style_set, &roots));
         let mut restyled_elements = 0;
+        // Roots under a may-stop root that descended were cascaded with it.
+        let mut descended = HashSet::new();
         for root in roots.iter().copied() {
+            if !descended.is_empty() && under_any(dom, root, &descended) {
+                continue;
+            }
             let (parent, parent_custom) = inherited_parent(dom, &self.plane, root);
+            let context = context.as_ref().expect("nonempty restyle roots");
+            if may_stop.contains(&root) {
+                let (restyled, descends) = restyle_inline_style_root(
+                    dom,
+                    &selector_tree,
+                    style_set,
+                    device,
+                    root,
+                    (parent.as_ref(), parent_custom.as_ref()),
+                    context,
+                    &mut self.plane,
+                );
+                restyled_elements += restyled;
+                if descends {
+                    descended.insert(root);
+                }
+                continue;
+            }
             remove_subtree(dom, &mut self.plane, root);
             restyled_elements += resolve_subtree(
                 &selector_tree,
@@ -233,7 +281,7 @@ where
                 root,
                 parent.as_ref(),
                 parent_custom.as_ref(),
-                context.as_ref().expect("nonempty restyle roots"),
+                context,
                 &mut self.plane,
             );
         }
@@ -703,25 +751,119 @@ where
 // Coalesce the complete candidate set once. Checking each root against all
 // earlier roots makes a batch of moving siblings quadratic. An ancestor walk
 // gives the same disjoint coverage and preserves first-occurrence order.
-fn coalesce_roots<D>(dom: &D, roots: &mut Vec<D::NodeId>)
+// A may-stop root absorbs nothing: roots below it stay, ordered after it.
+fn coalesce_roots<D>(dom: &D, roots: &mut Vec<D::NodeId>, may_stop: &HashSet<D::NodeId>)
 where
     D: LayoutDom,
+    D::NodeId: Eq + Hash,
 {
-    let candidates: HashSet<_> = roots.iter().copied().collect();
+    let absorbing: HashSet<_> = roots
+        .iter()
+        .copied()
+        .filter(|id| !may_stop.contains(id))
+        .collect();
     let mut seen = HashSet::new();
+    let mut nested = false;
     roots.retain(|node| {
         if !seen.insert(*node) {
             return false;
         }
         let mut ancestor = dom.parent(*node);
         while let Some(parent) = ancestor {
-            if candidates.contains(&parent) {
+            if absorbing.contains(&parent) {
                 return false;
             }
+            nested |= may_stop.contains(&parent);
             ancestor = dom.parent(parent);
         }
         true
     });
+    if nested {
+        // Ancestors first, so a may-stop root decides before roots below it.
+        roots.sort_by_cached_key(|node| {
+            std::iter::successors(dom.parent(*node), |id| dom.parent(*id)).count()
+        });
+    }
+}
+
+fn under_any<D>(dom: &D, node: D::NodeId, ancestors: &HashSet<D::NodeId>) -> bool
+where
+    D: LayoutDom,
+    D::NodeId: Eq + Hash,
+{
+    std::iter::successors(dom.parent(node), |id| dom.parent(*id)).any(|id| ancestors.contains(&id))
+}
+
+/// Merge the inline-style candidates into `roots`, returning those that may
+/// stop: hinted by nothing but their own unselected `style` attribute.
+fn inline_style_roots<Id>(roots: &mut Vec<Id>, inline_roots: Vec<Id>) -> HashSet<Id>
+where
+    Id: Copy + Eq + Hash,
+{
+    let others: HashSet<_> = roots.iter().copied().collect();
+    let may_stop = inline_roots
+        .iter()
+        .copied()
+        .filter(|id| !others.contains(id))
+        .collect();
+    roots.extend(inline_roots);
+    may_stop
+}
+
+/// Cascade a root changed only by its unselected `style` attribute. When its
+/// inherited and custom values are unchanged and none of its children reads a
+/// non-inherited value from it through `inherit`, descendants keep their
+/// entries: grandchildren read only children, which did not change. Returns
+/// the elements cascaded and whether it descended.
+#[allow(clippy::too_many_arguments)]
+fn restyle_inline_style_root<D>(
+    dom: &D,
+    selector_tree: &SelectorTree<'_, D>,
+    style_set: &StyleSet,
+    device: &Device,
+    root: D::NodeId,
+    (parent, parent_custom): (Option<&ComputedValues>, Option<&CustomProperties>),
+    context: &SubtreeStyleContext<D::NodeId>,
+    plane: &mut StylePlane<D::NodeId>,
+) -> (usize, bool)
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let old_inherited = plane.get(root).map(ComputedValues::for_child);
+    let old_custom = plane.custom_properties(root).cloned();
+    plane.remove(root);
+    let (computed, custom) = resolve_root_element(
+        selector_tree,
+        style_set,
+        device,
+        root,
+        parent,
+        parent_custom,
+        context,
+        plane,
+    );
+    let mut restyled = 1;
+    let unchanged = old_inherited.is_some_and(|old| old == ComputedValues::for_child(&computed))
+        && old_custom.as_ref() == Some(&custom)
+        && !children_inherit_explicitly(dom, plane, root);
+    if !unchanged {
+        for child in dom.flat_children(root) {
+            remove_subtree(dom, plane, child);
+        }
+        restyled += resolve_root_children(
+            selector_tree,
+            style_set,
+            device,
+            root,
+            &computed,
+            &custom,
+            context,
+            plane,
+        );
+    }
+    plane.insert_element(root, computed, custom);
+    (restyled, !unchanged)
 }
 
 fn inherited_parent<D>(

@@ -132,7 +132,8 @@ fn moving_sibling_work(count: usize) -> (usize, usize) {
     let stats = session.update(&dom, &styles, &device, &states, &mutations);
     let work = (dom.children.get(), dom.parents.get());
     assert_eq!(stats.hints, count);
-    assert_eq!(stats.restyled_elements, count * 2);
+    // An unselected `style` change to a reset property stops at each node.
+    assert_eq!(stats.restyled_elements, count);
     assert!(!stats.full_document);
     compare_full(&dom, &session, &styles, &states);
     for (index, node) in nodes.iter().enumerate() {

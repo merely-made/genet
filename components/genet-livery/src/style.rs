@@ -24,7 +24,7 @@ use livery::{
     ComputedValues, PropertyId, PropertyValue, ShorthandId,
     cascade::{
         CascadeLayer, ColorComputeContext, DeclarationError, MatchedCustomDeclaration,
-        MatchedDeclaration, Origin, Specificity, cascade_with_custom_context_and_image_resolver,
+        MatchedDeclaration, Origin, Specificity, cascade_reporting_explicit_inheritance,
         parse_declaration_block,
     },
     custom::CustomProperties,
@@ -740,6 +740,9 @@ pub struct StylePlane<Id> {
     inline_diagnostics: HashMap<Id, Vec<DeclarationError>>,
     presentational_hint_diagnostics: HashMap<Id, Vec<PresentationalHintDiagnostic>>,
     legacy_descendant_alignment: HashMap<Id, LegacyDescendantAlignment>,
+    // Elements whose cascade, or a generated pseudo's, copied a non-inherited
+    // property from its parent through `inherit`.
+    explicit_inheritance: HashSet<Id>,
     color_context: ColorComputeContext,
     // Derived numeric paint view. Every mutation gateway below invalidates it;
     // clones share only this immutable view, never mutable computed styles.
@@ -757,6 +760,7 @@ where
             && self.inline_diagnostics == other.inline_diagnostics
             && self.presentational_hint_diagnostics == other.presentational_hint_diagnostics
             && self.legacy_descendant_alignment == other.legacy_descendant_alignment
+            && self.explicit_inheritance == other.explicit_inheritance
             && self.color_context == other.color_context
     }
 }
@@ -770,6 +774,7 @@ impl<Id> Default for StylePlane<Id> {
             inline_diagnostics: HashMap::new(),
             presentational_hint_diagnostics: HashMap::new(),
             legacy_descendant_alignment: HashMap::new(),
+            explicit_inheritance: HashSet::new(),
             color_context: ColorComputeContext::default(),
             used_colors: OnceLock::new(),
         }
@@ -1257,6 +1262,20 @@ where
         self.inline_diagnostics.remove(&id);
         self.presentational_hint_diagnostics.remove(&id);
         self.legacy_descendant_alignment.remove(&id);
+        self.explicit_inheritance.remove(&id);
+    }
+
+    pub(crate) fn insert_element(
+        &mut self,
+        id: Id,
+        computed: ComputedValues,
+        custom: CustomProperties,
+    ) where
+        Id: Copy,
+    {
+        self.invalidate_used_colors();
+        self.values.insert(id, computed);
+        self.custom.insert(id, custom);
     }
 
     pub(crate) fn retain(&mut self, mut keep_id: impl FnMut(Id) -> bool)
@@ -1281,6 +1300,7 @@ where
         self.presentational_hint_diagnostics
             .retain(|id, _| keep(*id));
         self.legacy_descendant_alignment.retain(|id, _| keep(*id));
+        self.explicit_inheritance.retain(|id| keep(*id));
     }
 
     fn with_color_context(color_context: ColorComputeContext) -> Self {
@@ -1534,6 +1554,96 @@ where
     )
 }
 
+/// The element step of [`resolve_subtree`] alone, for a restyle root that may
+/// stop. The caller stores the returned values with
+/// [`StylePlane::insert_element`] once it has decided whether to descend.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_root_element<D>(
+    selector_tree: &SelectorTree<'_, D>,
+    style_set: &StyleSet,
+    device: &Device,
+    id: D::NodeId,
+    parent: Option<&ComputedValues>,
+    parent_custom: Option<&CustomProperties>,
+    context: &SubtreeStyleContext<D::NodeId>,
+    plane: &mut StylePlane<D::NodeId>,
+) -> (ComputedValues, CustomProperties)
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    plane.invalidate_used_colors();
+    resolve_element(
+        selector_tree,
+        style_set,
+        device,
+        id,
+        parent,
+        parent_custom,
+        context
+            .counts
+            .get(&id)
+            .copied()
+            .unwrap_or(TreeCounts::Deferred),
+        plane,
+        &context.hints,
+        None,
+        &context.scopes,
+    )
+}
+
+/// The descent of [`resolve_subtree`] below an element resolved by
+/// [`resolve_root_element`].
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resolve_root_children<D>(
+    selector_tree: &SelectorTree<'_, D>,
+    style_set: &StyleSet,
+    device: &Device,
+    id: D::NodeId,
+    computed: &ComputedValues,
+    custom: &CustomProperties,
+    context: &SubtreeStyleContext<D::NodeId>,
+    plane: &mut StylePlane<D::NodeId>,
+) -> usize
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    resolve_children(
+        selector_tree,
+        style_set,
+        device,
+        id,
+        Some(computed),
+        Some(custom),
+        plane,
+        &context.hints,
+        None,
+        &context.scopes,
+    )
+}
+
+/// Whether an element taking `id` as its style parent, or one of its
+/// generated pseudos, copied a non-inherited property through `inherit`.
+/// Non-element nodes pass the parent through, so their elements count.
+pub(crate) fn children_inherit_explicitly<D>(
+    dom: &D,
+    plane: &StylePlane<D::NodeId>,
+    id: D::NodeId,
+) -> bool
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    cascade_children(dom, id).into_iter().any(|(child, _)| {
+        if dom.kind(child) == NodeKind::Element {
+            plane.explicit_inheritance.contains(&child)
+        } else {
+            crate::with_recursion_stack(|| children_inherit_explicitly(dom, plane, child))
+        }
+    })
+}
+
 /// The children the cascade descends into, each with the tree counts its
 /// `:nth-child` family needs.
 ///
@@ -1725,251 +1835,329 @@ where
     P: PresentationalHintProvider<D::NodeId>,
 {
     if selector_tree.dom().kind(id) == NodeKind::Element {
-        if let Some(alignment) = hints.descendant_alignment_for(id) {
-            plane.legacy_descendant_alignment.insert(id, alignment);
-        } else {
-            plane.legacy_descendant_alignment.remove(&id);
-        }
-        let element = selector_tree.element(id).expect("element kind has adapter");
-        let candidates = containers
-            .and_then(|containers| containers.get(&id))
-            .map_or(&[][..], Vec::as_slice);
-        let mut matched = Vec::new();
-        let mut matched_custom = Vec::new();
-        // Only the rules the selector index offers this element are matched.
-        // They arrive in ascending rule position, so the visit order — and
-        // with it the cascade order the `source_order` on each matched
-        // declaration carries — is the unbucketed loop's order exactly.
-        let mut rule_candidates = Vec::new();
-        style_set.index.candidates(
-            element_local_name(selector_tree.dom(), id).as_deref(),
-            selector_tree
-                .dom()
-                .attribute(id, &Namespace::from(""), &LocalName::from("id")),
-            selector_tree
-                .dom()
-                .attribute(id, &Namespace::from(""), &LocalName::from("class")),
-            &mut rule_candidates,
+        let (computed, custom) = resolve_element(
+            selector_tree,
+            style_set,
+            device,
+            id,
+            parent,
+            parent_custom,
+            tree_counts,
+            plane,
+            hints,
+            containers,
+            scopes,
         );
-        if scopes.is_empty() {
-            for &position in &rule_candidates {
-                let rule = &style_set.rules[position as usize];
-                matched.extend(with_source_url(
-                    rule.matched_declarations_with_containers(&element, device, candidates),
-                    style_set.source_url_for_rule(position as usize),
-                ));
-                matched_custom.extend(
-                    rule.matched_custom_declarations_with_containers(&element, device, candidates),
-                );
-            }
-        } else {
-            // This element's own tree scope: the shadow root containing it, or
-            // the document. A rule matches normally only inside its own scope;
-            // across the boundary only `:host`, `::slotted()` and `::part()`
-            // are offered, and only those three can then match.
-            let element_scope = selector_tree
-                .dom()
-                .containing_shadow_root(id)
-                .map(|root| selector_tree.dom().opaque_id(root));
-            for &position in &rule_candidates {
-                let index = position as usize;
-                let rule = &style_set.rules[index];
-                let rule_scope = scopes.scope_of(index);
-                // UA rules are not scoped: `slot { display: contents }` has to
-                // reach inside every shadow tree.
-                let same_scope = rule.origin() == Origin::UserAgent
-                    || rule_scope.map(|(root, _)| root) == element_scope;
-                if !same_scope && !rule.crosses_tree_scope() {
-                    continue;
-                }
-                let host = rule_scope.and_then(|(_, host)| selector_tree.element(host));
-                matched.extend(with_source_url(
-                    rule.matched_declarations_scoped(
-                        &element, device, candidates, same_scope, host,
-                    ),
-                    style_set.source_url_for_rule(index),
-                ));
-                matched_custom.extend(rule.matched_custom_declarations_scoped(
-                    &element, device, candidates, same_scope, host,
-                ));
-            }
-        }
+        let resolved = 1 + resolve_children(
+            selector_tree,
+            style_set,
+            device,
+            id,
+            Some(&computed),
+            Some(&custom),
+            plane,
+            hints,
+            containers,
+            scopes,
+        );
+        plane.values.insert(id, computed);
+        plane.custom.insert(id, custom);
+        resolved
+    } else {
+        resolve_children(
+            selector_tree,
+            style_set,
+            device,
+            id,
+            parent,
+            parent_custom,
+            plane,
+            hints,
+            containers,
+            scopes,
+        )
+    }
+}
 
-        if let Some(declarations) = hints.declarations_for(id) {
-            if !declarations.diagnostics().is_empty() {
-                plane
-                    .presentational_hint_diagnostics
-                    .insert(id, declarations.diagnostics().to_vec());
+/// Cascade the flat-tree children of `id` against an already resolved parent.
+#[allow(clippy::too_many_arguments)]
+fn resolve_children<D, P>(
+    selector_tree: &SelectorTree<'_, D>,
+    style_set: &StyleSet,
+    device: &Device,
+    id: D::NodeId,
+    parent: Option<&ComputedValues>,
+    parent_custom: Option<&CustomProperties>,
+    plane: &mut StylePlane<D::NodeId>,
+    hints: &P,
+    containers: Option<&HashMap<D::NodeId, Vec<ContainerSnapshot>>>,
+    scopes: &TreeScopes<D::NodeId>,
+) -> usize
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+    P: PresentationalHintProvider<D::NodeId>,
+{
+    let mut resolved = 0;
+    for (child, child_counts) in cascade_children(selector_tree.dom(), id) {
+        resolved += resolve_subtree_with_containers(
+            selector_tree,
+            style_set,
+            device,
+            child,
+            parent,
+            parent_custom,
+            child_counts,
+            plane,
+            hints,
+            containers,
+            scopes,
+        );
+    }
+    resolved
+}
+
+/// Cascade one element and its generated pseudos. Writes every per-element
+/// plane entry except the computed and custom values, which are returned.
+#[allow(clippy::too_many_arguments)]
+fn resolve_element<D, P>(
+    selector_tree: &SelectorTree<'_, D>,
+    style_set: &StyleSet,
+    device: &Device,
+    id: D::NodeId,
+    parent: Option<&ComputedValues>,
+    parent_custom: Option<&CustomProperties>,
+    tree_counts: TreeCounts,
+    plane: &mut StylePlane<D::NodeId>,
+    hints: &P,
+    containers: Option<&HashMap<D::NodeId, Vec<ContainerSnapshot>>>,
+    scopes: &TreeScopes<D::NodeId>,
+) -> (ComputedValues, CustomProperties)
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+    P: PresentationalHintProvider<D::NodeId>,
+{
+    if let Some(alignment) = hints.descendant_alignment_for(id) {
+        plane.legacy_descendant_alignment.insert(id, alignment);
+    } else {
+        plane.legacy_descendant_alignment.remove(&id);
+    }
+    let element = selector_tree.element(id).expect("element kind has adapter");
+    let candidates = containers
+        .and_then(|containers| containers.get(&id))
+        .map_or(&[][..], Vec::as_slice);
+    let mut matched = Vec::new();
+    let mut matched_custom = Vec::new();
+    // Only the rules the selector index offers this element are matched.
+    // They arrive in ascending rule position, so the visit order — and
+    // with it the cascade order the `source_order` on each matched
+    // declaration carries — is the unbucketed loop's order exactly.
+    let mut rule_candidates = Vec::new();
+    style_set.index.candidates(
+        element_local_name(selector_tree.dom(), id).as_deref(),
+        selector_tree
+            .dom()
+            .attribute(id, &Namespace::from(""), &LocalName::from("id")),
+        selector_tree
+            .dom()
+            .attribute(id, &Namespace::from(""), &LocalName::from("class")),
+        &mut rule_candidates,
+    );
+    if scopes.is_empty() {
+        for &position in &rule_candidates {
+            let rule = &style_set.rules[position as usize];
+            matched.extend(with_source_url(
+                rule.matched_declarations_with_containers(&element, device, candidates),
+                style_set.source_url_for_rule(position as usize),
+            ));
+            matched_custom.extend(
+                rule.matched_custom_declarations_with_containers(&element, device, candidates),
+            );
+        }
+    } else {
+        // This element's own tree scope: the shadow root containing it, or
+        // the document. A rule matches normally only inside its own scope;
+        // across the boundary only `:host`, `::slotted()` and `::part()`
+        // are offered, and only those three can then match.
+        let element_scope = selector_tree
+            .dom()
+            .containing_shadow_root(id)
+            .map(|root| selector_tree.dom().opaque_id(root));
+        for &position in &rule_candidates {
+            let index = position as usize;
+            let rule = &style_set.rules[index];
+            let rule_scope = scopes.scope_of(index);
+            // UA rules are not scoped: `slot { display: contents }` has to
+            // reach inside every shadow tree.
+            let same_scope = rule.origin() == Origin::UserAgent
+                || rule_scope.map(|(root, _)| root) == element_scope;
+            if !same_scope && !rule.crosses_tree_scope() {
+                continue;
             }
-            // Providers expose only ordinary typed longhands. The cascade
-            // origin, not synthetic selector specificity or a CSS layer,
-            // gives these declarations their HTML-defined precedence.
-            matched.extend(declarations.declarations().iter().cloned().enumerate().map(
-                |(index, declaration)| MatchedDeclaration {
-                    declaration,
-                    origin: Origin::AuthorPresentationalHint,
-                    layer: CascadeLayer::Unlayered,
-                    specificity: Specificity(0),
-                    source_order: index as u64,
-                    source_url: None,
-                },
+            let host = rule_scope.and_then(|(_, host)| selector_tree.element(host));
+            matched.extend(with_source_url(
+                rule.matched_declarations_scoped(&element, device, candidates, same_scope, host),
+                style_set.source_url_for_rule(index),
+            ));
+            matched_custom.extend(rule.matched_custom_declarations_scoped(
+                &element, device, candidates, same_scope, host,
             ));
         }
+    }
 
-        if let Some(inline) =
-            selector_tree
-                .dom()
-                .attribute(id, &Namespace::from(""), &LocalName::from("style"))
-        {
-            let block = parse_declaration_block(inline);
-            if !block.errors.is_empty() {
-                plane.inline_diagnostics.insert(id, block.errors);
-            }
-            let inline_order = u64::MAX.saturating_sub(65_535);
-            matched.extend(block.declarations.into_iter().enumerate().map(
-                |(index, declaration)| MatchedDeclaration {
+    if let Some(declarations) = hints.declarations_for(id) {
+        if !declarations.diagnostics().is_empty() {
+            plane
+                .presentational_hint_diagnostics
+                .insert(id, declarations.diagnostics().to_vec());
+        }
+        // Providers expose only ordinary typed longhands. The cascade
+        // origin, not synthetic selector specificity or a CSS layer,
+        // gives these declarations their HTML-defined precedence.
+        matched.extend(declarations.declarations().iter().cloned().enumerate().map(
+            |(index, declaration)| MatchedDeclaration {
+                declaration,
+                origin: Origin::AuthorPresentationalHint,
+                layer: CascadeLayer::Unlayered,
+                specificity: Specificity(0),
+                source_order: index as u64,
+                source_url: None,
+            },
+        ));
+    }
+
+    if let Some(inline) =
+        selector_tree
+            .dom()
+            .attribute(id, &Namespace::from(""), &LocalName::from("style"))
+    {
+        let block = parse_declaration_block(inline);
+        if !block.errors.is_empty() {
+            plane.inline_diagnostics.insert(id, block.errors);
+        }
+        let inline_order = u64::MAX.saturating_sub(65_535);
+        matched.extend(
+            block
+                .declarations
+                .into_iter()
+                .enumerate()
+                .map(|(index, declaration)| MatchedDeclaration {
                     declaration,
                     origin: Origin::Author,
                     layer: CascadeLayer::Unlayered,
                     specificity: Specificity::INLINE,
                     source_order: inline_order.saturating_add(index as u64),
                     source_url: style_set.document_base_url.clone(),
-                },
-            ));
-            matched_custom.extend(block.custom.into_iter().enumerate().map(
-                |(index, declaration)| MatchedCustomDeclaration {
+                }),
+        );
+        matched_custom.extend(
+            block
+                .custom
+                .into_iter()
+                .enumerate()
+                .map(|(index, declaration)| MatchedCustomDeclaration {
                     declaration,
                     origin: Origin::Author,
                     layer: CascadeLayer::Unlayered,
                     specificity: Specificity::INLINE,
                     source_order: inline_order.saturating_add(index as u64),
-                },
-            ));
-        }
-
-        let (mut computed, custom) = cascade_with_logical_properties(
-            parent,
-            parent_custom,
-            matched,
-            matched_custom,
-            ColorComputeContext::from_device(device),
+                }),
         );
-        resolve_viewport_units(&mut computed, device, tree_counts);
-        resolve_font_metrics(&mut computed, parent);
-        if !crate::TABLE_LAYOUT {
-            flatten_table_display(&mut computed);
-        }
-        for (selector_pseudo, box_pseudo) in [
-            (
-                livery::selector::GeneratedPseudo::Before,
-                buckram::PseudoElement::Before,
-            ),
-            (
-                livery::selector::GeneratedPseudo::After,
-                buckram::PseudoElement::After,
-            ),
-        ] {
-            let mut pseudo_matched = Vec::new();
-            let mut pseudo_custom = Vec::new();
-            let element_scope = selector_tree
-                .dom()
-                .containing_shadow_root(id)
-                .map(|root| selector_tree.dom().opaque_id(root));
-            for &position in &rule_candidates {
-                let rule = &style_set.rules[position as usize];
-                let scope = scopes.scope_of(position as usize);
-                if !rule.has_generated_pseudo() {
-                    continue;
-                }
-                let same_scope = rule.origin() == Origin::UserAgent
-                    || scope.map(|(root, _)| root) == element_scope;
-                let host = scope.and_then(|(_, host)| selector_tree.element(host));
-                pseudo_matched.extend(with_source_url(
-                    rule.matched_declarations_scoped_for_pseudo(
-                        &element,
-                        device,
-                        candidates,
-                        same_scope,
-                        host,
-                        Some(selector_pseudo),
-                    ),
-                    style_set.source_url_for_rule(position as usize),
-                ));
-                pseudo_custom.extend(rule.matched_custom_declarations_scoped_for_pseudo(
+    }
+
+    let (mut computed, custom, mut explicit_inheritance) = cascade_reporting_logical_properties(
+        parent,
+        parent_custom,
+        matched,
+        matched_custom,
+        ColorComputeContext::from_device(device),
+    );
+    resolve_viewport_units(&mut computed, device, tree_counts);
+    resolve_font_metrics(&mut computed, parent);
+    if !crate::TABLE_LAYOUT {
+        flatten_table_display(&mut computed);
+    }
+    for (selector_pseudo, box_pseudo) in [
+        (
+            livery::selector::GeneratedPseudo::Before,
+            buckram::PseudoElement::Before,
+        ),
+        (
+            livery::selector::GeneratedPseudo::After,
+            buckram::PseudoElement::After,
+        ),
+    ] {
+        let mut pseudo_matched = Vec::new();
+        let mut pseudo_custom = Vec::new();
+        let element_scope = selector_tree
+            .dom()
+            .containing_shadow_root(id)
+            .map(|root| selector_tree.dom().opaque_id(root));
+        for &position in &rule_candidates {
+            let rule = &style_set.rules[position as usize];
+            let scope = scopes.scope_of(position as usize);
+            if !rule.has_generated_pseudo() {
+                continue;
+            }
+            let same_scope =
+                rule.origin() == Origin::UserAgent || scope.map(|(root, _)| root) == element_scope;
+            let host = scope.and_then(|(_, host)| selector_tree.element(host));
+            pseudo_matched.extend(with_source_url(
+                rule.matched_declarations_scoped_for_pseudo(
                     &element,
                     device,
                     candidates,
                     same_scope,
                     host,
                     Some(selector_pseudo),
-                ));
-            }
-            plane.generated.remove(&(id, box_pseudo));
-            if pseudo_matched.is_empty() && pseudo_custom.is_empty() {
-                continue;
-            }
-            let (mut pseudo_style, _) = cascade_with_logical_properties(
-                Some(&computed),
-                Some(&custom),
-                pseudo_matched,
-                pseudo_custom,
-                ColorComputeContext::from_device(device),
-            );
-            resolve_viewport_units(&mut pseudo_style, device, tree_counts);
-            resolve_font_metrics(&mut pseudo_style, Some(&computed));
-            // First slice admits inline text only. Unsupported box geometries
-            // remain absent rather than being silently flattened to inline.
-            if computed.display != livery::values::Display::None
-                && pseudo_style.display == livery::values::Display::Inline
-                && pseudo_style.position == Position::Static
-                && pseudo_style.float == livery::values::Float::None
-                && let Some(text) = pseudo_style
-                    .content
-                    .resolve(|name| generated_content_attribute(selector_tree.dom(), id, name))
-            {
-                plane
-                    .generated
-                    .insert((id, box_pseudo), (pseudo_style, text));
-            }
-        }
-        let mut resolved = 1;
-        for (child, child_counts) in cascade_children(selector_tree.dom(), id) {
-            resolved += resolve_subtree_with_containers(
-                selector_tree,
-                style_set,
+                ),
+                style_set.source_url_for_rule(position as usize),
+            ));
+            pseudo_custom.extend(rule.matched_custom_declarations_scoped_for_pseudo(
+                &element,
                 device,
-                child,
-                Some(&computed),
-                Some(&custom),
-                child_counts,
-                plane,
-                hints,
-                containers,
-                scopes,
-            );
+                candidates,
+                same_scope,
+                host,
+                Some(selector_pseudo),
+            ));
         }
-        plane.values.insert(id, computed);
-        plane.custom.insert(id, custom);
-        resolved
-    } else {
-        let mut resolved = 0;
-        for (child, child_counts) in cascade_children(selector_tree.dom(), id) {
-            resolved += resolve_subtree_with_containers(
-                selector_tree,
-                style_set,
-                device,
-                child,
-                parent,
-                parent_custom,
-                child_counts,
-                plane,
-                hints,
-                containers,
-                scopes,
-            );
+        plane.generated.remove(&(id, box_pseudo));
+        if pseudo_matched.is_empty() && pseudo_custom.is_empty() {
+            continue;
         }
-        resolved
+        let (mut pseudo_style, _, pseudo_inheritance) = cascade_reporting_logical_properties(
+            Some(&computed),
+            Some(&custom),
+            pseudo_matched,
+            pseudo_custom,
+            ColorComputeContext::from_device(device),
+        );
+        explicit_inheritance |= pseudo_inheritance;
+        resolve_viewport_units(&mut pseudo_style, device, tree_counts);
+        resolve_font_metrics(&mut pseudo_style, Some(&computed));
+        // First slice admits inline text only. Unsupported box geometries
+        // remain absent rather than being silently flattened to inline.
+        if computed.display != livery::values::Display::None
+            && pseudo_style.display == livery::values::Display::Inline
+            && pseudo_style.position == Position::Static
+            && pseudo_style.float == livery::values::Float::None
+            && let Some(text) = pseudo_style
+                .content
+                .resolve(|name| generated_content_attribute(selector_tree.dom(), id, name))
+        {
+            plane
+                .generated
+                .insert((id, box_pseudo), (pseudo_style, text));
+        }
     }
+    if explicit_inheritance {
+        plane.explicit_inheritance.insert(id);
+    } else {
+        plane.explicit_inheritance.remove(&id);
+    }
+    (computed, custom)
 }
 
 /// Bind each matched declaration to the sheet that supplied it before the
@@ -1988,14 +2176,16 @@ fn with_source_url(
 /// direction are known, while leaving declarations in their ordinary cascade
 /// priority order beside their physical counterparts. Generated logical fields
 /// retain the CSSOM values; layout consumes the mapped physical longhands.
-fn cascade_with_logical_properties(
+/// Also reports whether either pass copied a non-inherited property from
+/// `parent` through `inherit`.
+fn cascade_reporting_logical_properties(
     parent: Option<&ComputedValues>,
     parent_custom: Option<&CustomProperties>,
     matched: Vec<MatchedDeclaration>,
     matched_custom: Vec<MatchedCustomDeclaration>,
     color_context: ColorComputeContext,
-) -> (ComputedValues, CustomProperties) {
-    let (logical, _) = cascade_with_custom_context_and_image_resolver(
+) -> (ComputedValues, CustomProperties, bool) {
+    let (logical, _, logical_inheritance) = cascade_reporting_explicit_inheritance(
         parent,
         parent_custom,
         matched.clone(),
@@ -2019,7 +2209,7 @@ fn cascade_with_logical_properties(
         }
         declaration
     });
-    let (mut computed, custom) = cascade_with_custom_context_and_image_resolver(
+    let (mut computed, custom, mapped_inheritance) = cascade_reporting_explicit_inheritance(
         parent,
         parent_custom,
         mapped,
@@ -2032,6 +2222,24 @@ fn cascade_with_logical_properties(
             .set(property, value)
             .expect("generated logical property read and write types agree");
     }
+    (computed, custom, logical_inheritance || mapped_inheritance)
+}
+
+#[cfg(test)]
+fn cascade_with_logical_properties(
+    parent: Option<&ComputedValues>,
+    parent_custom: Option<&CustomProperties>,
+    matched: Vec<MatchedDeclaration>,
+    matched_custom: Vec<MatchedCustomDeclaration>,
+    color_context: ColorComputeContext,
+) -> (ComputedValues, CustomProperties) {
+    let (computed, custom, _) = cascade_reporting_logical_properties(
+        parent,
+        parent_custom,
+        matched,
+        matched_custom,
+        color_context,
+    );
     (computed, custom)
 }
 

@@ -1682,6 +1682,33 @@ pub fn cascade_with_custom_context_and_image_resolver(
     color_context: ColorComputeContext,
     resolve_image_url: impl Fn(&str, Option<&str>) -> String,
 ) -> (ComputedValues, CustomProperties) {
+    let (computed, custom, _) = cascade_reporting_explicit_inheritance(
+        parent,
+        parent_custom,
+        declarations,
+        custom_declarations,
+        color_context,
+        resolve_image_url,
+    );
+    (computed, custom)
+}
+
+/// As [`cascade_with_custom_context_and_image_resolver`], also reporting
+/// whether a winning `inherit`, after `var()` substitution, copied a
+/// non-inherited property from `parent`. Only such a winner reads the parent
+/// beyond what [`ComputedValues::for_child`] carries.
+///
+/// # Panics
+///
+/// Panics if the generated property tables disagree on a value type.
+pub fn cascade_reporting_explicit_inheritance(
+    parent: Option<&ComputedValues>,
+    parent_custom: Option<&CustomProperties>,
+    declarations: impl IntoIterator<Item = MatchedDeclaration>,
+    custom_declarations: impl IntoIterator<Item = MatchedCustomDeclaration>,
+    color_context: ColorComputeContext,
+    resolve_image_url: impl Fn(&str, Option<&str>) -> String,
+) -> (ComputedValues, CustomProperties, bool) {
     let mut custom_winners: std::collections::BTreeMap<String, (Priority, CustomDeclaredValue)> =
         std::collections::BTreeMap::new();
     for matched in custom_declarations {
@@ -1727,6 +1754,7 @@ pub fn cascade_with_custom_context_and_image_resolver(
 
     let initial = ComputedValues::default();
     let mut result = parent.map(ComputedValues::for_child).unwrap_or_default();
+    let mut explicit_inheritance = false;
     for (index, winner) in winners.into_iter().enumerate() {
         let Some((_, value, source_url)) = winner else {
             continue;
@@ -1750,6 +1778,7 @@ pub fn cascade_with_custom_context_and_image_resolver(
             },
             DeclaredValue::Initial => result.copy_property_from(property, &initial),
             DeclaredValue::Inherit => {
+                explicit_inheritance |= parent.is_some() && !property.metadata().inherited;
                 result.copy_property_from(property, parent.unwrap_or(&initial));
             },
             DeclaredValue::Unset => {
@@ -1763,7 +1792,7 @@ pub fn cascade_with_custom_context_and_image_resolver(
         }
     }
     resolve_computed_colors(&mut result, parent, color_context);
-    (result, custom)
+    (result, custom, explicit_inheritance)
 }
 
 fn resolve_computed_colors(

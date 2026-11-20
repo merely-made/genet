@@ -265,6 +265,8 @@ and no `harness-timeout` remains for a supported element, both engines. Touches
 `script-runtime-api` DOM files that other lanes also edit; it lands behind the
 P1 policy container.
 
+P2 also owns [image-button resource loading](#image-button-resource-loading-2026-11-20).
+
 **P3. Fetch Metadata.** `Sec-Fetch-Site`, `-Mode`, `-Dest`, `-User` on fetch,
 XHR and the P2 loaders. Done when `fetch/metadata` and
 `fetch/metadata/generated` rows for supported initiators pass.
@@ -387,6 +389,25 @@ accounting, because Murm's request body is buffered), Mark: **"Keep .h2. on plai
 origin for now (Recommended)"**. `--server-h2-base` stays as an opt-in. Follow-up for
 Murm: stream request bodies so full-duplex h2 upload can run, then the h2 origin can
 become the default.
+
+## Image-button resource loading (2026-11-20)
+
+The document resource collector in
+`components/genet-document-resources/lib.rs` discovers `img` sources but
+has no entry for `input type=image`. Extend the element image-request
+lifecycle to parser-created and script-created image buttons. Resolve
+`src` against the owning document's base and apply its image request policy.
+Publish image availability and decoded metadata to the
+[image-button sizing work](2026-09-12_css_3d_transforms_and_first_frame_plan.md#image-button-sizing-2026-11-20)
+for the current source. Handle changes to `src` and `type` so stale
+completions cannot become the button's current image.
+
+Qualify successful and failed requests, source replacement, and type changes
+on Bole and Vano. The
+[Image Button state](https://html.spec.whatwg.org/multipage/input.html#image-button-state-(type=image))
+defines the request and availability behavior. The
+[IDL reflection closeout](archive_docs/2026-11-20/2026-09-07_idl_interface_table_plan.md#archival-closeout-2026-11-20)
+records the setter and getter coverage that preceded this work.
 
 ## Progress
 

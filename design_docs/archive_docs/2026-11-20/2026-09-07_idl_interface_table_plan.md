@@ -2,13 +2,13 @@
 
 **Date:** 2026-09-07
 
-**Status:** landed 2026-09-07. `components/script-runtime-api` (the DOM table
-and its bootstrap glue) plus a new offline generator at
-`support/idl-interface-table`. No renderer, layout or network source touched.
+**Status (2026-11-20).** Archived after the generated table and the form and
+tabular reflection follow-through landed. See the
+[closeout](#archival-closeout-2026-11-20) for the verification and remaining owners.
 
-**Parent:** [`2026-09-06_web_platform_wpt_census.md`](2026-09-06_web_platform_wpt_census.md);
-measured against the [`2026-09-07_wpt_harness_repair_plan.md`](2026-09-07_wpt_harness_repair_plan.md)
-ledger, which is this lane's baseline.
+**Parent.** The [web platform WPT census](../../2026-09-06_web_platform_wpt_census.md)
+and the [WPT harness repair ledger](../../2026-09-07_wpt_harness_repair_plan.md)
+record the original lane's baseline.
 
 **Receipts:** `Code/testing/genet/wpt-ledger/2026-09-07_idl_interface_table/`.
 
@@ -280,13 +280,14 @@ Named movements:
 variant, which needs `DOMParser` — a missing global, not a table gap — and
 three are the case-preservation limit recorded in F6.
 
-## Known gaps carried forward
+## Original scope limits
 
-- The three case-sensitivity subtests in F6.
+- The three case-sensitivity subtests in F6 were closed by the
+  [tag-name lane](../2026-11-17/2026-09-07_tagname_window_globals_plan.md#measured-movement).
 - The generator reads `html.idl`, `dom.idl` and `cssom.idl`. `SVG.idl`,
-  `uievents.idl` and the rest of the 338 vendored IDL files are untouched;
-  extending the shape pass to them is the obvious next slice and is not
-  scheduled.
+  `uievents.idl` and the other vendored IDL files were outside the original
+  landing. The [deferred shape coverage](../../2026-09-07_deferred_web_platform_lanes_scoping.md#deferred-idl-shape-coverage-2026-11-20)
+  records the current inputs and the unscheduled expansion.
 
 ## `[ReflectRange]` follow-through (2026-11-17)
 
@@ -649,6 +650,21 @@ On each engine, `reflection-forms.html` improved from 8269/8271 to
 8271/8271. The two Kelvin-sign assertions passed, and every prior pass
 held. Frozen runners, raw maps, and the comparison are retained in
 `Code/output/genet-input-type-ascii/`.
+
+## Archival closeout (2026-11-20)
+
+The generator and interface table landed in September and satisfied the
+three phases above. The retained follow-through receipts record
+`reflection-tabular.html` at 6116/6116 and `reflection-forms.html` at
+8271/8271 on Bole and Vano. The [tag-name lane](../2026-11-17/2026-09-07_tagname_window_globals_plan.md#measured-movement)
+records the three F6 gains and an all-pass Bole `interfaces.html` run.
+
+[Fetch P2](../../2026-10-20_fetch_request_security_plan.md#image-button-resource-loading-2026-11-20)
+owns image-button source loading and availability.
+[Image-button sizing](../../2026-09-12_css_3d_transforms_and_first_frame_plan.md#image-button-sizing-2026-11-20)
+owns natural dimensions, rendered sizing and the pre-existing height
+discrepancy. Broader interface shape input is recorded in
+[deferred web-platform scoping](../../2026-09-07_deferred_web_platform_lanes_scoping.md#deferred-idl-shape-coverage-2026-11-20).
 
 ## Progress
 

@@ -138,7 +138,6 @@ older `docs/` corpus without changing their location or governance.
 | [WPT harness repair](2026-09-07_wpt_harness_repair_plan.md) | Earlier isolation/include/handler/deadline repairs retained. September 29 isolated Vano workers use a fresh runtime because harness snapshots lost the window proxy; real sync/microtask reporting passes on both engines, GC on/off (`0c4aa9f60b8`). In-process snapshots and server-mode network measurements remain separate gates. |
 | [XMLHttpRequest](2026-09-07_xhr_plan.md) | XHR as a state machine over the fetch seam, landed 2026-09-07: xhr 53 to 281 subtests in disk mode, 831 of 1,336 in server mode, fetch holds. Residuals: responseXML needs DOMParser; 28 errors are Worker and document.domain demand. |
 | [Globals, clone and timing](2026-11-03_globals_clone_timing_frontier_plan.md) | Reconcile actual transfer custody, platform serialization, timing producers and cross-agent reach. SubtleCrypto, FileList and later Worker/frame messaging already exist; their presence does not establish full qualification. |
-| [IDL interface table](2026-09-07_idl_interface_table_plan.md) | The scripted tier's HTML interface table is generated from WPT's vendored WebIDL plus its tag map, with 41 reasoned overrides and a drift test. 72 interfaces / 338 reflected attributes / 41 shape-only DOM-CSSOM interfaces. `[ReflectRange]` bounds reach the unsigned-long getter. Remaining work includes invalid-value defaults and extending the shape pass past `html`, `dom` and `cssom`. |
 | [MutationObserver and timing](2026-10-20_observers_and_timing_plan.md#mutationobserver-archival-carry-2026-11-16) | The observer implementation is complete. Phase M owns current verification of parser-driven records, CDATA `textContent`, and cross-realm callback exception reporting. |
 | [Selection and Range](2026-09-07_selection_range_plan.md) | `Range` / `StaticRange` / `Selection` over the scripted arena, with the live-range steps at the bootstrap's mutation funnel and a boundary index keyed by node. Landed 2026-09-07: `selection` 0/280 to 28,582/33,621 subtests, `dom/ranges` 0 to 10 all-pass, +29,126 subtest passes and zero pass-to-fail. The DOM node model lane supplied all three on 2026-09-07 (plus a constructible `Document`, the second floor in the same file) and `dom/ranges` unfloored to 15 all-pass / 35,466 subtests. |
 | [DOM node model](2026-09-07_dom_node_model_plan.md) | `DocumentFragment` insertion, `CDATASection` and real `DocumentType` nodes, the `ParentNode` / `ChildNode` mixins, `normalize`, `outerHTML`, namespaced attributes as live `Attr` nodes, `DOMParser` / `XMLSerializer` and `Node.baseURI`. Landed 2026-09-07: `dom/ranges` unfloored (15 errored to 1, 24 to 35,466 subtests), `html/semantics/interfaces.html` 298 to 435 of 438, +82,944 subtest passes over nine directories with zero pass-to-fail. Next proof is a server-mode receipt for `responseXML`, and static `NodeList` indexed access, which is a `Proxy` trap per read. |
@@ -428,7 +427,7 @@ completed corpus census or bounded slice does not close its enclosing feature.
   18/38 → 32/38 and `-characterData` 13/23 → 21/23; +29,126 subtest passes over
   five directories with zero pass-to-fail. Raw maps under
   `Code/testing/genet/wpt-ledger/2026-09-07_selection_range/`.)
-- [idl_interface_table_plan](2026-09-07_idl_interface_table_plan.md)
+- [idl_interface_table_plan](archive_docs/2026-11-20/2026-09-07_idl_interface_table_plan.md)
   (**landed 2026-09-07**: the scripted tier's hand-maintained HTML interface
   table is replaced by one generated offline from WPT's vendored WebIDL
   (`tests/wpt/tests/interfaces/{html,dom,cssom}.idl`) plus its tag map
@@ -693,6 +692,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
 Per policy §4 and §8: a plan moves here once complete and once its open
 points have a home elsewhere. Links into a moved plan are repaired in the
 same session; links out of it are rewritten for its new depth.
+
+### Archived 2026-11-20
+
+- [IDL interface table and reflection](archive_docs/2026-11-20/2026-09-07_idl_interface_table_plan.md#archival-closeout-2026-11-20) — the recorded forms and tabular reflection runs passed 8271/8271 and 6116/6116 on each engine. [Fetch P2](2026-10-20_fetch_request_security_plan.md#image-button-resource-loading-2026-11-20) owns image-button loading, the [layout plan](2026-09-12_css_3d_transforms_and_first_frame_plan.md#image-button-sizing-2026-11-20) owns image-button sizing, and [deferred web-platform scoping](2026-09-07_deferred_web_platform_lanes_scoping.md#deferred-idl-shape-coverage-2026-11-20) holds broader IDL input coverage.
 
 ### Archived 2026-11-17
 

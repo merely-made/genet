@@ -158,6 +158,7 @@ where
         let structural_dependencies = style_set.has_structural_dependencies();
         let text_dependencies = style_set.depends_on_text_content();
         let mut roots = Vec::new();
+        let mut form_trees = FormTrees::default();
 
         for mutation in mutations {
             // HTML title is metadata unless a selector tests it or a
@@ -173,32 +174,36 @@ where
             {
                 continue;
             }
-            for_each_mutation_dependency(dom, mutation, |dependency| match dependency {
-                MutationDependency::Element(node) => {
-                    push_element_hint(dom, &mut roots, node, sibling_dependencies);
-                },
-                MutationDependency::SemanticOwner(node) | MutationDependency::Tree(node) => {
-                    push_root(dom, &mut roots, node);
-                },
-                MutationDependency::Structure {
-                    kind,
-                    node,
-                    boundary,
-                } => {
-                    if kind == StructureKind::Text {
-                        if text_dependencies && dom.parent(node).is_some() {
-                            push_element_hint(dom, &mut roots, boundary, sibling_dependencies);
-                        }
-                    } else if structural_dependencies {
-                        push_element_hint(dom, &mut roots, boundary, sibling_dependencies);
-                    } else if matches!(
-                        kind,
-                        StructureKind::Inserted | StructureKind::Replaced | StructureKind::Moved
-                    ) {
+            for_each_mutation_dependency(dom, mutation, &mut form_trees, |dependency| {
+                match dependency {
+                    MutationDependency::Element(node) => {
+                        push_element_hint(dom, &mut roots, node, sibling_dependencies);
+                    },
+                    MutationDependency::SemanticOwner(node) | MutationDependency::Tree(node) => {
                         push_root(dom, &mut roots, node);
-                    }
-                },
-                MutationDependency::Removed(node) => remove_subtree(dom, &mut self.plane, node),
+                    },
+                    MutationDependency::Structure {
+                        kind,
+                        node,
+                        boundary,
+                    } => {
+                        if kind == StructureKind::Text {
+                            if text_dependencies && dom.parent(node).is_some() {
+                                push_element_hint(dom, &mut roots, boundary, sibling_dependencies);
+                            }
+                        } else if structural_dependencies {
+                            push_element_hint(dom, &mut roots, boundary, sibling_dependencies);
+                        } else if matches!(
+                            kind,
+                            StructureKind::Inserted
+                                | StructureKind::Replaced
+                                | StructureKind::Moved
+                        ) {
+                            push_root(dom, &mut roots, node);
+                        }
+                    },
+                    MutationDependency::Removed(node) => remove_subtree(dom, &mut self.plane, node),
+                }
             });
         }
         for node in state_nodes {
@@ -252,6 +257,23 @@ where
     }
 }
 
+/// Which DOM trees hold a form, fieldset or radio, by tree root. One batch of
+/// mutations read against one DOM shares it, so each tree is walked once.
+pub(crate) struct FormTrees<Id>(HashMap<Id, bool>);
+
+impl<Id> Default for FormTrees<Id> {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+#[cfg(test)]
+impl<Id> FormTrees<Id> {
+    pub(crate) fn trees_walked(&self) -> usize {
+        self.0.len()
+    }
+}
+
 /// Mutation facts shared by style and retained layout. The consumers choose
 /// their own restyle and formatting roots from these affected DOM owners.
 pub(crate) enum MutationDependency<Id> {
@@ -281,6 +303,7 @@ pub(crate) enum StructureKind {
 pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
     dom: &D,
     mutation: &DomMutation<D::NodeId>,
+    form_trees: &mut FormTrees<D::NodeId>,
     mut affected: impl FnMut(MutationDependency<D::NodeId>),
 ) {
     match mutation {
@@ -297,7 +320,7 @@ pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
             // Ownership changes reach controls outside this subtree. An ID
             // on any element can also block an external form association.
             if form_association_attribute_changed(dom, *node, name) {
-                emit_form_tree(dom, *node, &mut affected);
+                emit_form_tree(dom, *node, form_trees, &mut affected);
             }
             // The first old value matters when a radio changes type.
             if radio_group_attribute_changed(dom, *node, name, old_value.as_deref())
@@ -328,7 +351,7 @@ pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
             emit_validity_owners(dom, *node, &mut affected);
         },
         DomMutation::Inserted { node, parent } => {
-            emit_form_tree(dom, *parent, &mut affected);
+            emit_form_tree(dom, *parent, form_trees, &mut affected);
             emit_select_owners(dom, *parent, &mut affected);
             affected(MutationDependency::Structure {
                 kind: StructureKind::Inserted,
@@ -341,7 +364,7 @@ pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
             former_parent,
         } => {
             affected(MutationDependency::Removed(*node));
-            emit_form_tree(dom, *former_parent, &mut affected);
+            emit_form_tree(dom, *former_parent, form_trees, &mut affected);
             emit_select_owners(dom, *former_parent, &mut affected);
             affected(MutationDependency::Structure {
                 kind: StructureKind::Removed,
@@ -364,7 +387,7 @@ pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
                 })
             {
                 affected(MutationDependency::Element(control));
-                emit_form_tree(dom, control, &mut affected);
+                emit_form_tree(dom, control, form_trees, &mut affected);
                 emit_select_owners(dom, control, &mut affected);
                 emit_validity_owners(dom, control, &mut affected);
             }
@@ -375,7 +398,7 @@ pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
             });
         },
         DomMutation::SubtreeReplaced { node } => {
-            emit_form_tree(dom, *node, &mut affected);
+            emit_form_tree(dom, *node, form_trees, &mut affected);
             emit_select_owners(dom, *node, &mut affected);
             affected(MutationDependency::Structure {
                 kind: StructureKind::Replaced,
@@ -389,7 +412,7 @@ pub(crate) fn for_each_mutation_dependency<D: LayoutDom>(
             to_parent,
         } => {
             for parent in [*from_parent, *to_parent] {
-                emit_form_tree(dom, parent, &mut affected);
+                emit_form_tree(dom, parent, form_trees, &mut affected);
                 emit_select_owners(dom, parent, &mut affected);
                 affected(MutationDependency::Structure {
                     kind: StructureKind::Moved,
@@ -424,9 +447,10 @@ fn emit_select_owners<D: LayoutDom>(
 fn emit_form_tree<D: LayoutDom>(
     dom: &D,
     node: D::NodeId,
+    form_trees: &mut FormTrees<D::NodeId>,
     affected: &mut impl FnMut(MutationDependency<D::NodeId>),
 ) {
-    if let Some(root) = form_validity_tree_root(dom, node) {
+    if let Some(root) = form_validity_tree_root(dom, node, form_trees) {
         affected(MutationDependency::Tree(root));
     }
 }
@@ -634,13 +658,20 @@ fn radio_tree_root<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<D::NodeId> 
 /// owners, including controls outside a form subtree. Radio validity also
 /// depends on same-name group membership. Widen only DOM trees containing one
 /// of those dependencies, so ordinary documents retain the existing scope.
-fn form_validity_tree_root<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<D::NodeId> {
+fn form_validity_tree_root<D: LayoutDom>(
+    dom: &D,
+    node: D::NodeId,
+    form_trees: &mut FormTrees<D::NodeId>,
+) -> Option<D::NodeId> {
     if !dom.is_live(node) {
         return None;
     }
     let mut root = node;
     while let Some(parent) = dom.parent(root) {
         root = parent;
+    }
+    if let Some(known) = form_trees.0.get(&root) {
+        return known.then_some(root);
     }
     let mut pending = vec![root];
     let mut contains_aggregate = false;
@@ -656,7 +687,8 @@ fn form_validity_tree_root<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<D::
         }
         pending.extend(dom.dom_children(current));
     }
-    if contains_aggregate { Some(root) } else { None }
+    form_trees.0.insert(root, contains_aggregate);
+    contains_aggregate.then_some(root)
 }
 
 fn push_root<D>(dom: &D, roots: &mut Vec<D::NodeId>, root: D::NodeId)

@@ -3801,7 +3801,7 @@ fn shared_mutation_dependencies_match_fresh_selectors_and_geometry() {
 
 #[test]
 fn radio_state_and_interaction_or_custom_validity_have_distinct_group_facts() {
-    use crate::invalidation::{MutationDependency, for_each_mutation_dependency};
+    use crate::invalidation::{FormTrees, MutationDependency, for_each_mutation_dependency};
 
     let dom = ScriptedDom::from_serialized_document(
         "<html><body><form id=owner><input id=radio type=radio name=group required></form></body></html>",
@@ -3822,15 +3822,49 @@ fn radio_state_and_interaction_or_custom_validity_have_distinct_group_facts() {
         let mut direct = false;
         let mut form_owner = false;
         let mut group_tree = false;
-        for_each_mutation_dependency(&dom, &mutation, |fact| match fact {
-            MutationDependency::Element(node) => direct |= node == radio,
-            MutationDependency::SemanticOwner(node) => form_owner |= node == form,
-            MutationDependency::Tree(_) => group_tree = true,
-            MutationDependency::Structure { .. } | MutationDependency::Removed(_) => {},
-        });
+        for_each_mutation_dependency(
+            &dom,
+            &mutation,
+            &mut FormTrees::default(),
+            |fact| match fact {
+                MutationDependency::Element(node) => direct |= node == radio,
+                MutationDependency::SemanticOwner(node) => form_owner |= node == form,
+                MutationDependency::Tree(_) => group_tree = true,
+                MutationDependency::Structure { .. } | MutationDependency::Removed(_) => {},
+            },
+        );
         assert!(direct, "radio itself needs its changed selector or style");
         assert!(form_owner, "the form aggregates its control's validity");
         assert_eq!(group_tree, widens_group, "{mutation:?}");
+    }
+}
+
+#[test]
+fn a_batch_walks_each_tree_for_form_dependencies_once() {
+    use crate::invalidation::{FormTrees, MutationDependency, for_each_mutation_dependency};
+
+    for (markup, widens) in [
+        (
+            "<html><body><form></form><p id=a></p><p id=b></p></body></html>",
+            true,
+        ),
+        ("<html><body><p id=a></p><p id=b></p></body></html>", false),
+    ] {
+        let dom = ScriptedDom::from_serialized_document(markup);
+        let parent = dom.parent(by_id(&dom, "a")).expect("body");
+        let mut form_trees = FormTrees::default();
+        for id in ["a", "b"] {
+            let mutation = DomMutation::Inserted {
+                node: by_id(&dom, id),
+                parent,
+            };
+            let mut tree = false;
+            for_each_mutation_dependency(&dom, &mutation, &mut form_trees, |fact| {
+                tree |= matches!(fact, MutationDependency::Tree(_));
+            });
+            assert_eq!(tree, widens, "{markup}: {id}");
+        }
+        assert_eq!(form_trees.trees_walked(), 1, "{markup}");
     }
 }
 

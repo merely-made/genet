@@ -11,7 +11,7 @@
 //! sticky-positioning pass that needs the laid-out scrollport.
 
 use super::*;
-use crate::invalidation::{MutationDependency, for_each_mutation_dependency};
+use crate::invalidation::{FormTrees, MutationDependency, for_each_mutation_dependency};
 
 impl<D> LiveryDocument<D>
 where
@@ -53,8 +53,9 @@ where
                 if name.ns == Namespace::from("") && name.local == LocalName::from("style"))
         });
         let mut roots = Vec::new();
+        let mut form_trees = FormTrees::default();
         for mutation in mutations {
-            for_each_mutation_dependency(&self.dom, mutation, |dependency| {
+            for_each_mutation_dependency(&self.dom, mutation, &mut form_trees, |dependency| {
                 let node = match dependency {
                     MutationDependency::Element(node)
                     | MutationDependency::SemanticOwner(node)

@@ -18,6 +18,8 @@ use crate::{
     PhysicalRect, PhysicalSize,
 };
 
+mod splice;
+
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct FragmentId(u32);
 

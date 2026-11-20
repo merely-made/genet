@@ -12,6 +12,13 @@ impl<Id: Copy + Eq + Hash> LiveryLayout<Id> {
     /// cascade. The caller owns the DOM, styles, resources, and scroll state.
     /// Call with the complete batch since this layout and the same device,
     /// text and image resources. A refusal leaves the published layout intact.
+    ///
+    /// `previous_styles` is the resolved plane the published layout was made
+    /// from. A scroll batch (see `scroll_batch`) patches it in place into the
+    /// plane resolved from `cascade`, which the caller keeps for the next
+    /// batch. `restyled` is `IncrementalStyle::restyled_elements` from the
+    /// update that produced `cascade`; without it no scroll batch is admitted.
+    /// The text route ignores it.
     #[expect(
         clippy::too_many_arguments,
         reason = "borrowed layout and its caller-owned inputs"
@@ -21,7 +28,8 @@ impl<Id: Copy + Eq + Hash> LiveryLayout<Id> {
         dom: &D,
         style_set: &StyleSet,
         cascade: &StylePlane<Id>,
-        previous_styles: &StylePlane<Id>,
+        previous_styles: &mut StylePlane<Id>,
+        restyled: Option<&HashSet<Id>>,
         viewport: ViewportSizes,
         mutations: &[DomMutation<Id>],
         text: &mut TextSystem,
@@ -33,12 +41,21 @@ impl<Id: Copy + Eq + Hash> LiveryLayout<Id> {
             return Ok(false);
         }
         let Some(owner) = text_mutation_owner(dom, mutations) else {
-            return Ok(false);
+            return self.relayout_scroll_batch(
+                dom,
+                cascade,
+                previous_styles,
+                restyled,
+                viewport,
+                mutations,
+                text,
+                images,
+            );
         };
         // The complete cascade includes selectors, generated content and
         // inheritance outside the edited subtree. Keep the published plane
         // only if those results and the resolved lengths agree.
-        if cascade != previous_styles {
+        if cascade != &*previous_styles {
             let mut resolved = cascade.clone();
             resolved.resolve_ch_lengths(text, viewport);
             if resolved != *previous_styles {
@@ -181,7 +198,7 @@ where
     }
 }
 
-fn text_sources_in_dom_order<D: LayoutDom>(dom: &D) -> Vec<D::NodeId> {
+pub(in crate::layout) fn text_sources_in_dom_order<D: LayoutDom>(dom: &D) -> Vec<D::NodeId> {
     fn visit<D: LayoutDom>(dom: &D, node: D::NodeId, sources: &mut Vec<D::NodeId>) {
         // Native controls retain text under the element's own ID.
         if dom.kind(node) == NodeKind::Text || dom.form_control_state(node).is_some() {

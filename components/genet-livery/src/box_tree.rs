@@ -214,6 +214,15 @@ where
     pub(crate) fn into_tree(self) -> CssBoxTree<Id> {
         self.tree
     }
+
+    /// Take the previous tree's identities before formatting, so fragments
+    /// formatted from this tree need no later box remap.
+    pub(crate) fn reconcile_identifiers(
+        &mut self,
+        previous: &CssBoxTree<Id>,
+    ) -> std::collections::HashMap<buckram::BoxId, buckram::BoxId> {
+        self.tree.reconcile_identifiers(previous)
+    }
 }
 
 fn generated_text_input<D>(

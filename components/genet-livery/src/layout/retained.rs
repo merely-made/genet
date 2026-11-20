@@ -394,6 +394,24 @@ where
     false
 }
 
+/// Whether a fixed box sits strictly below `root` in the generated tree.
+pub(in crate::layout) fn box_subtree_has_fixed<Id>(
+    boxes: &buckram::CssBoxTree<Id>,
+    root: BoxId,
+) -> bool
+where
+    Id: Copy + Eq + Hash,
+{
+    let mut pending = boxes[root].children().to_vec();
+    while let Some(box_id) = pending.pop() {
+        if boxes[box_id].positioning == PositioningScheme::Fixed {
+            return true;
+        }
+        pending.extend_from_slice(boxes[box_id].children());
+    }
+    false
+}
+
 pub(in crate::layout) fn supports_retained_table_root_formatting<Id>(
     boxes: &GeneratedBoxTree<Id>,
     root: BoxId,

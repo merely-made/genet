@@ -402,6 +402,39 @@ where
         .collect()
 }
 
+/// The placement of one absolute or fixed box, without the every-box walk of
+/// [`positioned_placements`]. Admits exactly the boxes that walk admits.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one placement needs the same inputs as the batch"
+)]
+pub(in crate::layout) fn positioned_placement_for_box<D>(
+    fragments: &FragmentTree,
+    boxes: &buckram::CssBoxTree<D::NodeId>,
+    styles: &StylePlane<D::NodeId>,
+    dom: &D,
+    image_sources: &dyn crate::ImageSourceLookup,
+    viewport_width: f32,
+    viewport_height: f32,
+    box_id: BoxId,
+) -> Option<PositionedPlacement>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let candidate = positioned_candidate(fragments, boxes, styles, box_id)?;
+    positioned_placement(
+        fragments,
+        boxes,
+        styles,
+        dom,
+        image_sources,
+        &HashMap::new(),
+        (viewport_width, viewport_height),
+        candidate,
+    )
+}
+
 /// An absolute or fixed box awaiting placement. Its static-position record is
 /// relative to its source fragment, so a move leaves it valid.
 struct PositionedCandidate<Id> {
@@ -426,30 +459,41 @@ where
     };
     let mut candidates = boxes
         .iter()
-        .filter_map(|(box_id, css_box)| {
-            if !matches!(
-                css_box.positioning,
-                PositioningScheme::Absolute | PositioningScheme::Fixed
-            ) || matches!(
-                css_box.display.internal_table,
-                Some(role) if !supports_shared_positioned_table_part(role)
-            ) {
-                return None;
-            }
-            let node = css_box.origin.node()?;
-            styles.get(node)?;
-            let root = fragments.fragment_ids_for_box(box_id).first().copied()?;
-            let static_position = *fragments.static_position_for_box(box_id)?;
-            Some(PositionedCandidate {
-                box_id,
-                node,
-                root,
-                static_position,
-            })
-        })
+        .filter_map(|(box_id, _)| positioned_candidate(fragments, boxes, styles, box_id))
         .collect::<Vec<_>>();
     candidates.sort_by_key(|candidate| depth(candidate.box_id));
     candidates
+}
+
+fn positioned_candidate<Id>(
+    fragments: &FragmentTree,
+    boxes: &buckram::CssBoxTree<Id>,
+    styles: &StylePlane<Id>,
+    box_id: BoxId,
+) -> Option<PositionedCandidate<Id>>
+where
+    Id: Copy + Eq + Hash,
+{
+    let css_box = &boxes[box_id];
+    if !matches!(
+        css_box.positioning,
+        PositioningScheme::Absolute | PositioningScheme::Fixed
+    ) || matches!(
+        css_box.display.internal_table,
+        Some(role) if !supports_shared_positioned_table_part(role)
+    ) {
+        return None;
+    }
+    let node = css_box.origin.node()?;
+    styles.get(node)?;
+    let root = fragments.fragment_ids_for_box(box_id).first().copied()?;
+    let static_position = *fragments.static_position_for_box(box_id)?;
+    Some(PositionedCandidate {
+        box_id,
+        node,
+        root,
+        static_position,
+    })
 }
 
 /// `candidate`'s placement, read from the fragment tree as it stands now.

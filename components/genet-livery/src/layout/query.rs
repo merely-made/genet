@@ -11,6 +11,14 @@
 
 use super::*;
 
+/// A planned translation of one positioned fragment subtree.
+pub(in crate::layout) struct Reposition<Id> {
+    node: Id,
+    root: FragmentId,
+    containing: Option<FragmentId>,
+    offset: PhysicalOffset,
+}
+
 impl<Id> LiveryLayout<Id>
 where
     Id: Copy + Eq + Hash,
@@ -478,49 +486,83 @@ where
         D: LayoutDom<NodeId = Id>,
         D::NodeId: Copy + Eq + Hash,
     {
-        let Some(placement) = self.positioned_placement_for_node(
+        let moved = match self.plan_reposition(
             dom,
             styles,
             image_sources,
             node,
             viewport_width,
             viewport_height,
-        ) else {
-            return false;
+        ) {
+            Some(Some(plan)) => {
+                self.apply_reposition(dom, &plan);
+                true
+            },
+            _ => false,
         };
+        self.buckram.fragments_mut().flush_overflow();
+        moved
+    }
+
+    /// The proof behind [`Self::reposition_stable_positioned_subtree`], with
+    /// no change made: `None` when it fails, `Some(None)` when the subtree is
+    /// already in place, otherwise the translation to apply.
+    pub(in crate::layout) fn plan_reposition<D>(
+        &self,
+        dom: &D,
+        styles: &StylePlane<D::NodeId>,
+        image_sources: &dyn crate::ImageSourceLookup,
+        node: D::NodeId,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> Option<Option<Reposition<Id>>>
+    where
+        D: LayoutDom<NodeId = Id>,
+        D::NodeId: Copy + Eq + Hash,
+    {
+        let placement = self.positioned_placement_for_node(
+            dom,
+            styles,
+            image_sources,
+            node,
+            viewport_width,
+            viewport_height,
+        )?;
         let target = placement.target_rect();
         if (target.width - placement.current.width).abs() > 0.001
             || (target.height - placement.current.height).abs() > 0.001
         {
-            return false;
+            return None;
         }
         // A fixed box below would move with the subtree though its containing
         // block stays put, so the ordinary layout places it.
-        let boxes = self.buckram.boxes();
-        if boxes.iter().any(|(_, css_box)| {
-            css_box.positioning == PositioningScheme::Fixed
-                && std::iter::successors(css_box.parent(), |parent| boxes[*parent].parent())
-                    .any(|ancestor| ancestor == placement.box_id)
-        }) {
-            return false;
+        if box_subtree_has_fixed(self.buckram.boxes(), placement.box_id) {
+            return None;
         }
         let offset = PhysicalOffset {
             x: placement.containing_rect.x + target.x - placement.current.x,
             y: placement.containing_rect.y + target.y - placement.current.y,
         };
-        if offset.x == 0.0 && offset.y == 0.0 {
-            return false;
-        }
-        {
-            let fragments = self.buckram.fragments_mut();
-            fragments.translate_subtree(placement.root, offset);
-            fragments.set_containing_fragment(placement.root, placement.containing_fragment);
-            fragments.flush_overflow();
-        }
+        Some((offset.x != 0.0 || offset.y != 0.0).then_some(Reposition {
+            node,
+            root: placement.root,
+            containing: placement.containing_fragment,
+            offset,
+        }))
+    }
+
+    /// Move a planned subtree and its text. Aggregate overflow is left stale
+    /// for the caller's single `flush_overflow`.
+    pub(in crate::layout) fn apply_reposition<D>(&mut self, dom: &D, plan: &Reposition<Id>)
+    where
+        D: LayoutDom<NodeId = Id>,
+    {
+        let fragments = self.buckram.fragments_mut();
+        fragments.translate_subtree(plan.root, plan.offset);
+        fragments.set_containing_fragment(plan.root, plan.containing);
         if let Some(text_frame) = self.text_frame.as_mut() {
-            text_frame.translate_subtree(dom, node, (offset.x, offset.y));
+            text_frame.translate_subtree(dom, plan.node, (plan.offset.x, plan.offset.y));
         }
-        true
     }
 
     /// Resize and reposition one retained absolute or fixed leaf after its
@@ -597,19 +639,26 @@ where
         D: LayoutDom<NodeId = Id>,
         D::NodeId: Copy + Eq + Hash,
     {
-        let intrinsic_sizes = HashMap::new();
-        let mut placements = positioned_placements(
-            self.buckram.fragments(),
-            self.buckram.boxes(),
-            styles,
-            dom,
-            image_sources,
-            &intrinsic_sizes,
-            viewport_width,
-            viewport_height,
-        )
-        .into_iter()
-        .filter(|placement| self.buckram.boxes()[placement.box_id].origin.node() == Some(node));
+        // The node's own boxes, not every box: the same placements the
+        // document-wide walk would return for it.
+        let mut placements = self
+            .buckram
+            .boxes()
+            .boxes_for_node(node)
+            .iter()
+            .filter(|box_id| self.buckram.boxes()[**box_id].origin.node() == Some(node))
+            .filter_map(|box_id| {
+                positioned_placement_for_box(
+                    self.buckram.fragments(),
+                    self.buckram.boxes(),
+                    styles,
+                    dom,
+                    image_sources,
+                    viewport_width,
+                    viewport_height,
+                    *box_id,
+                )
+            });
         let placement = placements.next()?;
         (placements.next().is_none()
             && self.buckram.boxes()[placement.box_id]

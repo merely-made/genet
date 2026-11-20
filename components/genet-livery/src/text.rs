@@ -7,6 +7,7 @@
 //! Clean-room Parley adapter for Livery inline formatting.
 
 mod cache;
+mod frame_splice;
 pub(crate) use cache::ShapeKey;
 #[cfg(all(feature = "parallel-text", not(target_arch = "wasm32")))]
 mod parallel;

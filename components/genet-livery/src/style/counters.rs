@@ -81,11 +81,7 @@ fn apply<Id: Copy + Eq>(
 pub(crate) fn resolve<D: LayoutDom>(dom: &D, plane: &mut StylePlane<D::NodeId>) {
     // Counter properties have no observable output until content uses them.
     // Keep documents without such output off the tree-walk path.
-    if !plane
-        .generated
-        .values()
-        .any(|(style, _)| style.content.has_counters())
-    {
+    if !plane.uses_counters() {
         return;
     }
     plane.invalidate_used_colors();

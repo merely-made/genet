@@ -74,6 +74,9 @@ pub struct IncrementalStyle<Id> {
     device: Option<Device>,
     snapshots: Vec<ElementSnapshot<Id>>,
     last_stats: RestyleStats,
+    /// Nodes whose plane entries the last update wrote or removed; `None`
+    /// when that update restyled the whole document or ran counters.
+    restyled: Option<HashSet<Id>>,
 }
 
 impl<Id> Default for IncrementalStyle<Id> {
@@ -87,6 +90,7 @@ impl<Id> Default for IncrementalStyle<Id> {
             device: None,
             snapshots: Vec::new(),
             last_stats: RestyleStats::default(),
+            restyled: None,
         }
     }
 }
@@ -109,6 +113,20 @@ where
 
     pub fn last_stats(&self) -> RestyleStats {
         self.last_stats
+    }
+
+    /// Every node whose entries in [`Self::styles`] the last `update` wrote
+    /// or removed: the flat subtree of each restyle root (or the root alone
+    /// when an inline-style root stopped), each removed subtree, and every
+    /// released node. Computed values, custom properties, generated pseudos,
+    /// diagnostics, presentational-hint and legacy-alignment entries and
+    /// explicit-inheritance marks are all keyed by element, so an element
+    /// outside the set kept every entry. `None` after a pass that restyled
+    /// the whole document (first, forced, stylesheet or device change, or
+    /// every element hinted), or when counter output exists, since counters
+    /// rewrite generated text anywhere in the document.
+    pub fn restyled_elements(&self) -> Option<&HashSet<Id>> {
+        self.restyled.as_ref()
     }
 
     /// Force the next update through the full-document correctness path.
@@ -137,6 +155,7 @@ where
         let stylesheet_invalidated = self.initialized && generation != self.stylesheet_generation;
         let device_invalidated = self.initialized && self.device != Some(*device);
         if !self.initialized || self.force_full || stylesheet_invalidated || device_invalidated {
+            self.restyled = None;
             self.plane = resolve_styles(dom, style_set, device, states);
             self.initialized = true;
             self.force_full = false;
@@ -166,6 +185,7 @@ where
         let mut inline_roots = Vec::new();
         let mut style_tested = None;
         let mut form_trees = FormTrees::default();
+        let mut restyled = HashSet::new();
 
         for mutation in mutations {
             // HTML title is metadata unless a selector tests it or a
@@ -225,7 +245,9 @@ where
                             push_root(dom, &mut roots, node);
                         }
                     },
-                    MutationDependency::Removed(node) => remove_subtree(dom, &mut self.plane, node),
+                    MutationDependency::Removed(node) => {
+                        remove_subtree(dom, &mut self.plane, node, &mut restyled);
+                    },
                 }
             });
         }
@@ -234,7 +256,13 @@ where
         }
 
         // innerHTML can retire old ids before the mutation is observed.
-        self.plane.retain(|id| dom.is_live(id));
+        self.plane.retain(|id| {
+            let live = dom.is_live(id);
+            if !live {
+                restyled.insert(id);
+            }
+            live
+        });
         roots.retain(|id| dom.is_live(*id));
         inline_roots.retain(|id| dom.is_live(*id));
         let may_stop = inline_style_roots(&mut roots, inline_roots);
@@ -257,7 +285,7 @@ where
             let (parent, parent_custom) = inherited_parent(dom, &self.plane, root);
             let context = context.as_ref().expect("nonempty restyle roots");
             if may_stop.contains(&root) {
-                let (restyled, descends) = restyle_inline_style_root(
+                let (cascaded, descends) = restyle_inline_style_root(
                     dom,
                     &selector_tree,
                     style_set,
@@ -266,14 +294,16 @@ where
                     (parent.as_ref(), parent_custom.as_ref()),
                     context,
                     &mut self.plane,
+                    &mut restyled,
                 );
-                restyled_elements += restyled;
+                restyled_elements += cascaded;
                 if descends {
                     descended.insert(root);
                 }
                 continue;
             }
-            remove_subtree(dom, &mut self.plane, root);
+            // The cascade rewrites exactly the flat subtree this removes.
+            remove_subtree(dom, &mut self.plane, root, &mut restyled);
             restyled_elements += resolve_subtree(
                 &selector_tree,
                 style_set,
@@ -301,6 +331,8 @@ where
             stylesheet_invalidated: false,
             device_invalidated: false,
         };
+        self.restyled =
+            (!self.last_stats.full_document && !self.plane.uses_counters()).then_some(restyled);
         self.last_stats
     }
 }
@@ -825,6 +857,7 @@ fn restyle_inline_style_root<D>(
     (parent, parent_custom): (Option<&ComputedValues>, Option<&CustomProperties>),
     context: &SubtreeStyleContext<D::NodeId>,
     plane: &mut StylePlane<D::NodeId>,
+    restyled: &mut HashSet<D::NodeId>,
 ) -> (usize, bool)
 where
     D: LayoutDom,
@@ -833,6 +866,7 @@ where
     let old_inherited = plane.get(root).map(ComputedValues::for_child);
     let old_custom = plane.custom_properties(root).cloned();
     plane.remove(root);
+    restyled.insert(root);
     let (computed, custom) = resolve_root_element(
         selector_tree,
         style_set,
@@ -843,15 +877,15 @@ where
         context,
         plane,
     );
-    let mut restyled = 1;
+    let mut cascaded = 1;
     let unchanged = old_inherited.is_some_and(|old| old == ComputedValues::for_child(&computed))
         && old_custom.as_ref() == Some(&custom)
         && !children_inherit_explicitly(dom, plane, root);
     if !unchanged {
         for child in dom.flat_children(root) {
-            remove_subtree(dom, plane, child);
+            remove_subtree(dom, plane, child, restyled);
         }
-        restyled += resolve_root_children(
+        cascaded += resolve_root_children(
             selector_tree,
             style_set,
             device,
@@ -863,7 +897,7 @@ where
         );
     }
     plane.insert_element(root, computed, custom);
-    (restyled, !unchanged)
+    (cascaded, !unchanged)
 }
 
 fn inherited_parent<D>(
@@ -884,14 +918,21 @@ where
     (None, None)
 }
 
-fn remove_subtree<D>(dom: &D, plane: &mut StylePlane<D::NodeId>, root: D::NodeId)
-where
+/// Remove the flat subtree at `root`, noting every node it removes.
+fn remove_subtree<D>(
+    dom: &D,
+    plane: &mut StylePlane<D::NodeId>,
+    root: D::NodeId,
+    removed: &mut HashSet<D::NodeId>,
+) where
     D: LayoutDom,
+    D::NodeId: Eq + Hash,
 {
     if dom.is_live(root) {
         for child in dom.flat_children(root) {
-            remove_subtree(dom, plane, child);
+            remove_subtree(dom, plane, child, removed);
         }
     }
     plane.remove(root);
+    removed.insert(root);
 }

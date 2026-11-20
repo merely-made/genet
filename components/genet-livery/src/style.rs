@@ -11,6 +11,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+mod batch_patch;
 mod counters;
 #[cfg(test)]
 mod used_color_tests;
@@ -1220,11 +1221,7 @@ where
         // Generated boxes too: a `content: url()` image is sized in `cap`.
         let generated = self.generated.values_mut().map(|(style, _)| style);
         for computed in self.values.values_mut().chain(generated) {
-            let environment = livery::values::RelativeLengthEnvironment::viewport(viewport)
-                .with_vertical_writing(computed.writing_mode.is_vertical())
-                .with_ch_advance(text.ch_advance(computed))
-                .with_cap_height(text.cap_height(computed));
-            let _ = resolve_relative_lengths(computed, environment);
+            batch_patch::resolve_ch(computed, text, viewport);
         }
     }
 
@@ -1248,6 +1245,14 @@ where
 
     pub fn len(&self) -> usize {
         self.values.len()
+    }
+
+    /// Whether any generated content reads a counter, so counter resolution
+    /// can rewrite generated text anywhere in the document.
+    pub(crate) fn uses_counters(&self) -> bool {
+        self.generated
+            .values()
+            .any(|(style, _)| style.content.has_counters())
     }
 
     pub fn is_empty(&self) -> bool {

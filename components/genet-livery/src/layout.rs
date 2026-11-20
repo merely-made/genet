@@ -87,6 +87,12 @@ mod positioned;
 mod query;
 mod retained;
 mod retained_session;
+mod scroll_batch;
+mod scroll_batch_admit;
+mod scroll_batch_format;
+mod scroll_batch_shape;
+#[cfg(test)]
+mod scroll_batch_tests;
 mod tables;
 mod taffy_style;
 #[cfg(test)]

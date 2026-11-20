@@ -576,6 +576,27 @@ and zero regressions. Vano completed with a 600-second timeout after its
 initial candidate run reached the 300-second limit. The frozen runner, raw
 maps, and assertion comparison are retained in `Code/output/genet-input-size/`.
 
+## Select size reflection (2026-11-19)
+
+The `select.size` getter accepts parsed non-negative integers from 0 through
+2147483647. A missing, invalid, or out-of-range content attribute returns 0
+for both single and multiple selects. The setter applies Web IDL unsigned-long
+conversion first. Zero writes `"0"`, and a converted value above 2147483647
+also writes `"0"`. [HTML select element](https://html.spec.whatwg.org/multipage/form-elements.html#the-select-element)
+[HTML reflection rules](https://html.spec.whatwg.org/multipage/common-dom-interfaces.html#reflecting-content-attributes-in-idl-attributes)
+
+The generated record uses the vendored IDL default and the shared bounded
+unsigned-long reflection path. The focused regression failed before the fix
+and passed afterward on Bole and Vano. It covers both missing defaults, raw
+attribute parsing and preservation, zero writes, the range boundaries, and
+Web IDL conversion including wraparound and BigInt rejection. The generated
+table passed `--check`.
+
+On both engines, `reflection-forms.html` improved from 8247/8271 to
+8253/8271. All six gains concern `select.size`, with 18 remaining failures
+and zero regressions. The frozen runner, raw maps, and assertion comparison
+are retained in `Code/output/genet-select-size/`.
+
 ## Progress
 
 - **2026-09-07** — Generator written (`support/idl-interface-table`, 1,323

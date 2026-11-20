@@ -5870,12 +5870,13 @@
           if (n < 0) throw new DOMException('Value must be nonnegative', 'IndexSizeError');
           this.setAttribute(attr, String(n));
         };
-      } else if (kind === 'ul' || kind === 'ul-positive-fallback' || kind === 'ul-positive') {
+      } else if (kind === 'ul' || kind === 'ul-bounded' || kind === 'ul-positive-fallback' || kind === 'ul-positive') {
         var unsignedMissing = miss === null || miss === undefined ? 0 : toUnsignedLong(miss);
         desc.get = function() {
-          if (kind === 'ul-positive-fallback' || kind === 'ul-positive') {
-            var positive = parseBoundedUnsigned(this.getAttribute(attr), 2147483647);
-            return positive === null || positive < 1 || positive > 2147483647 ? unsignedMissing : positive;
+          if (kind !== 'ul') {
+            var bounded = parseBoundedUnsigned(this.getAttribute(attr), 2147483647);
+            var minimum = kind === 'ul-bounded' ? 0 : 1;
+            return bounded === null || bounded < minimum || bounded > 2147483647 ? unsignedMissing : bounded;
           }
           if (!range) { var n = parseHtmlUnsignedLong(this.getAttribute(attr)); return n === null ? unsignedMissing : n; }
           var parsed = parseBoundedUnsigned(this.getAttribute(attr), range[1]);

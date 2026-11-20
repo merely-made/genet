@@ -634,6 +634,40 @@ fn reflected_input_size_on_nova() {
     reflected_input_size_work::<script_engine_nova::NovaEngine>();
 }
 
+fn reflected_select_size_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      var e = document.createElement('select');
+      function check(ok, label) { if (!ok) throw new Error('select.size: ' + label); }
+      check(e.size === 0 && !e.hasAttribute('size'), 'missing default');
+      e.multiple = true; check(e.size === 0 && !e.hasAttribute('size'), 'multiple missing default');
+      [['',0], ['bad',0], ['-1',0], ['-0',0], ['+1',1], ['  +12xyz',12],
+       ['2147483647',2147483647], ['2147483648',0],
+       ['999999999999999999999999999999999999',0]].forEach(function(x) {
+        e.setAttribute('size', x[0]); check(e.size === x[1], 'get ' + x[0]);
+        check(e.getAttribute('size') === x[0], 'preserve raw ' + x[0]);
+      });
+      [[0,0], [1,1], [2147483647,2147483647], [2147483648,0], [-1,0],
+       [4294967296,0], [4294967297,1], [-4294967295,1], [1.9,1], [NaN,0]].forEach(function(x) {
+        e.size = x[0]; check(e.size === x[1] && e.getAttribute('size') === String(x[1]), 'set ' + x[0]);
+      });
+      e.setAttribute('size', '7'); var bigintError = false;
+      try { e.size = BigInt(1); } catch (err) { bigintError = err instanceof TypeError; }
+      check(bigintError && e.getAttribute('size') === '7', 'BigInt rejection');
+    "#).expect("select size reflection");
+}
+
+#[test]
+fn reflected_select_size_on_boa() {
+    reflected_select_size_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_select_size_on_nova() {
+    reflected_select_size_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_nonnegative_work<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(r#"

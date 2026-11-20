@@ -451,6 +451,7 @@ fn classify(a: &Attribute, interface: &str) -> Option<Reflected> {
             "DOMString" | "USVString" => "s",
             "boolean" => "b",
             "long" => "l",
+            "unsigned long" if interface == "HTMLSelectElement" && a.name == "size" => "ul-bounded",
             "unsigned long" => "ul",
             "DOMTokenList" => "t",
             _ => return None,
@@ -476,7 +477,7 @@ fn classify(a: &Attribute, interface: &str) -> Option<Reflected> {
     let missing = match kind {
         "ul" if a.ext.has("ReflectRange") => default,
         "ul-positive-fallback" => Some(default.unwrap_or_else(|| "1".to_string())),
-        "l" | "ul" => Some(default.unwrap_or_else(|| "0".to_string())),
+        "l" | "ul" | "ul-bounded" => Some(default.unwrap_or_else(|| "0".to_string())),
         "l-nonnegative" => Some(default.unwrap_or_else(|| "-1".to_string())),
         "d-positive" => Some(default.unwrap_or_else(|| "0".to_string())),
         _ => default,

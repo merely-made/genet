@@ -3186,7 +3186,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "size",
-                kind: "ul",
+                kind: "ul-bounded",
                 attr: None,
                 keywords: &[],
                 missing: Some("0"),

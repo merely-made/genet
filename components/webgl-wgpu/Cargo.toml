@@ -17,7 +17,7 @@ path = "lib.rs"
 [dependencies]
 genet-compositor = { workspace = true }
 genet-essl = { path = "../webgl-essl" }
-wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "vulkan", "wgsl"] }
+wgpu = { version = "30.0.2", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "vulkan", "wgsl"] }
 
 [dev-dependencies]
 pollster = "1.0"

@@ -333,7 +333,7 @@ vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", branc
 webdriver = { version = "0.53.0", default-features = false }
 webpki-roots = "1.0.10"
 web_atoms = "0.2"
-wgpu = "30"
+wgpu = "30.0.2"
 wgpu-core = "30"
 wgpu-types = "30"
 windows = { version = "0.62", features = [

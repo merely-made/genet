@@ -115,9 +115,10 @@ question, not a table question, and it is not opened here.
 ## The generator
 
 `support/idl-interface-table` is a dependency-free workspace member with a
-library and a binary. `cargo run -p genet-idl-interface-table` writes
-`components/script-runtime-api/dom/html_interfaces_generated.rs`;
-`-- --check` verifies it without writing.
+library and a binary. Pass `run -p genet-idl --bin genet-idl-interface-table`
+to the workspace build launcher to write
+`components/script-runtime-api/dom/html_interfaces_generated.rs`. Add
+`-- --check` to verify the table.
 
 **Parser.** `src/idl.rs` is a hand-written reader for the WebIDL subset the
 table needs — about 495 lines including the tokenizer. It handles `interface`,
@@ -199,7 +200,7 @@ built from the table's own tag name with the documented argument mapping.
 
 **Done-conditions**
 
-- `cargo run -p genet-idl-interface-table` writes the table from the vendored
+- The `genet-idl-interface-table` binary writes the table from the vendored
   WPT inputs with no network access and no dependencies. **Met.**
 - Output is byte-stable across runs and across `cargo fmt`. **Met**, proved by
   `-- --check` after a formatting pass.
@@ -281,9 +282,8 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- Enumerated attributes such as `form.autocomplete` still need their specified
-  defaults. Keyword sets come from prose and are maintained in the generator's
-  override table.
+- `input.type` still uses Unicode lowercasing for its keyword comparison.
+  This makes `checKbox` match `checkbox` under reflection.
 - The three case-sensitivity subtests in F6.
 - The generator reads `html.idl`, `dom.idl` and `cssom.idl`. `SVG.idl`,
   `uievents.idl` and the rest of the 338 vendored IDL files are untouched;
@@ -514,6 +514,25 @@ on both engines. All 120 action assertions that depended on the anchor
 getters now pass, as do 42 additional `input.src` assertions. The fixture has
 101 remaining failures and zero regressions. The frozen runner, raw maps,
 and assertion comparison are retained in `Code/output/genet-hyperlink-reflection/`.
+
+## Form autocomplete enumeration defaults (2026-11-19)
+
+The generated `HTMLFormElement.autocomplete` binding uses `on` for both its
+missing and invalid defaults. The getter recognizes `on` and `off` with
+ASCII case-insensitive matching and returns the canonical lowercase keyword.
+Empty and whitespace-padded values use the invalid default. The setter
+reflects the converted DOMString with its case and whitespace preserved.
+[HTML form autocomplete attribute](https://html.spec.whatwg.org/multipage/forms.html#attr-form-autocomplete)
+
+The focused regression failed before the fix and passed afterward on Bole
+and Vano. It covers missing, empty, and invalid values, mixed-case keywords,
+attribute removal, and DOMString conversion. The generated table passed
+`--check`.
+
+`reflection-forms.html` improved from 8170/8271 to 8219/8271 on each engine.
+All 49 failing `form.autocomplete` assertions moved to pass. The fixture has
+52 remaining failures and zero regressions. The frozen runner, raw maps, and
+assertion comparison are retained in `Code/output/genet-autocomplete-reflection/`.
 
 ## Progress
 

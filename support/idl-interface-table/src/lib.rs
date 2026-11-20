@@ -271,7 +271,7 @@ pub const OVERRIDES: &[Override] = &[
         "HTMLFormElement",
         "autocomplete",
         "enum",
-        s("autocomplete").keywords(ON_OFF)
+        s("autocomplete").keywords(ON_OFF).missing("on").invalid("on")
     ),
     set!(
         "HTMLFormElement",

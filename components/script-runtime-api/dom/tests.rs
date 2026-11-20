@@ -416,6 +416,41 @@ fn validation_pseudo_classes_match_in_js_selectors_on_boa() {
     );
 }
 
+fn reflected_form_autocomplete_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      var e = document.createElement('form');
+      function check(ok, label) { if (!ok) throw new Error('form.autocomplete: '+label); }
+      check(e.autocomplete === 'on', 'missing');
+      [['on','on'], ['OFF','off'], ['On','on'], ['', 'on'], ['invalid','on'],
+       [' off ','on'], ['oﬀ','on']].forEach(function(x) {
+        e.setAttribute('autocomplete', x[0]);
+        check(e.autocomplete === x[1], 'attribute '+x[0]+' got '+e.autocomplete);
+        check(e.getAttribute('autocomplete') === x[0], 'attribute preserved');
+      });
+      e.autocomplete = 'OfF';
+      check(e.autocomplete === 'off' && e.getAttribute('autocomplete') === 'OfF', 'setter');
+      e.autocomplete = null;
+      check(e.autocomplete === 'on' && e.getAttribute('autocomplete') === 'null', 'DOMString null');
+      e.autocomplete = {toString: function() { return 'OFF'; }};
+      check(e.autocomplete === 'off' && e.getAttribute('autocomplete') === 'OFF', 'DOMString object');
+      var threw = false; try { e.autocomplete = Symbol('x'); } catch (err) { threw = err instanceof TypeError; }
+      check(threw && e.getAttribute('autocomplete') === 'OFF', 'DOMString Symbol');
+      e.removeAttribute('autocomplete'); check(e.autocomplete === 'on', 'removed');
+    "#).expect("form autocomplete reflection");
+}
+
+#[test]
+fn reflected_form_autocomplete_on_boa() {
+    reflected_form_autocomplete_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn reflected_form_autocomplete_on_nova() {
+    reflected_form_autocomplete_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_form_methods_work<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(r#"

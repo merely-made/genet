@@ -2914,7 +2914,7 @@ pub(crate) const HTML_INTERFACES: &[HtmlInterface] = &[
             },
             ReflectedAttribute {
                 idl: "size",
-                kind: "ul",
+                kind: "ul-positive",
                 attr: None,
                 keywords: &[],
                 missing: Some("20"),

@@ -132,14 +132,12 @@ macro_rules! set {
     };
 }
 
-/// Reasons fall into four families:
+/// Reasons fall into three families:
 ///
 /// * `enum` — HTML's enumerated attributes are plain `DOMString` in WebIDL and
 ///   carry no `[Reflect]`; the keyword set and missing-value default are prose.
-/// * `prose` — the IDL getter is defined by prose, not reflection, but the
-///   runtime's approximation of it is a reflection of the content attribute.
-/// * `default` — `[Reflect]` without `[ReflectDefault]`, where HTML's prose
-///   still gives a non-zero missing-value default.
+/// * `prose` — HTML prose defines reflection rules beyond the IDL, or the
+///   runtime approximates a prose-defined getter through content reflection.
 /// * `union` — the IDL type is a union the reflection kinds do not model.
 pub const OVERRIDES: &[Override] = &[
     // Action URL reflection has document-URL defaults unlike ordinary URL reflection.
@@ -376,13 +374,13 @@ pub const OVERRIDES: &[Override] = &[
     // union: `hidden` is `(boolean or unrestricted double or DOMString)?`; the
     // runtime models only the boolean form.
     set!("HTMLElement", "hidden", "union", r("hidden", "b")),
-    // default: `[Reflect]` with no `[ReflectDefault]`, but HTML's prose gives
-    // input's size a missing-value default of 20.
+    // HTML's input size prose specifies positive reflection with default 20
+    // and an IndexSizeError for a setter value of zero.
     set!(
         "HTMLInputElement",
         "size",
-        "default",
-        r("size", "ul").missing("20")
+        "prose",
+        r("size", "ul-positive").missing("20")
     ),
 ];
 

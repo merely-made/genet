@@ -145,8 +145,8 @@ fallback can never apply.
 
 **Overrides.** `OVERRIDES` in `src/lib.rs` is a flat table of
 `(interface, IDL name, operation, reason)`. An entry replaces the generated row
-or inserts one, and its reason is one of four families, stated once at the top
-of the table: `enum` (27 rows — the keyword set is prose, per F3), `prose`
+or inserts one. The initial table used four reasons: `enum` (27 rows — the
+keyword set is prose, per F3), `prose`
 (12 rows — the getter is prose but the runtime's approximation is a reflection),
 `union` (1 row — `hidden`'s `(boolean or unrestricted double or DOMString)?`,
 of which the runtime models the boolean form), and `default` (1 row —
@@ -553,6 +553,28 @@ On both engines, `option-label.html` improved from 0/12 to 12/12 and
 in the forms fixture concern `option.label`. The fixture has 33 remaining
 failures and zero regressions. The frozen runner, raw maps, and assertion
 comparison are retained in `Code/output/genet-option-label/`.
+
+## Input size positive reflection (2026-11-19)
+
+The generated record for `input.size` carries the positive unsigned-long
+reflection rule and default of 20 from the HTML prose. The getter accepts
+parsed integers from 1 through 2147483647 and returns 20 for missing, invalid,
+zero, or out-of-range content attributes. The setter applies Web IDL
+unsigned-long conversion before checking the range. A converted zero throws
+`IndexSizeError` before changing the attribute. A converted value above
+2147483647 writes 20. [HTML input size](https://html.spec.whatwg.org/multipage/input.html#attr-input-size)
+
+The focused regression failed before the fix and passed afterward on Bole
+and Vano. It checks the default, raw attribute parsing, getter and setter
+bounds, zero assignments preserving the attribute, and Web IDL conversion
+including wraparound and BigInt rejection. The generated table passed
+`--check`.
+
+On both engines, `reflection-forms.html` improved from 8238/8271 to
+8247/8271. All nine gains concern `input.size`, with 24 remaining failures
+and zero regressions. Vano completed with a 600-second timeout after its
+initial candidate run reached the 300-second limit. The frozen runner, raw
+maps, and assertion comparison are retained in `Code/output/genet-input-size/`.
 
 ## Progress
 

@@ -5870,10 +5870,10 @@
           if (n < 0) throw new DOMException('Value must be nonnegative', 'IndexSizeError');
           this.setAttribute(attr, String(n));
         };
-      } else if (kind === 'ul' || kind === 'ul-positive-fallback') {
+      } else if (kind === 'ul' || kind === 'ul-positive-fallback' || kind === 'ul-positive') {
         var unsignedMissing = miss === null || miss === undefined ? 0 : toUnsignedLong(miss);
         desc.get = function() {
-          if (kind === 'ul-positive-fallback') {
+          if (kind === 'ul-positive-fallback' || kind === 'ul-positive') {
             var positive = parseBoundedUnsigned(this.getAttribute(attr), 2147483647);
             return positive === null || positive < 1 || positive > 2147483647 ? unsignedMissing : positive;
           }
@@ -5885,9 +5885,10 @@
           return Math.min(range[1], Math.max(range[0], parsed));
         };
         desc.set = function(v) {
-          if (kind !== 'ul-positive-fallback' && !range) { this.setAttribute(attr, String(toUnsignedLong(v))); return; }
+          if (kind === 'ul' && !range) { this.setAttribute(attr, String(toUnsignedLong(v))); return; }
           // Web IDL unsigned long conversion precedes HTML's setter fallback.
           var n = v >>> 0;
+          if (kind === 'ul-positive' && n === 0) throw new DOMException('Value must be positive', 'IndexSizeError');
           this.setAttribute(attr, String(n > 2147483647 || (kind === 'ul-positive-fallback' && n === 0) ? unsignedMissing : n));
         };
       } else if (kind === 't') {

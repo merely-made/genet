@@ -356,6 +356,8 @@ pub const OVERRIDES: &[Override] = &[
     set!("HTMLInputElement", "type", "prose", r("type", "it")),
     set!("HTMLInputElement", "value", "prose", r("value", "fv")),
     set!("HTMLInputElement", "checked", "prose", r("checked", "fc")),
+    set!("HTMLInputElement", "width", "prose", r("width", "input-dimension")),
+    set!("HTMLInputElement", "height", "prose", r("height", "input-dimension")),
     set!("HTMLTextAreaElement", "value", "prose", r("value", "fv")),
     set!("HTMLTextAreaElement", "defaultValue", "prose", r("defaultValue", "td")),
     set!("HTMLOptionElement", "value", "prose", s("value")),

@@ -597,6 +597,43 @@ On both engines, `reflection-forms.html` improved from 8247/8271 to
 and zero regressions. The frozen runner, raw maps, and assertion comparison
 are retained in `Code/output/genet-select-size/`.
 
+## Input width and height reflection (2026-11-20)
+
+`HTMLInputElement.width` and `.height` have reflected setters and
+dimension-aware getters. The setters convert to Web IDL `unsigned long`
+and write the converted value when it is at most 2147483647. Larger
+converted values write `0`. These setters also write attributes for
+non-image inputs. The getters return 0 for non-image inputs and use the
+content-box dimensions for rendered image inputs. Without a rendered box, an
+image input reads the corresponding attribute as a non-negative integer in
+the unsigned-long range, with a default of 0 for absent, invalid, or
+unrepresentable values.
+[HTML input element](https://html.spec.whatwg.org/multipage/input.html#dom-input-width)
+[HTML dimension attributes](https://html.spec.whatwg.org/multipage/embedded-content-other.html)
+
+Natural dimensions for loaded image buttons still require image-input
+resource and intrinsic-size support.
+
+The focused runtime test reproduced the missing accessor on Bole and Vano.
+Both engines passed after the fix, including the detached image defaults,
+attribute parsing, live type changes, and Web IDL setter boundaries. The
+generated table passed `--check`.
+
+The layout test passed on both engines and covers content-box sizing,
+live CSS changes, and the attribute fallback after `display:none`. The
+pre-fix runner measured a 64 px border-box height in the same fixture with
+an authored 40 px height and 16 px of vertical padding and borders. The
+getter test checks the content size against the measured box.
+
+On each engine, `reflection-forms.html` improved from 8253/8271 to
+8269/8271. Width and height gained eight assertions apiece, with no
+regressions. The two remaining failures concern ASCII case matching in
+`input.type`. The dedicated `input-width.html` and `input-height.html` WPT
+files each passed 1/1 before and after on both engines. The geometry tests
+and all three WPT files reproduced these results after rebasing onto
+`48e5524aa07`. Frozen runners, raw maps, and comparisons are retained in
+`Code/output/genet-input-dimensions/`.
+
 ## Progress
 
 - **2026-09-07** — Generator written (`support/idl-interface-table`, 1,323

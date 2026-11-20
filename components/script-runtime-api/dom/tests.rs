@@ -634,6 +634,51 @@ fn reflected_input_size_on_nova() {
     reflected_input_size_work::<script_engine_nova::NovaEngine>();
 }
 
+fn input_dimensions_work<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      var e = document.createElement('input');
+      function check(ok, label) { if (!ok) throw new Error('input dimensions: ' + label); }
+      e.type = 'image';
+      check(e.width === 0 && e.height === 0, 'image missing defaults');
+      Object.defineProperty(e, 'type', {value: 'text', configurable: true});
+      e.setAttribute('width', '9'); check(e.width === 9, 'actual type state');
+      delete e.type; e.removeAttribute('width');
+      e.type = 'text';
+      ['width', 'height'].forEach(function(prop) {
+        check(e[prop] === 0 && !e.hasAttribute(prop), prop + ' missing');
+        e.setAttribute(prop, '37');
+        check(e[prop] === 0, prop + ' non-image state');
+        e.type = 'image';
+        [['',0], ['bad',0], ['-1',0], ['-0',0], ['+12',12], ['  42x',42],
+         ['2147483647',2147483647], ['2147483648',2147483648],
+         ['4294967295',4294967295], ['4294967296',0]].forEach(function(x) {
+          e.setAttribute(prop, x[0]); check(e[prop] === x[1], prop + ' get ' + x[0]);
+        });
+        [[0,0], [7,7], [2147483647,2147483647], [2147483648,0],
+         [-1,0], [4294967297,1], [1.9,1]].forEach(function(x) {
+          e[prop] = x[0];
+          check(e.getAttribute(prop) === String(x[1]) && e[prop] === x[1], prop + ' set ' + x[0]);
+        });
+        var rejected = false;
+        try { e[prop] = BigInt(1); } catch (err) { rejected = err instanceof TypeError; }
+        check(rejected && e.getAttribute(prop) === '1', prop + ' BigInt rejection');
+        e.type = 'text';
+      });
+    "#).expect("input dimensions");
+}
+
+#[test]
+fn input_dimensions_on_boa() {
+    input_dimensions_work::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn input_dimensions_on_nova() {
+    input_dimensions_work::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_select_size_work<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(r#"

@@ -281,6 +281,7 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<mutation_observer::SetGroup>("__moGroup", 1)?;
     engine.set_function::<geometry::Rects>("__geomRects", 1)?;
     engine.set_function::<geometry::Metrics>("__geomMetrics", 1)?;
+    engine.set_function::<geometry::ContentBoxSize>("__geomContentBoxSize", 1)?;
     engine.set_function::<geometry::SetScroll>("__geomScroll", 3)?;
     engine.set_function::<geometry::OffsetParent>("__geomOffsetParent", 1)?;
     engine.set_function::<geometry::Intersection>("__geomIntersection", 4)?;

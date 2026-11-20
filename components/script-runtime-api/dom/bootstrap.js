@@ -5870,9 +5870,18 @@
           if (n < 0) throw new DOMException('Value must be nonnegative', 'IndexSizeError');
           this.setAttribute(attr, String(n));
         };
-      } else if (kind === 'ul' || kind === 'ul-bounded' || kind === 'ul-positive-fallback' || kind === 'ul-positive') {
+      } else if (kind === 'input-dimension' || kind === 'ul' || kind === 'ul-bounded' || kind === 'ul-positive-fallback' || kind === 'ul-positive') {
         var unsignedMissing = miss === null || miss === undefined ? 0 : toUnsignedLong(miss);
-        desc.get = function() {
+        desc.get = kind === 'input-dimension' ? function() {
+          if (asciiLower(__getAttribute(this.__ref, 'type') || '') !== 'image') return 0;
+          var box = __geomContentBoxSize(this.__ref);
+          if (box) {
+            var dimensions = box.split(',');
+            return Math.max(0, Math.floor(+(attr === 'width' ? dimensions[0] : dimensions[1])));
+          }
+          var parsed = parseBoundedUnsigned(__getAttribute(this.__ref, attr), 4294967295);
+          return parsed === null || parsed > 4294967295 ? 0 : parsed;
+        } : function() {
           if (kind !== 'ul') {
             var bounded = parseBoundedUnsigned(this.getAttribute(attr), 2147483647);
             var minimum = kind === 'ul-bounded' ? 0 : 1;

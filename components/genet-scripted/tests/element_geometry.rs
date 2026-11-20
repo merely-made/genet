@@ -78,6 +78,33 @@ fn geometry_follows_script_mutation_without_a_frame<E: ScriptEngine>() {
     assert_eq!(out[0], "160,160");
 }
 
+fn input_image_dimensions_follow_content_box<E: ScriptEngine>() {
+    let (mut runtime, _cssom) = setup::<E>();
+    let out = run(&mut runtime, r#"
+      var image = document.createElement('input'); image.type = 'image';
+      image.width = 30; image.height = 20;
+      image.style.cssText = 'display:block; width:80px; height:40px; padding:5px; border:3px solid';
+      document.body.appendChild(image);
+      console.log(image.width + ',' + (image.height === image.offsetHeight - 16));
+      image.style.width = '90px'; console.log(image.width);
+      image.style.display = 'none'; console.log(image.width + ',' + image.height);
+      image.type = 'text'; console.log(image.width + ',' + image.height);
+    "#);
+    // The content height excludes the fixture's 10px padding and 6px border.
+    assert_eq!(out, vec!["80,true", "90", "30,20", "0,0"]);
+}
+
+#[test]
+fn input_image_dimensions_follow_content_box_on_boa() {
+    input_image_dimensions_follow_content_box::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "scripted-nova"))]
+#[test]
+fn input_image_dimensions_follow_content_box_on_nova() {
+    input_image_dimensions_follow_content_box::<script_engine_nova::NovaEngine>();
+}
+
 fn scroll_containers_report_client_and_scroll_boxes<E: ScriptEngine>() {
     let (mut runtime, _cssom) = setup::<E>();
     let out = run(

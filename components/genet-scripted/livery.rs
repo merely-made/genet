@@ -2297,6 +2297,18 @@ fn offset_parent(
 }
 
 impl GeometryHandler for LiveryGeometry {
+    fn content_box_size(&self, node: u64) -> Option<(f32, f32)> {
+        let node = NodeId::from_raw(node);
+        self.with_layout(|_, state| {
+            let frame = state.frame.as_ref()?;
+            Some(content_box_size(
+                frame.styles.get(node)?,
+                frame.fragments.get(node)?,
+            ))
+        })
+        .flatten()
+    }
+
     fn intersection(&self, request: &IntersectionRequest) -> Option<IntersectionReport> {
         let target = NodeId::from_raw(request.target);
         let root = request.root.map(NodeId::from_raw);

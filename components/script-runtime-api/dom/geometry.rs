@@ -60,6 +60,10 @@ pub struct IntersectionReport {
 
 /// The host's layout seam for CSSOM View element geometry and scrolling.
 pub trait GeometryHandler {
+    /// Content-box dimensions in CSS pixels, or None when not rendered.
+    fn content_box_size(&self, _node: u64) -> Option<(f32, f32)> {
+        None
+    }
     /// How much of a target shows through the clips up to a root. `None` when
     /// the host has no layout to answer from.
     fn intersection(&self, request: &IntersectionRequest) -> Option<IntersectionReport>;
@@ -81,6 +85,21 @@ pub trait GeometryHandler {
 
     /// Scroll the viewport to `(x, y)`, clamped; returns the resulting offset.
     fn set_viewport_scroll(&self, x: f32, y: f32) -> (f32, f32);
+}
+
+pub(crate) struct ContentBoxSize;
+impl<E: ScriptEngine> NativeFn<E> for ContentBoxSize {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let value = cx.arg(0);
+        let Some(node) = cx.owned_node(&value)? else {
+            return cx.make_string("");
+        };
+        let geometry = node.host().borrow().geometry.clone();
+        let Some((width, height)) = geometry.and_then(|h| h.content_box_size(node.raw())) else {
+            return cx.make_string("");
+        };
+        cx.make_string(&format!("{width},{height}"))
+    }
 }
 
 fn handler<E: ScriptEngine>(cx: &mut E::CallCx<'_>) -> Option<Rc<dyn GeometryHandler>> {

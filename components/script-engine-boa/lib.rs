@@ -641,7 +641,7 @@ impl CallCx for BoaCallCx<'_> {
         let v = self.make_reflector(data)?;
         if let Some(cell) = self.ctx.realm().host_defined().get::<RealmSlot>() {
             if let Some(obj) = v.as_object() {
-                cell.reflectors.borrow_mut().insert(data, obj.downgrade());
+                cell.reflectors.borrow_mut().insert(data, WeakJsObject::new(&obj));
             }
         }
         Ok(v)
@@ -1236,7 +1236,7 @@ impl ScriptEngine for BoaEngine {
                         };
                         let Some(o) = v.as_object() else { continue };
                         if let Some(cell) = self.ctx.realm().host_defined().get::<RealmSlot>() {
-                            cell.reflectors.borrow_mut().insert(d, o.downgrade());
+                            cell.reflectors.borrow_mut().insert(d, WeakJsObject::new(&o));
                         }
                         o
                     },
@@ -1683,9 +1683,8 @@ impl ScriptEngine for BoaEngine {
             // Real death-reporting: sweep the weak canonical cache and report (and
             // forget) the reflectors whose JS objects have been collected since the
             // last call. A rooted reflector (`root_reflectors`) cannot appear here:
-            // its strong root keeps the weak upgradeable. Backed by the vendored boa patch (`JsObject::downgrade` /
-            // `WeakJsObject::upgrade`). The host unpins each returned id, freeing the
-            // underlying detached node for collection (G3).
+            // its strong root keeps the weak handle upgradeable. The host unpins
+            // each returned id, freeing the detached node for collection (G3).
             let mut dead = Vec::new();
             if let Some(cell) = self.ctx.realm().host_defined().get::<RealmSlot>() {
                 cell.reflectors.borrow_mut().retain(|&data, weak| {

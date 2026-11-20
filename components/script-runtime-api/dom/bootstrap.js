@@ -5782,7 +5782,7 @@
         desc.get = function() { return __formControlGet(this.__ref, 'defaultValue'); };
         desc.set = function(value) { this.textContent = String(value); };
       } else if (kind === 'it') {
-        desc.get = function() { var value = (this.getAttribute('type') || '').toLowerCase(); return ['hidden','text','search','tel','url','email','password','date','month','week','time','datetime-local','number','range','color','checkbox','radio','file','submit','image','reset','button'].indexOf(value) >= 0 ? value : 'text'; };
+        desc.get = function() { var value = asciiLower(this.getAttribute('type') || ''); return ['hidden','text','search','tel','url','email','password','date','month','week','time','datetime-local','number','range','color','checkbox','radio','file','submit','image','reset','button'].indexOf(value) >= 0 ? value : 'text'; };
         desc.set = function(value) { this.setAttribute('type', String(value)); };
       } else if (kind === 's' || kind === 's-null-empty') {
         desc.get = function() { var v = this.getAttribute(attr); return v === null ? '' : v; };

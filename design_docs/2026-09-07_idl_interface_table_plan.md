@@ -282,8 +282,6 @@ three are the case-preservation limit recorded in F6.
 
 ## Known gaps carried forward
 
-- `input.type` still uses Unicode lowercasing for its keyword comparison.
-  This makes `checKbox` match `checkbox` under reflection.
 - The three case-sensitivity subtests in F6.
 - The generator reads `html.idl`, `dom.idl` and `cssom.idl`. `SVG.idl`,
   `uievents.idl` and the rest of the 338 vendored IDL files are untouched;
@@ -633,6 +631,24 @@ files each passed 1/1 before and after on both engines. The geometry tests
 and all three WPT files reproduced these results after rebasing onto
 `48e5524aa07`. Frozen runners, raw maps, and comparisons are retained in
 `Code/output/genet-input-dimensions/`.
+
+## Input type ASCII matching (2026-11-20)
+
+The `input.type` getter compares keywords using ASCII case folding. It
+returns the canonical keyword for values such as `ChEcKbOx`, and uses the
+`text` default for unrecognized values such as `checKbox` with U+212A
+KELVIN SIGN. Assignments preserve the supplied attribute text.
+[HTML input type](https://html.spec.whatwg.org/multipage/input.html#dom-input-type)
+[HTML enumerated attributes](https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#keywords-and-enumerated-attributes)
+
+The focused test failed before the fix and passed afterward on Bole and
+Vano. It covers mixed ASCII case via both setters, preserved attribute
+text, and fallback for the Kelvin sign and missing, empty, or invalid values.
+
+On each engine, `reflection-forms.html` improved from 8269/8271 to
+8271/8271. The two Kelvin-sign assertions passed, and every prior pass
+held. Frozen runners, raw maps, and the comparison are retained in
+`Code/output/genet-input-type-ascii/`.
 
 ## Progress
 

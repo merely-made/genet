@@ -596,6 +596,38 @@ fn reflected_positive_fallback_on_nova() {
     reflected_positive_fallback_work::<script_engine_nova::NovaEngine>();
 }
 
+fn input_type_ascii_matching<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+        var input = document.createElement('input');
+        function check(condition, message) { if (!condition) throw new Error(message); }
+        check(input.type === 'text' && input.getAttribute('type') === null, 'missing');
+        input.type = 'ChEcKbOx';
+        check(input.type === 'checkbox' && input.getAttribute('type') === 'ChEcKbOx', 'mixed ASCII setter');
+        input.setAttribute('type', 'DaTeTiMe-LoCaL');
+        check(input.type === 'datetime-local' && input.getAttribute('type') === 'DaTeTiMe-LoCaL', 'mixed ASCII attribute');
+        input.setAttribute('type', 'WEE\u212A');
+        check(input.type === 'text' && input.getAttribute('type') === 'WEE\u212A', 'Kelvin sign');
+        input.type = 'chec\u212Abox';
+        check(input.type === 'text' && input.getAttribute('type') === 'chec\u212Abox', 'Kelvin sign setter');
+        input.type = 'unknown';
+        check(input.type === 'text' && input.getAttribute('type') === 'unknown', 'invalid setter');
+        input.setAttribute('type', '');
+        check(input.type === 'text' && input.getAttribute('type') === '', 'empty');
+    "#).expect("input type reflection");
+}
+
+#[test]
+fn input_type_ascii_matching_on_boa() {
+    input_type_ascii_matching::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn input_type_ascii_matching_on_nova() {
+    input_type_ascii_matching::<script_engine_nova::NovaEngine>();
+}
+
 fn reflected_input_size_work<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(r#"

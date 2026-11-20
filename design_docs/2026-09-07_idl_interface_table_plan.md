@@ -534,6 +534,26 @@ All 49 failing `form.autocomplete` assertions moved to pass. The fixture has
 52 remaining failures and zero regressions. The frozen runner, raw maps, and
 assertion comparison are retained in `Code/output/genet-autocomplete-reflection/`.
 
+## Option label reflection (2026-11-19)
+
+`option.label` returns the value of a present null-namespace `label` attribute,
+including an explicit empty string. When the attribute is missing, the getter
+uses the same HTML-aware text collection as `option.text`. The setter writes
+the converted DOMString to the null-namespace attribute. The specification's
+display label algorithm uses the option text for both missing and empty
+labels. [HTML option element](https://html.spec.whatwg.org/multipage/form-elements.html#the-option-element)
+
+The focused regression failed before the fix and passed afterward on Bole
+and Vano. It covers text mutations, whitespace, explicit empty labels,
+null-namespace writes alongside a namespaced label, and DOMString conversion.
+The generated table passed `--check`.
+
+On both engines, `option-label.html` improved from 0/12 to 12/12 and
+`reflection-forms.html` improved from 8219/8271 to 8238/8271. All 19 gains
+in the forms fixture concern `option.label`. The fixture has 33 remaining
+failures and zero regressions. The frozen runner, raw maps, and assertion
+comparison are retained in `Code/output/genet-option-label/`.
+
 ## Progress
 
 - **2026-09-07** — Generator written (`support/idl-interface-table`, 1,323

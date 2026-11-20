@@ -2855,6 +2855,52 @@ fn generated_table_is_current() {
     );
 }
 
+fn option_label_works<E: ScriptEngine>() {
+    let mut rt = Runtime::<E>::new().expect("runtime");
+    rt.eval(r#"
+      const option = document.createElement('option');
+      option.appendChild(document.createTextNode('  First\t'));
+      const span = document.createElement('span'); span.textContent = ' second  ';
+      option.appendChild(span);
+      const script = document.createElement('script'); script.textContent = 'ignored'; option.appendChild(script);
+      console.log(JSON.stringify([option.label, option.text, option.value]));
+      span.textContent = ' changed\n text '; console.log(JSON.stringify(option.label));
+      option.label = ''; console.log(JSON.stringify([option.label, option.getAttribute('label')]));
+      option.label = '  '; console.log(JSON.stringify(option.label));
+      option.label = 42; console.log(JSON.stringify([option.label, option.getAttribute('label')]));
+      option.removeAttribute('label'); console.log(JSON.stringify(option.label));
+      option.setAttributeNS('urn:test', 'label', 'foreign');
+      console.log(JSON.stringify(option.label));
+      option.label = 'native'; console.log(JSON.stringify([option.getAttributeNS('urn:test', 'label'), option.getAttributeNS(null, 'label')]));
+      try { option.label = Symbol('x'); } catch (e) { console.log(e.name); }
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLOptionElement.prototype, 'label');
+      try { descriptor.set.call(document.createElement('div'), 'x'); } catch (e) { console.log(e.name); }
+    "#).expect("option label script");
+    assert_eq!(rt.host().borrow().console, vec![
+        r#"["First second","First second","First second"]"#,
+        r#""First changed text""#,
+        r#"["",""]"#,
+        r#""  ""#,
+        r#"["42","42"]"#,
+        r#""First changed text""#,
+        r#""First changed text""#,
+        r#"["foreign","native"]"#,
+        "TypeError",
+        "TypeError",
+    ]);
+}
+
+#[test]
+fn option_label_on_boa() {
+    option_label_works::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn option_label_on_nova() {
+    option_label_works::<script_engine_nova::NovaEngine>();
+}
+
 fn form_control_live_state_works<E: ScriptEngine>() {
     let mut rt = Runtime::<E>::new().expect("runtime");
     rt.eval(r#"

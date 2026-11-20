@@ -3653,6 +3653,18 @@
       return;
     }
     if (name === 'HTMLOptionElement') {
+      gcDefineProperty(proto, 'label', { configurable: true, enumerable: true,
+        get: function() {
+          var ref = formInterfaceRef(this, 'option');
+          var label = this.getAttributeNS(null, 'label');
+          return label === null ? nativeControlGet(ref, 'optionText') : label;
+        },
+        set: function(value) {
+          formInterfaceRef(this, 'option');
+          if (typeof value === 'symbol') throw new TypeError('Cannot convert a Symbol to a DOMString');
+          this.setAttributeNS(null, 'label', String(value));
+        }
+      });
       gcDefineProperty(proto, 'selected', { configurable: true, enumerable: true,
         get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'selected') === 'true'; },
         set: function(value) { formControlError(__formControlSet(formInterfaceRef(this, 'option'), 'selected', String(!!value))); }

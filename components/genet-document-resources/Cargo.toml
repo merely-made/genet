@@ -7,7 +7,7 @@ edition.workspace = true
 publish = true
 
 rust-version = "1.97.1"
-repository.workspace = true
+repository = "https://github.com/merely-made/genet"
 description = "Engine-neutral HTML document resource discovery and attribution for Genet."
 
 [lib]

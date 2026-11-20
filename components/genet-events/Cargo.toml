@@ -5,6 +5,7 @@ version = "0.0.1"
 edition = "2021"
 license = "MPL-2.0"
 description = "Engine-neutral DOM event dispatch: listener registry, event path, phases and composedPath over the scripted-DOM arena."
+repository = "https://github.com/merely-made/genet"
 
 [lib]
 name = "genet_events"

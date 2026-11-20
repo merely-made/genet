@@ -3,8 +3,8 @@ name = "genet-presenter"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-repository.workspace = true
-publish = false
+repository = "https://github.com/merely-made/genet"
+publish = true
 
 rust-version = "1.97.1"
 description = "Target-neutral Genet present core: boot wgpu + a netrender Renderer, configure a surface on any wgpu target, and rasterize scenes into composable textures."
@@ -50,8 +50,8 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 
 [dev-dependencies]
 # IMG-GPU gate (tests/image_gpu.rs): decoded document images through the shared device.
-genet-livery = { path = "../genet-livery" }
-genet-scripted-dom = { path = "../genet-scripted-dom" }
+genet-livery = { version = "0.0.4", path = "../genet-livery" }
+genet-scripted-dom = { version = "0.1.2", path = "../genet-scripted-dom" }
 paint_list_api = { workspace = true }
 paint_list_render = { workspace = true }
 image = { workspace = true }

@@ -4,10 +4,10 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 
 rust-version = "1.97.1"
-repository.workspace = true
+repository = "https://github.com/merely-made/genet"
 description = "Genet host render driver: neutral DOM -> owned Livery/Buckram paint list -> netrender scene, plus host spatial, caret, selection, and accessibility queries."
 
 [lib]
@@ -28,8 +28,8 @@ accesskit = ["dep:accesskit", "document-session-api/accesskit"]
 
 [dependencies]
 # The genet DOM + the engine pipeline this drives.
-genet-scripted-dom = { path = "../genet-scripted-dom" }
-genet-livery = { path = "../genet-livery", default-features = false, features = ["scripted-dom"] }
+genet-scripted-dom = { version = "0.1.2", path = "../genet-scripted-dom" }
+genet-livery = { version = "0.0.4", path = "../genet-livery", default-features = false, features = ["scripted-dom"] }
 layout_dom_api = { workspace = true }
 # Paint-list -> netrender::Scene lowering (aliased `paint`), the Scene type, and
 # the paint/query value types.
@@ -48,7 +48,7 @@ accesskit = { workspace = true, optional = true }
 
 [dev-dependencies]
 # A parsed HTML document for the content-introspection (`inspect`) tests.
-genet-static-dom = { path = "../genet-static-dom" }
+genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
 
 [lints]
 workspace = true

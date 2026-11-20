@@ -263,7 +263,7 @@ document-session-api = { version = "=0.1.2", path = "components/shared/document-
 genet-documents = { version = "=0.1.0", path = "components/genet-documents", default-features = false }
 genet-document-resources = { version = "=0.2.1", path = "components/genet-document-resources" }
 genet-host-api = { version = "=0.2.0", path = "components/genet-host-api" }
-genet-presenter = { path = "components/genet-render-host" }
+genet-presenter = { version = "0.2.0", path = "components/genet-render-host" }
 netrender = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = "=0.1.2" }
 netrender_device = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = "=0.1.2" }
 # (No xilem git deps remain. The Masonry-era `xilem` / `masonry` /

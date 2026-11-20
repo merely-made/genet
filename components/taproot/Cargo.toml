@@ -31,7 +31,7 @@ genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
 layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
 
 [dev-dependencies]
-genet-render = { path = "../genet-render", default-features = false, features = ["accesskit"] }
+genet-render = { version = "0.2.0", path = "../genet-render", default-features = false, features = ["accesskit"] }
 
 [lints]
 workspace = true

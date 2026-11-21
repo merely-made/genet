@@ -35,6 +35,12 @@ use accesskit::{
     TreeUpdate,
 };
 
+mod retained;
+#[cfg(test)]
+mod retained_tests;
+
+use retained::{Pending, RetainedTree};
+
 /// Whether the OS-level AccessKit adapter is live for this window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BridgeStatus {
@@ -56,19 +62,85 @@ pub struct A11yActionRequest {
 type ActionSink = Arc<dyn Fn(A11yActionRequest) + Send + Sync>;
 
 /// A complete publication, with a safe host-only activation entry point.
+/// `retained` set means the host tree is kept whole and patched by partial
+/// updates; `initial` and `ordered` are then empty.
 #[derive(Default)]
 struct A11yPublication {
     initial: Option<TreeUpdate>,
     ordered: Vec<TreeUpdate>,
     expected_epoch: Option<u64>,
+    retained: Option<Retained>,
+}
+
+struct Retained {
+    tree: RetainedTree,
+    pending: Pending,
 }
 
 impl A11yPublication {
     fn initial(&self) -> Option<TreeUpdate> {
-        self.initial.clone()
+        match &self.retained {
+            Some(retained) => Some(retained.tree.snapshot(retained.tree.root())),
+            None => self.initial.clone(),
+        }
+    }
+    // A reader activating now is served the whole tree, so nothing is pending.
+    fn activate(&mut self) -> Option<TreeUpdate> {
+        if let Some(retained) = &mut self.retained {
+            retained.pending = Pending::none();
+        }
+        self.initial()
+    }
+    fn has_initial(&self) -> bool {
+        self.initial.is_some() || self.retained.is_some()
+    }
+    // A retained delta is valid on top of any later whole-tree snapshot, so it
+    // needs no safe-root substitution.
+    fn safe_root(&self) -> Option<TreeUpdate> {
+        self.retained
+            .is_none()
+            .then(|| self.initial.clone())
+            .flatten()
     }
     fn replay(&self) -> Vec<TreeUpdate> {
-        self.ordered.clone()
+        match &self.retained {
+            Some(retained) => vec![retained.tree.delta(&retained.pending)],
+            None => self.ordered.clone(),
+        }
+    }
+    fn mark_delivered(&mut self) {
+        if let Some(retained) = &mut self.retained {
+            retained.pending = Pending::none();
+        }
+    }
+
+    // Patch the retained host tree; the first partial after a full publish
+    // builds it from that publication. `in_sync` says the reader holds it.
+    fn apply_partial(&mut self, update: TreeUpdate, in_sync: bool) -> Result<(), String> {
+        if let Some(retained) = &mut self.retained {
+            let applied = retained.tree.apply(update)?;
+            retained.pending.record(applied);
+            return Ok(());
+        }
+        if self.expected_epoch.is_some() {
+            return Err("an epoch-bound forest publication has no retained host tree".into());
+        }
+        let initial = self.initial.clone().ok_or("no host tree is installed")?;
+        let mut tree = RetainedTree::from_full(initial)?;
+        for ordered in &self.ordered {
+            tree.apply(ordered.clone())?;
+        }
+        let applied = tree.apply(update)?;
+        let mut pending = if in_sync {
+            Pending::none()
+        } else {
+            Pending::All
+        };
+        pending.record(applied);
+        self.retained = Some(Retained { tree, pending });
+        self.initial = None;
+        self.ordered.clear();
+        Ok(())
     }
 
     fn replace(&mut self, initial: TreeUpdate, ordered: Vec<TreeUpdate>) -> Result<(), String> {
@@ -94,6 +166,7 @@ impl A11yPublication {
         self.initial = Some(initial);
         self.ordered = ordered;
         self.expected_epoch = None;
+        self.retained = None;
         Ok(())
     }
 
@@ -137,7 +210,7 @@ impl ActivationHandler for Activation {
             .publication
             .lock()
             .ok()
-            .and_then(|state| state.initial());
+            .and_then(|mut state| state.activate());
         self.replay
             .store(true, std::sync::atomic::Ordering::Release);
         (self.wake)();
@@ -275,6 +348,16 @@ impl BridgeState {
             .store(true, std::sync::atomic::Ordering::Release);
         Ok(())
     }
+    fn update_partial(&mut self, update: TreeUpdate) -> Result<(), String> {
+        let in_sync = self.delivered && !self.replay.load(Ordering::Acquire);
+        self.publication
+            .lock()
+            .map_err(|e| e.to_string())?
+            .apply_partial(update, in_sync)?;
+        self.delivered = false;
+        self.replay.store(true, Ordering::Release);
+        Ok(())
+    }
     fn activation_epoch(&self) -> u64 {
         self.epoch.load(Ordering::Acquire)
     }
@@ -308,11 +391,11 @@ impl BridgeState {
     // only before update_if_active would hand them a stale guest-tree delta.
     fn flush(&mut self, mut deliver: impl FnMut(&mut dyn FnMut() -> TreeUpdate) -> bool) -> bool {
         let delivery_epoch = self.activation_epoch();
-        let Some((Some(safe_root), updates, expected_epoch)) = self
+        let Some((true, safe_root, expected_epoch)) = self
             .publication
             .lock()
             .ok()
-            .map(|p| (p.initial(), p.replay(), p.expected_epoch))
+            .map(|p| (p.has_initial(), p.safe_root(), p.expected_epoch))
         else {
             return false;
         };
@@ -324,6 +407,11 @@ impl BridgeState {
             return self.delivered;
         }
         self.delivered = false;
+        let updates = self
+            .publication
+            .lock()
+            .map(|p| p.replay())
+            .unwrap_or_default();
         if updates.is_empty() {
             return false;
         }
@@ -337,10 +425,9 @@ impl BridgeState {
             let mut supplier = || {
                 supplied = true;
                 current = self.activation_epoch() == delivery_epoch;
-                if current {
-                    update.clone()
-                } else {
-                    safe_root.clone()
+                match &safe_root {
+                    Some(safe_root) if !current => safe_root.clone(),
+                    _ => update.clone(),
                 }
             };
             let accepted = deliver(&mut supplier);
@@ -352,6 +439,12 @@ impl BridgeState {
             {
                 self.replay.store(true, Ordering::Release);
                 return false;
+            }
+        }
+        if let Ok(mut publication) = self.publication.lock() {
+            // Under custody: an activation after this check snapshots afterwards.
+            if self.activation_epoch() == delivery_epoch {
+                publication.mark_delivered();
             }
         }
         self.delivered = true;
@@ -448,6 +541,23 @@ mod imp {
             ordered: Vec<TreeUpdate>,
         ) -> Result<bool, String> {
             self.state.replace_batch(initial, ordered)?;
+            Ok(self.flush_pending())
+        }
+
+        /// Patch the retained host tree with a partial AccessKit update: listed
+        /// nodes replace theirs whole, unlisted nodes stay, and nodes dropped
+        /// from a listed parent's children are removed. Root host tree only.
+        /// Ok(true): delivered to an active reader; Ok(false): no reader took
+        /// it, but it is retained and a later reader gets the whole tree.
+        ///
+        /// # Errors
+        ///
+        /// Refuses, leaving the retained tree unchanged, an update that names
+        /// an unknown child or root, enters a guest tree, would leave a listed
+        /// node or the focus outside the tree, or follows an epoch-bound or
+        /// guest-carrying publication. Publish in full with `update_batch`.
+        pub fn update_partial(&mut self, update: TreeUpdate) -> Result<bool, String> {
+            self.state.update_partial(update)?;
             Ok(self.flush_pending())
         }
 
@@ -601,6 +711,23 @@ mod imp {
             Ok(self.flush_pending())
         }
 
+        /// Patch the retained host tree with a partial AccessKit update: listed
+        /// nodes replace theirs whole, unlisted nodes stay, and nodes dropped
+        /// from a listed parent's children are removed. Root host tree only.
+        /// Ok(true): delivered to an active reader; Ok(false): no reader took
+        /// it, but it is retained and a later reader gets the whole tree.
+        ///
+        /// # Errors
+        ///
+        /// Refuses, leaving the retained tree unchanged, an update that names
+        /// an unknown child or root, enters a guest tree, would leave a listed
+        /// node or the focus outside the tree, or follows an epoch-bound or
+        /// guest-carrying publication. Publish in full with `update_batch`.
+        pub fn update_partial(&mut self, update: TreeUpdate) -> Result<bool, String> {
+            self.state.update_partial(update)?;
+            Ok(self.flush_pending())
+        }
+
         /// Epoch of the current native activation lifecycle. Compose a fresh
         /// host publication whenever this value changes.
         pub fn activation_epoch(&self) -> u64 {
@@ -744,6 +871,23 @@ mod imp {
             Ok(self.flush_pending())
         }
 
+        /// Patch the retained host tree with a partial AccessKit update: listed
+        /// nodes replace theirs whole, unlisted nodes stay, and nodes dropped
+        /// from a listed parent's children are removed. Root host tree only.
+        /// Ok(true): delivered to an active reader; Ok(false): no reader took
+        /// it, but it is retained and a later reader gets the whole tree.
+        ///
+        /// # Errors
+        ///
+        /// Refuses, leaving the retained tree unchanged, an update that names
+        /// an unknown child or root, enters a guest tree, would leave a listed
+        /// node or the focus outside the tree, or follows an epoch-bound or
+        /// guest-carrying publication. Publish in full with `update_batch`.
+        pub fn update_partial(&mut self, update: TreeUpdate) -> Result<bool, String> {
+            self.state.update_partial(update)?;
+            Ok(self.flush_pending())
+        }
+
         /// Epoch of the current native activation lifecycle. Compose a fresh
         /// host publication whenever this value changes.
         pub fn activation_epoch(&self) -> u64 {
@@ -875,6 +1019,9 @@ mod imp {
 
         pub fn activation_epoch(&self) -> u64 {
             0
+        }
+        pub fn update_partial(&mut self, _update: TreeUpdate) -> Result<bool, String> {
+            Ok(false)
         }
         pub fn update_batch_at(
             &mut self,

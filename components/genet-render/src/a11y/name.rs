@@ -7,8 +7,9 @@
 //! (`with_rendered`). Name from content follows the flat tree (AccName's
 //! "rendered child nodes"); ID references resolve only within the referring
 //! node's own tree. Embedded controls contribute current values during labels.
-//! A node that is neither referenced nor part of a content traversal takes
-//! no name from content when its role bars it (see [`Names::content_barred`]).
+//! A node that is neither referenced nor part of a content traversal takes a
+//! name from content when its role allows it ([`NAME_FROM_CONTENTS`]) or, as
+//! an interim until text nodes are projected, when it has direct text (D65).
 
 use std::collections::{HashMap, HashSet};
 
@@ -21,9 +22,42 @@ pub(super) struct Names<'a, D: LayoutDom> {
     ids: HashMap<D::NodeId, HashMap<String, D::NodeId>>,
     /// Every `<label>` in tree order within its own tree, with that tree's root.
     labels: Vec<(D::NodeId, D::NodeId)>,
+    /// Every node carrying an ARIA reference attribute, with its tree's root.
+    referrers: Vec<(D::NodeId, D::NodeId)>,
     generated: Option<&'a dyn Fn(D::NodeId) -> (String, String)>,
     rendered: Option<&'a dyn Fn(D::NodeId) -> bool>,
 }
+
+/// Attributes by which one node's name or description reads another node.
+pub(super) const LABELLEDBY: &str = "aria-labelledby";
+pub(super) const DESCRIBEDBY: &str = "aria-describedby";
+/// `for` counts only on a `<label>`.
+pub(super) const LABEL_FOR: &str = "for";
+pub(super) const REFERENCE_ATTRIBUTES: [&str; 3] = [LABELLEDBY, DESCRIBEDBY, LABEL_FOR];
+
+/// Roles whose name may come from their contents: WAI-ARIA 1.2, each role's
+/// "Name From: contents" (AccName 1.2 step 2F). A generic container is named
+/// from content only through its direct text ([`Names::has_direct_text`]).
+pub(super) const NAME_FROM_CONTENTS: &[&str] = &[
+    "button",
+    "cell",
+    "checkbox",
+    "columnheader",
+    "gridcell",
+    "heading",
+    "link",
+    "menuitem",
+    "menuitemcheckbox",
+    "menuitemradio",
+    "option",
+    "radio",
+    "row",
+    "rowheader",
+    "switch",
+    "tab",
+    "tooltip",
+    "treeitem",
+];
 
 fn attr<'a, D: LayoutDom>(dom: &'a D, node: D::NodeId, name: &str) -> Option<&'a str> {
     dom.attribute(node, &Namespace::default(), &LocalName::from(name))
@@ -50,15 +84,19 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             dom,
             ids: HashMap::new(),
             labels: Vec::new(),
+            referrers: Vec::new(),
             generated: None,
             rendered: None,
         };
         // Each tree is walked in its own DOM order; a host's shadow root starts
         // a new tree, walked after the host's light-DOM subtree. Each tree is
         // still visited contiguously, so tree order holds within every tree.
+        let no_ns = Namespace::default();
+        let [id_name, labelledby, describedby] =
+            ["id", LABELLEDBY, DESCRIBEDBY].map(LocalName::from);
         let mut pending = vec![(dom.document(), dom.document())];
         while let Some((node, tree)) = pending.pop() {
-            if let Some(id) = attr(dom, node, "id") {
+            if let Some(id) = dom.attribute(node, &no_ns, &id_name) {
                 names
                     .ids
                     .entry(tree)
@@ -68,6 +106,11 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             }
             if names.tag(node) == Some("label") {
                 names.labels.push((node, tree));
+            }
+            if dom.attribute(node, &no_ns, &labelledby).is_some()
+                || dom.attribute(node, &no_ns, &describedby).is_some()
+            {
+                names.referrers.push((node, tree));
             }
             if let Some(root) = dom
                 .has_shadow_trees()
@@ -149,6 +192,32 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         None
     }
 
+    /// Whether `node`'s own role allows a name from its contents: an explicit
+    /// `role` token first, then the role the element maps to.
+    fn content_allowed(&self, node: D::NodeId) -> bool {
+        let explicit = attr(self.dom, node, "role").map(|r| r.trim().to_ascii_lowercase());
+        let token = explicit
+            .as_deref()
+            .filter(|r| {
+                NAME_FROM_CONTENTS.contains(r) || super::ARIA_ROLES.iter().any(|(t, _)| t == r)
+            })
+            .or_else(|| super::aria_token(super::document_role(self.dom, node)));
+        token.is_some_and(|token| NAME_FROM_CONTENTS.contains(&token))
+    }
+
+    /// Whether `node` holds text of its own: a non-whitespace text child in the
+    /// flat tree, or generated `::before`/`::after` text. Genet projects no
+    /// text nodes, so this keeps such text reachable (D65, interim).
+    fn has_direct_text(&self, node: D::NodeId) -> bool {
+        let text = |s: &str| !flat(s).is_empty();
+        self.dom.flat_children(node).any(|child| {
+            self.dom.kind(child) == NodeKind::Text && self.dom.text(child).is_some_and(text)
+        }) || self
+            .generated
+            .map(|f| f(node))
+            .is_some_and(|(before, after)| text(&before) || text(&after))
+    }
+
     /// A table's first `caption` child.
     fn caption(&self, table: D::NodeId) -> Option<D::NodeId> {
         self.dom
@@ -202,13 +271,37 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             .collect()
     }
 
+    /// Every reference in the document: each referrer with what its
+    /// [`REFERENCE_ATTRIBUTES`] resolve to, `None` for a dangling token.
+    pub(super) fn resolved_references(&self) -> HashMap<D::NodeId, Vec<Option<D::NodeId>>> {
+        let mut out: HashMap<_, Vec<_>> = HashMap::new();
+        for (node, tree) in &self.referrers {
+            for name in [LABELLEDBY, DESCRIBEDBY] {
+                let tokens = attr(self.dom, *node, name).unwrap_or("");
+                out.entry(*node).or_default().extend(
+                    tokens
+                        .split_ascii_whitespace()
+                        .map(|id| self.element_by_id(*tree, id)),
+                );
+            }
+        }
+        for (label, tree) in &self.labels {
+            if let Some(id) = attr(self.dom, *label, LABEL_FOR) {
+                out.entry(*label)
+                    .or_default()
+                    .push(self.element_by_id(*tree, id));
+            }
+        }
+        out
+    }
+
     pub(super) fn name(&self, node: D::NodeId) -> Option<String> {
         self.compute(node, false, false, false, false, &mut HashSet::new())
             .map(|s| flat(&s))
     }
 
     pub(super) fn description(&self, node: D::NodeId) -> Option<String> {
-        let references = self.references(node, "aria-describedby");
+        let references = self.references(node, DESCRIBEDBY);
         if !references.is_empty() {
             return Some(
                 references
@@ -233,14 +326,11 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             return Some(flat(description));
         }
         // Title is available for description only when a higher-priority name
-        // source was used. Suppress title during that independent calculation.
-        if self
-            .compute(node, false, true, false, false, &mut HashSet::new())
-            .is_some()
-        {
-            return attr(self.dom, node, "title").map(flat);
-        }
-        None
+        // source was used. Suppress title during that independent calculation,
+        // which is skipped when there is no title to offer.
+        let title = attr(self.dom, node, "title")?;
+        self.compute(node, false, true, false, false, &mut HashSet::new())
+            .map(|_| flat(title))
     }
 
     /// Whether the style owner reports `node` rendered and visible; true when
@@ -415,7 +505,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
             return self.dom.text(node).map(str::to_owned);
         }
         if !referenced {
-            let references = self.references(node, "aria-labelledby");
+            let references = self.references(node, LABELLEDBY);
             if !references.is_empty() {
                 return Some(
                     references
@@ -464,7 +554,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                 .labels
                 .iter()
                 .filter(|(label, tree)| {
-                    if let Some(target) = attr(self.dom, *label, "for") {
+                    if let Some(target) = attr(self.dom, *label, LABEL_FOR) {
                         self.element_by_id(*tree, target) == Some(node)
                     } else {
                         self.first_control(*label) == Some(node)
@@ -539,6 +629,7 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         }
         // Native text fields get names from labels, never their editable value.
         let content = if barred.is_some()
+            || (root && !self.content_allowed(node) && !self.has_direct_text(node))
             || matches!(self.tag(node), Some("input" | "textarea" | "select"))
             || super::document_role(self.dom, node)
                 == document_session_api::DocumentA11yRole::TextField
@@ -579,6 +670,10 @@ impl<'a, D: LayoutDom> Names<'a, D> {
         None
     }
 }
+
+#[cfg(test)]
+#[path = "name_gate_tests.rs"]
+mod gate_tests;
 
 #[cfg(test)]
 mod tests {

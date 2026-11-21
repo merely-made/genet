@@ -13,15 +13,24 @@ use accesskit::{
     Toggled, TreeId, TreeInfo, TreeUpdate,
 };
 use document_session_api::{
-    A11yCapability, DocumentA11yAction, DocumentA11yBounds, DocumentA11yHasPopup, DocumentA11yLive,
-    DocumentA11yNode, DocumentA11yNodeId, DocumentA11yOrientation, DocumentA11yProjection,
-    DocumentA11yRole, DocumentA11yState, DocumentA11ySupport, DocumentA11yToggled,
+    A11yCapability, DocumentA11yAction, DocumentA11yHasPopup, DocumentA11yLive, DocumentA11yNode,
+    DocumentA11yNodeId, DocumentA11yOrientation, DocumentA11yProjection, DocumentA11yRole,
+    DocumentA11yState, DocumentA11ySupport, DocumentA11yToggled,
 };
 use genet_livery::LiveryLayout;
 use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
 use crate::render::ScrollOffsets;
 
+#[cfg(test)]
+#[path = "a11y/measure_tests.rs"]
+mod measure_tests;
+#[cfg(test)]
+#[path = "a11y/session_tests.rs"]
+mod session_tests;
+#[cfg(test)]
+#[path = "a11y/table_fixture.rs"]
+mod table_fixture;
 #[cfg(test)]
 #[path = "a11y/traversal_tests.rs"]
 mod traversal_tests;
@@ -31,108 +40,11 @@ fn access_id<D: LayoutDom>(dom: &D, node: D::NodeId) -> AccessNodeId {
     AccessNodeId(dom.opaque_id(node))
 }
 
-fn document_role<D: LayoutDom>(dom: &D, node: D::NodeId) -> DocumentA11yRole {
-    if let Some(role) = dom.attribute(node, &Namespace::default(), &LocalName::from("role")) {
-        match role.trim().to_ascii_lowercase().as_str() {
-            "document" => return DocumentA11yRole::Document,
-            "article" => return DocumentA11yRole::Article,
-            "region" => return DocumentA11yRole::Region,
-            "group" => return DocumentA11yRole::Group,
-            "navigation" => return DocumentA11yRole::Navigation,
-            "main" => return DocumentA11yRole::Main,
-            "heading" => return DocumentA11yRole::Heading { level: 0 },
-            "paragraph" => return DocumentA11yRole::Paragraph,
-            "link" => return DocumentA11yRole::Link,
-            "button" => return DocumentA11yRole::Button,
-            "textbox" => return DocumentA11yRole::TextField,
-            "checkbox" => return DocumentA11yRole::CheckBox,
-            "radio" => return DocumentA11yRole::RadioButton,
-            "radiogroup" => return DocumentA11yRole::RadioGroup,
-            "switch" => return DocumentA11yRole::Switch,
-            "combobox" => return DocumentA11yRole::ComboBox,
-            "listbox" => return DocumentA11yRole::ListBox,
-            "option" => return DocumentA11yRole::ListBoxOption,
-            "list" => return DocumentA11yRole::List,
-            "listitem" => return DocumentA11yRole::ListItem,
-            "table" => return DocumentA11yRole::Table,
-            "row" => return DocumentA11yRole::Row,
-            "cell" | "gridcell" => return DocumentA11yRole::Cell,
-            "image" | "img" => return DocumentA11yRole::Image,
-            "form" => return DocumentA11yRole::Form,
-            "dialog" => return DocumentA11yRole::Dialog,
-            "alert" => return DocumentA11yRole::Alert,
-            "menu" => return DocumentA11yRole::Menu,
-            "menubar" => return DocumentA11yRole::MenuBar,
-            "menuitem" => return DocumentA11yRole::MenuItem,
-            "menuitemcheckbox" => return DocumentA11yRole::MenuItemCheckBox,
-            "menuitemradio" => return DocumentA11yRole::MenuItemRadio,
-            "tablist" => return DocumentA11yRole::TabList,
-            "tab" => return DocumentA11yRole::Tab,
-            "tabpanel" => return DocumentA11yRole::TabPanel,
-            "tree" => return DocumentA11yRole::Tree,
-            "treeitem" => return DocumentA11yRole::TreeItem,
-            "slider" => return DocumentA11yRole::Slider,
-            "spinbutton" => return DocumentA11yRole::SpinButton,
-            "status" => return DocumentA11yRole::Status,
-            "log" => return DocumentA11yRole::Log,
-            "note" => return DocumentA11yRole::Note,
-            "separator" => return DocumentA11yRole::Splitter,
-            "toolbar" => return DocumentA11yRole::Toolbar,
-            "progressbar" => return DocumentA11yRole::ProgressIndicator,
-            _ => {},
-        }
-    }
-    if dom.element_name(node).is_some_and(|name| {
-        name.ns.as_str() == "http://www.w3.org/1999/xhtml"
-            && name.local.as_str().eq_ignore_ascii_case("input")
-    }) {
-        let input_type = dom
-            .attribute(node, &Namespace::default(), &LocalName::from("type"))
-            .map(str::to_ascii_lowercase)
-            .unwrap_or_else(|| "text".to_owned());
-        match input_type.as_str() {
-            "checkbox" => return DocumentA11yRole::CheckBox,
-            "radio" => return DocumentA11yRole::RadioButton,
-            _ => {},
-        }
-    }
-    match dom.kind(node) {
-        NodeKind::Document => DocumentA11yRole::Window,
-        NodeKind::Element => match dom.element_name(node).map(|name| name.local.as_str()) {
-            Some("html") => DocumentA11yRole::Document,
-            Some("article") => DocumentA11yRole::Article,
-            Some("nav") => DocumentA11yRole::Navigation,
-            Some("main") => DocumentA11yRole::Main,
-            Some("form") => DocumentA11yRole::Form,
-            Some("dialog") => DocumentA11yRole::Dialog,
-            Some("h1") => DocumentA11yRole::Heading { level: 1 },
-            Some("h2") => DocumentA11yRole::Heading { level: 2 },
-            Some("h3") => DocumentA11yRole::Heading { level: 3 },
-            Some("h4") => DocumentA11yRole::Heading { level: 4 },
-            Some("h5") => DocumentA11yRole::Heading { level: 5 },
-            Some("h6") => DocumentA11yRole::Heading { level: 6 },
-            Some("p") => DocumentA11yRole::Paragraph,
-            Some("a")
-                if dom
-                    .attribute(node, &Namespace::default(), &LocalName::from("href"))
-                    .is_some() =>
-            {
-                DocumentA11yRole::Link
-            },
-            Some("button") => DocumentA11yRole::Button,
-            Some("input" | "textarea") => DocumentA11yRole::TextField,
-            Some("label") => DocumentA11yRole::Label,
-            Some("ul" | "ol") => DocumentA11yRole::List,
-            Some("li") => DocumentA11yRole::ListItem,
-            Some("table") => DocumentA11yRole::Table,
-            Some("tr") => DocumentA11yRole::Row,
-            Some("td" | "th") => DocumentA11yRole::Cell,
-            Some("img") => DocumentA11yRole::Image,
-            _ => DocumentA11yRole::Unknown,
-        },
-        _ => DocumentA11yRole::Unknown,
-    }
-}
+mod pass;
+mod roles;
+mod session;
+use roles::{ARIA_ROLES, aria_token, document_role};
+pub use session::{A11ySession, A11yUpdate};
 
 mod name;
 fn text_control_value<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<String> {
@@ -334,7 +246,7 @@ fn has_tabindex<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
 
 /// State carried down the flat-tree descent. Keep action blocking separate
 /// from the sum: opposite nonzero scroll offsets can cancel geometrically.
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct AncestorScroll {
     offset: (f32, f32),
     active: bool,
@@ -722,98 +634,6 @@ fn neutral_actions<D: LayoutDom>(
     actions
 }
 
-fn projection_walk<D>(
-    dom: &D,
-    fragments: &LiveryLayout<D::NodeId>,
-    scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
-    node: D::NodeId,
-    inherited_scroll: AncestorScroll,
-    parent: Option<DocumentA11yNodeId>,
-    names: &name::Names<D>,
-    focus: Option<D::NodeId>,
-    out: &mut Vec<DocumentA11yNode>,
-) -> Vec<DocumentA11yNodeId>
-where
-    D: LayoutDom,
-    D::NodeId: Copy + Eq + Hash,
-{
-    if aria_true(dom, node, "aria-hidden") {
-        return Vec::new();
-    }
-    // A CSS-hidden node is skipped like a box-less one, but its children are
-    // still walked: a `visibility: visible` child of a hidden parent renders.
-    let projected = dom.kind(node) == NodeKind::Document
-        || (fragments.get(node).is_some() && names.rendered(node));
-    let id = projected.then(|| neutral_node_id(dom, node));
-    let child_parent = id.or(parent);
-    let child_scroll = inherited_scroll.including(
-        scroll_offsets
-            .and_then(|offsets| offsets.get(&node))
-            .copied()
-            .unwrap_or_default(),
-    );
-    let children = dom
-        .flat_children(node)
-        .filter(|child| dom.kind(*child) == NodeKind::Element)
-        .flat_map(|child| {
-            projection_walk(
-                dom,
-                fragments,
-                scroll_offsets,
-                child,
-                child_scroll,
-                child_parent,
-                names,
-                focus,
-                out,
-            )
-        })
-        .collect::<Vec<_>>();
-    let Some(id) = id else {
-        return children;
-    };
-
-    let role = match document_role(dom, node) {
-        DocumentA11yRole::Heading { level: 0 } => DocumentA11yRole::Heading {
-            level: neutral_heading_level(dom, node),
-        },
-        role => role,
-    };
-    let state = neutral_state(dom, node, focus);
-    let bounds = fragments.get(node).map(|fragment| {
-        let (scroll_x, scroll_y) = inherited_scroll.offset;
-        DocumentA11yBounds {
-            x: fragment.x - scroll_x,
-            y: fragment.y - scroll_y,
-            width: fragment.width,
-            height: fragment.height,
-        }
-    });
-    let name = names.name(node);
-    let description = names.description(node);
-    let value = text_control_value(dom, node);
-    let actions = neutral_actions(dom, node, role, state, inherited_scroll.active);
-    let numeric_value = aria_number(dom, node, "aria-valuenow");
-    let numeric_minimum = aria_number(dom, node, "aria-valuemin");
-    let numeric_maximum = aria_number(dom, node, "aria-valuemax");
-    out.push(DocumentA11yNode {
-        id,
-        parent,
-        children: children.clone(),
-        role,
-        name,
-        description,
-        value,
-        numeric_value,
-        numeric_minimum,
-        numeric_maximum,
-        bounds,
-        state,
-        actions,
-    });
-    vec![id]
-}
-
 /// Project the retained Livery/Buckram document into the renderer-neutral
 /// accessibility contract. `revision` scopes local identities and action
 /// requests; compatibility AccessKit wrappers use zero.
@@ -944,27 +764,41 @@ fn projection_with_names<D: LayoutDom>(
     revision: u64,
     scroll_offsets: Option<&ScrollOffsets<D::NodeId>>,
     names: &name::Names<D>,
-) -> DocumentA11yProjection {
-    let root = dom.document();
-    let root_id = neutral_node_id(dom, root);
-    let mut nodes = Vec::new();
-    projection_walk(
+) -> DocumentA11yProjection
+where
+    D::NodeId: Copy + Eq + Hash,
+{
+    let pass = pass::Pass {
         dom,
         fragments,
         scroll_offsets,
+        names,
+        focus,
+    };
+    let root = dom.document();
+    let mut nodes = Vec::new();
+    pass.walk(
         root,
         AncestorScroll::default(),
         None,
-        names,
-        focus,
         &mut nodes,
+        &mut Vec::new(),
     );
+    projection_from(revision, neutral_node_id(dom, root), nodes)
+}
+
+/// The contract's projection of `nodes`, rooted at `root`.
+fn projection_from(
+    revision: u64,
+    root: DocumentA11yNodeId,
+    nodes: Vec<DocumentA11yNode>,
+) -> DocumentA11yProjection {
     let support = DocumentA11ySupport::new(
         A11yCapability::Partial,
         ["Laid-out element roles and states are exposed; custom leaves, standalone text nodes, and the complete accessible-name algorithm are not yet included."],
     )
     .expect("partial projections carry an explicit limitation");
-    DocumentA11yProjection::new(revision, support, root_id, nodes)
+    DocumentA11yProjection::new(revision, support, root, nodes)
 }
 
 #[cfg(all(test, feature = "accesskit"))]

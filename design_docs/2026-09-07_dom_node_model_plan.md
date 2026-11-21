@@ -339,12 +339,30 @@ Vano. `Element-setAttribute.html` moved from 1/2 to 2/2 on both engines, and
 passed all 24 tests. The runner and raw maps are retained in
 `Code/output/genet-setattribute-qualified-name/`.
 
-The Document and Element `getElementsByTagName` WPTs each retain six
-interface/property failures on Bole and Vano. Cover the `HTMLCollection`
-prototype, strict indexed writes, expandos shadowing `item` and `namedItem`,
-and named and indexed own-property descriptors. The WPT liveness row first
-requires `instanceof HTMLCollection`. Preserve the separately passing runtime
-mutation and adoption controls when fixing that interface.
+**Live `HTMLCollection` interface (2026-11-20).** Live element queries now
+return collections with an `HTMLCollection` prototype, read-only indexed
+properties, non-enumerable named properties and ordinary expando properties.
+Named lookup uses IDs and the `name` attribute of HTML elements. The backing
+query still supplies fresh elements on each access. On base `a66c252ea2e1`,
+the Document and Element `getElementsByTagName` WPTs moved from 12/18 to 18/18
+and from 13/19 to 19/19, respectively, on both Bole and Vano. The
+`dom/collections` comparison moved from 29/53 to 48/53 on both engines with
+zero regressions. A focused control
+reproduced duplicate own keys before the fix when an element ID matched an
+index and passed after the fix on both engines. The DOM node-model,
+cross-arena adoption and tag-name/window-globals runtime suites passed all
+60 tests. The runners and result maps are retained in
+`Code/output/genet-htmlcollection/`.
+
+**Netrender recheck (2026-11-21).** On base `a81e40e9882` with Netrender
+`0.2.0` at `4f00a4553`, `Document-getElementsByTagName.html` passed 18/18
+and `Element-getElementsByTagName.html` passed 19/19 on both Bole and Vano.
+The runner, lockfile resolution and assertion maps are retained in
+`Code/output/genet-htmlcollection/netrender-pin/`.
+
+**Namespace-aware tag queries remain open.** The two remaining
+`HTMLCollection-empty-name.html` failures exercise the missing Document and
+Element `getElementsByTagNameNS` methods.
 
 ## Gates
 

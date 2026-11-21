@@ -5503,17 +5503,44 @@
     queueSelectionChange();
   };
 
+  var htmlCollectionItems = globalThis.__agentTimers.domHTMLCollectionItems;
+  if (!htmlCollectionItems) htmlCollectionItems = globalThis.__agentTimers.domHTMLCollectionItems = new WeakMap();
+  function HTMLCollection() { throw new TypeError('Illegal constructor'); }
+  function htmlCollectionGetter(collection) {
+    var getItems = privateGet(htmlCollectionItems, collection);
+    if (!getItems) throw new TypeError('Illegal invocation');
+    return getItems;
+  }
+  Object.defineProperty(HTMLCollection.prototype, 'length', {
+    configurable: true, enumerable: true,
+    get: function() { return htmlCollectionGetter(this)().length; }
+  });
+  HTMLCollection.prototype.item = function item(index) {
+    var getItems = htmlCollectionGetter(this);
+    if (arguments.length === 0) throw new TypeError('item requires an index');
+    index = index >>> 0;
+    var items = getItems();
+    return index < items.length ? items[index] : null;
+  };
+  HTMLCollection.prototype.namedItem = function namedItem(name) {
+    var getItems = htmlCollectionGetter(this);
+    if (arguments.length === 0 || typeof name === 'symbol') throw new TypeError('namedItem requires a string');
+    name = String(name);
+    return name === '' ? null : namedMatch(getItems(), name);
+  };
+  Object.defineProperty(HTMLCollection.prototype, Symbol.iterator, {
+    configurable: true, writable: true, value: Array.prototype.values
+  });
+  Object.defineProperty(HTMLCollection, 'prototype', { writable: false });
+  setClassString(HTMLCollection.prototype, 'HTMLCollection');
+  globalThis.HTMLCollection = HTMLCollection;
+
   installHtmlInterfaceTable();
   installOffsetGeometry();
   installShapeInterfaces();
   installTraversal();
 
-  // Live HTMLCollection / NodeList as legacy-platform exotic objects, modeled with
-  // a JS Proxy (both backends support the get/has/ownKeys/getOwnPropertyDescriptor
-  // traps — verified by `proxy_capability`). `getItems()` returns the current
-  // element/node array, re-read per access for liveness. `isHtml` selects
-  // HTMLCollection (named access + namedItem, no forEach/values/entries/keys) vs
-  // NodeList (forEach/entries/keys/values, no named access).
+  // Collection proxies re-read their backing query on each access.
   function isArrayIndex(k) {
     return typeof k === 'string' && /^(0|[1-9][0-9]*)$/.test(k) && k <= 4294967294;
   }
@@ -5526,60 +5553,108 @@
     it[Symbol.iterator] = function() { return it; };
     return it;
   }
-  function supportedNames(getItems) {
-    var a = getItems(); var seen = {}; var out = [];
-    for (var i = 0; i < a.length; i++) {
-      var id = a[i].getAttribute && a[i].getAttribute('id');
-      if (id && !seen['$' + id]) { seen['$' + id] = 1; out.push(id); }
-      var nm = a[i].getAttribute && a[i].getAttribute('name');
-      if (nm && !seen['$' + nm]) { seen['$' + nm] = 1; out.push(nm); }
-    }
-    return out;
+  function collectionId(element) {
+    return __getAttributeNS(element.__ref, '', 'id');
   }
-  function namedMatch(getItems, name) {
-    var a = getItems();
-    for (var i = 0; i < a.length; i++) {
-      if (a[i].getAttribute && (a[i].getAttribute('id') === name || a[i].getAttribute('name') === name)) return a[i];
+  function collectionName(element) {
+    return __namespaceURI(element.__ref) === XHTML_NS
+      ? __getAttributeNS(element.__ref, '', 'name') : null;
+  }
+  function namedMatch(items, name) {
+    if (name === '') return null;
+    for (var i = 0; i < items.length; i++) {
+      var element = items[i];
+      if (collectionId(element) === name || collectionName(element) === name) return element;
     }
     return null;
   }
+  function makeHtmlCollection(getItems) {
+    function virtualProperty(target, key) {
+      if (isArrayIndex(key)) {
+        var items = getItems();
+        return +key < items.length ? items[+key] : undefined;
+      }
+      if (typeof key === 'string' && !(key in target)) {
+        return namedMatch(getItems(), key) || undefined;
+      }
+    }
+    var collection = new Proxy(Object.create(HTMLCollection.prototype), {
+      get: function(target, key, receiver) {
+        return virtualProperty(target, key) || Reflect.get(target, key, receiver);
+      },
+      has: function(target, key) {
+        return key in target || virtualProperty(target, key) !== undefined;
+      },
+      ownKeys: function(target) {
+        var items = getItems();
+        var keys = [];
+        var seen = Object.create(null);
+        function appendName(name) {
+          if (name && !isArrayIndex(name) && !seen[name] && !(name in target)) {
+            seen[name] = true;
+            keys.push(name);
+          }
+        }
+        for (var i = 0; i < items.length; i++) keys.push(String(i));
+        for (var j = 0; j < items.length; j++) {
+          appendName(collectionId(items[j]));
+          appendName(collectionName(items[j]));
+        }
+        return keys.concat(Reflect.ownKeys(target));
+      },
+      getOwnPropertyDescriptor: function(target, key) {
+        var value = virtualProperty(target, key);
+        if (value !== undefined) {
+          return { value: value, writable: false, enumerable: isArrayIndex(key), configurable: true };
+        }
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      set: function(target, key, value, receiver) {
+        if (isArrayIndex(key) && +key < getItems().length) return false;
+        return Reflect.set(target, key, value, receiver);
+      },
+      defineProperty: function(target, key, descriptor) {
+        if (isArrayIndex(key)) return false;
+        if (typeof key === 'string' && !Reflect.getOwnPropertyDescriptor(target, key)
+            && namedMatch(getItems(), key)) return false;
+        return Reflect.defineProperty(target, key, descriptor);
+      },
+      deleteProperty: function(target, key) {
+        return virtualProperty(target, key) === undefined && Reflect.deleteProperty(target, key);
+      },
+      preventExtensions: function() { return false; }
+    });
+    privateSet(htmlCollectionItems, collection, getItems);
+    return collection;
+  }
+
   function makeCollection(getItems, isHtml) {
+    if (isHtml) return makeHtmlCollection(getItems);
     var handler = {
       get: function(t, k) {
         if (k === 'length') return getItems().length;
         if (k === 'item') return function(i) { var a = getItems(); i = i >>> 0; return i < a.length ? a[i] : null; };
         if (k === Symbol.iterator) return function() { return collectionIterator(getItems); };
-        if (isHtml) {
-          if (k === 'namedItem') return function(name) {
-            name = String(name); return name === '' ? null : namedMatch(getItems, name);
-          };
-        } else {
-          if (k === 'forEach') return function(cb, thisArg) { var a = getItems(); for (var i = 0; i < a.length; i++) cb.call(thisArg, a[i], i, this); };
-          if (k === 'values') return function() { return collectionIterator(getItems); };
-          if (k === 'keys') return function() { var i = 0; var a = getItems(); var o = { next: function() { return i < a.length ? { value: i++, done: false } : { value: undefined, done: true }; } }; o[Symbol.iterator] = function() { return o; }; return o; };
-          if (k === 'entries') return function() { var i = 0; var a = getItems(); var o = { next: function() { return i < a.length ? { value: [i, a[i++]], done: false } : { value: undefined, done: true }; } }; o[Symbol.iterator] = function() { return o; }; return o; };
-        }
+        if (k === 'forEach') return function(cb, thisArg) { var a = getItems(); for (var i = 0; i < a.length; i++) cb.call(thisArg, a[i], i, this); };
+        if (k === 'values') return function() { return collectionIterator(getItems); };
+        if (k === 'keys') return function() { var i = 0; var a = getItems(); var o = { next: function() { return i < a.length ? { value: i++, done: false } : { value: undefined, done: true }; } }; o[Symbol.iterator] = function() { return o; }; return o; };
+        if (k === 'entries') return function() { var i = 0; var a = getItems(); var o = { next: function() { return i < a.length ? { value: [i, a[i++]], done: false } : { value: undefined, done: true }; } }; o[Symbol.iterator] = function() { return o; }; return o; };
         if (isArrayIndex(k)) { var a = getItems(); var idx = +k; return idx < a.length ? a[idx] : undefined; }
-        if (isHtml && typeof k === 'string') { var m = namedMatch(getItems, k); if (m) return m; }
         return t[k];
       },
       has: function(t, k) {
         if (k === 'length' || k === 'item' || k === Symbol.iterator) return true;
-        if (isHtml && k === 'namedItem') return true;
-        if (!isHtml && (k === 'forEach' || k === 'values' || k === 'keys' || k === 'entries')) return true;
+        if (k === 'forEach' || k === 'values' || k === 'keys' || k === 'entries') return true;
         if (isArrayIndex(k)) return (+k) < getItems().length;
-        if (isHtml && typeof k === 'string' && namedMatch(getItems, k)) return true;
         return k in t;
       },
       ownKeys: function() {
         var a = getItems(); var keys = [];
         for (var i = 0; i < a.length; i++) keys.push(String(i));
-        if (isHtml) { var names = supportedNames(getItems); for (var j = 0; j < names.length; j++) keys.push(names[j]); }
         return keys;
       },
       getOwnPropertyDescriptor: function(t, k) {
         if (isArrayIndex(k)) { var a = getItems(); var idx = +k; if (idx < a.length) return { value: a[idx], writable: false, enumerable: true, configurable: true }; return undefined; }
-        if (isHtml && typeof k === 'string') { var m = namedMatch(getItems, k); if (m) return { value: m, writable: false, enumerable: true, configurable: true }; }
         return Object.getOwnPropertyDescriptor(t, k);
       }
     };

@@ -267,6 +267,47 @@ fn reflected_writes_use_the_null_namespace<E: ScriptEngine>() {
     );
 }
 
+fn html_collection_live_keys_and_expandos<E: ScriptEngine>() {
+    assert_eq!(
+        console::<E>(
+            r#"
+            const root = document.createElement('div');
+            const first = root.appendChild(document.createElement('span'));
+            first.id = '0';
+            first.setAttribute('name', 'shared');
+            const foreign = root.appendChild(document.createElementNS('urn:other', 'span'));
+            foreign.setAttribute('name', 'ignored');
+            foreign.setAttributeNS('urn:attr', 'id', 'foreignId');
+            foreign.setAttributeNS(null, 'id', 'shared');
+            const collection = root.getElementsByTagName('span');
+            const symbol = Symbol();
+            Object.defineProperty(collection, 'note', { value: 'kept' });
+            collection[symbol] = 'symbol';
+            console.log(collection instanceof HTMLCollection);
+            console.log(Reflect.ownKeys(collection).filter(key => typeof key === 'string').join(','));
+            console.log(Object.keys(collection).join(','));
+            console.log([collection.namedItem('shared') === first,
+                         collection.namedItem('ignored') === null,
+                         collection.namedItem('foreignId') === null].join(' '));
+            console.log([Reflect.defineProperty(collection, '5', { value: first }),
+                         Reflect.deleteProperty(collection, '0'),
+                         Reflect.preventExtensions(collection)].join(' '));
+            root.removeChild(first);
+            console.log([collection[0] === foreign, collection.shared === foreign,
+                         collection.note, collection[symbol]].join(' '));
+            "#,
+        ),
+        vec![
+            "true",
+            "0,1,shared,note",
+            "0,1",
+            "true true true",
+            "false false false",
+            "true true kept symbol",
+        ],
+    );
+}
+
 /// Cloning preserves comments, processing instructions and doctypes, and the
 /// static-to-scripted clone carries them into the live document.
 fn clone_preserves_every_kind_works<E: ScriptEngine>() {
@@ -394,6 +435,11 @@ per_backend!(
     reflected_writes_use_the_null_namespace,
     reflected_writes_null_namespace_on_boa,
     reflected_writes_null_namespace_on_nova
+);
+per_backend!(
+    html_collection_live_keys_and_expandos,
+    html_collection_live_keys_on_boa,
+    html_collection_live_keys_on_nova
 );
 per_backend!(
     clone_preserves_every_kind_works,

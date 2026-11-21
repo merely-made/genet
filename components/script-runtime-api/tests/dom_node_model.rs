@@ -209,6 +209,64 @@ fn attributes_are_attr_nodes_works<E: ScriptEngine>() {
     );
 }
 
+fn set_attribute_updates_the_first_qualified_name<E: ScriptEngine>() {
+    assert_eq!(
+        run::<E>(
+            r#"
+            const el = document.createElement('div');
+            el.setAttributeNS('urn:first', 'x', 'first');
+            el.setAttributeNS('urn:second', 'x', 'second');
+            const held = el.getAttributeNodeNS('urn:first', 'x');
+            const observer = new MutationObserver(records => {
+                console.log(records.length);
+                const record = records[0];
+                console.log([record.target === el, record.attributeName,
+                             record.attributeNamespace, record.oldValue].join(','));
+            });
+            observer.observe(el, { attributes: true, attributeOldValue: true });
+            el.setAttribute('x', 'changed');
+            console.log([el.attributes.length, el.getAttribute('x'), held.value,
+                         held === el.getAttributeNodeNS('urn:first', 'x'),
+                         el.getAttributeNS('urn:second', 'x')].join(','));
+
+            const prefixed = document.createElement('div');
+            prefixed.setAttributeNS('urn:first', 'p:x', 'first');
+            prefixed.setAttributeNS('urn:second', 'p:x', 'second');
+            prefixed.setAttribute('p:x', 'changed');
+            console.log([prefixed.attributes.length, prefixed.attributes[0].prefix,
+                         prefixed.getAttributeNS('urn:first', 'x'),
+                         prefixed.getAttributeNS('urn:second', 'x')].join(','));
+            "#,
+            true,
+        ),
+        vec![
+            "2,changed,changed,true,second",
+            "2,p,changed,second",
+            "1",
+            "true,x,urn:first,first",
+        ],
+    );
+}
+
+fn reflected_writes_use_the_null_namespace<E: ScriptEngine>() {
+    assert_eq!(
+        console::<E>(
+            r#"
+            const input = document.createElement('input');
+            input.setAttributeNS('urn:other', 'type', 'foreign');
+            input.setAttributeNS('urn:other', 'id', 'foreign');
+            input.type = 'checkbox';
+            input.id = 'local';
+            console.log([input.getAttributeNS(null, 'type'),
+                         input.getAttributeNS('urn:other', 'type'),
+                         input.getAttributeNS(null, 'id'),
+                         input.getAttributeNS('urn:other', 'id')].join(','));
+            "#,
+        ),
+        vec!["checkbox,foreign,local,foreign"],
+    );
+}
+
 /// Cloning preserves comments, processing instructions and doctypes, and the
 /// static-to-scripted clone carries them into the live document.
 fn clone_preserves_every_kind_works<E: ScriptEngine>() {
@@ -326,6 +384,16 @@ per_backend!(
     attributes_are_attr_nodes_works,
     attributes_on_boa,
     attributes_on_nova
+);
+per_backend!(
+    set_attribute_updates_the_first_qualified_name,
+    set_attribute_qualified_name_on_boa,
+    set_attribute_qualified_name_on_nova
+);
+per_backend!(
+    reflected_writes_use_the_null_namespace,
+    reflected_writes_null_namespace_on_boa,
+    reflected_writes_null_namespace_on_nova
 );
 per_backend!(
     clone_preserves_every_kind_works,

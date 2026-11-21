@@ -328,11 +328,16 @@ receipt belongs to a server-mode run, which is the XHR plan's open next proof.
 
 ### Attribute mutation and live collection carry (2026-11-17)
 
-`Element-setAttribute.html` passes the ASCII folding assertion on Bole and
-Vano. Its qualified-name collision assertion still fails on both engines.
-`setAttribute()` inserts a third attribute when two existing namespaced
-attributes share the same qualified name. Update the first matching attribute
-and preserve its namespace, mutation records and live `Attr` view.
+**Qualified-name setter follow-through (2026-11-20).** `setAttribute()` now
+updates the first attribute with the requested qualified name. The existing
+attribute keeps its namespace, prefix and live `Attr` identity. Built-in
+content-attribute writes use the null namespace. The focused pre-fix control
+reproduced the extra attribute and incorrect observer namespace on Bole and
+Vano. `Element-setAttribute.html` moved from 1/2 to 2/2 on both engines, and
+`MutationObserver-attributes.html` and `reflection-forms.html` held at
+42/42 and 8271/8271 on both. The DOM node-model and CSS declaration suites
+passed all 24 tests. The runner and raw maps are retained in
+`Code/output/genet-setattribute-qualified-name/`.
 
 The Document and Element `getElementsByTagName` WPTs each retain six
 interface/property failures on Bole and Vano. Cover the `HTMLCollection`

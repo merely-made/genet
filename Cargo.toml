@@ -259,10 +259,10 @@ parley = { package = "genet-parley", version = "0.10.0", path = "support/patches
 # 2026-09-03 under the platform boundary plan, with the doc areas that
 # describe it. Its smolweb protocol crates (nex, spartan, guppy, gopher, gemini,
 # scroll, finger) were errand's wire layer and left this table with it.
-document-session-api = { version = "=0.1.2", path = "components/shared/document-session-api" }
-genet-documents = { version = "=0.1.0", path = "components/genet-documents", default-features = false }
-genet-document-resources = { version = "=0.2.1", path = "components/genet-document-resources" }
-genet-host-api = { version = "=0.2.0", path = "components/genet-host-api" }
+document-session-api = { version = ">=0.1.2", path = "components/shared/document-session-api" }
+genet-documents = { version = ">=0.1.0", path = "components/genet-documents", default-features = false }
+genet-document-resources = { version = ">=0.2.1", path = "components/genet-document-resources" }
+genet-host-api = { version = ">=0.2.0", path = "components/genet-host-api" }
 genet-presenter = { version = "0.2.0", path = "components/genet-render-host" }
 netrender = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = ">=0.2.0" }
 netrender_device = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = ">=0.2.0" }
@@ -362,16 +362,16 @@ zeroize = "1.8"
 # be listed here, between the `Begin` and `End` comments, so that we can easily find and
 # update the version requirements when bumping the workspace version.
 # Begin workspace-version dependencies - Don't change this comment, we grep for it in scripts!
-engine_observables_api = { package = "engine-observables-api", version = "=0.2.0", path = "components/shared/engine-observables-api" }
-layout_dom_api = { package = "layout-dom-api", version = "=0.1.1", path = "components/shared/layout-dom" }
-genet-compositor = { version = "=0.2.0", path = "components/genet-compositor" }
+engine_observables_api = { package = "engine-observables-api", version = ">=0.2.0", path = "components/shared/engine-observables-api" }
+layout_dom_api = { package = "layout-dom-api", version = ">=0.1.1", path = "components/shared/layout-dom" }
+genet-compositor = { version = ">=0.2.0", path = "components/genet-compositor" }
 # Moved to the netrender workspace as a neutral, engine-agnostic crate
 # (extraction plan 2026-05-20). genet is now a consumer, not the owner.
 paint_list_api = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = ">=0.2.0" }
 # The PaintCmd -> netrender::Scene translator; also lives in the netrender
 # workspace so any engine can reuse the lowering.
 paint_list_render = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = ">=0.2.0" }
-paint_types = { package = "genet-paint-types", version = "=0.2.0", path = "components/shared/paint-types" }
+paint_types = { package = "genet-paint-types", version = ">=0.2.0", path = "components/shared/paint-types" }
 # `servo = "..."` workspace.dep removed 2026-05-15 per Mark's audit:
 # genet used to be servo-the-fork, but the umbrella servo crate is no
 # longer load-bearing. The two examples that depended on it
@@ -380,22 +380,22 @@ paint_types = { package = "genet-paint-types", version = "=0.2.0", path = "compo
 # below are kept for now since several still serve as workspace-internal
 # paths for components that may be referenced — separate cleanup pass if
 # they turn out to be vestigial.
-servo-config-macro = { version = "=0.2.0", path = "components/config/macro" }
-servo-media = { version = "=0.2.0", path = "components/media/servo-media" }
-servo-media-audio = { version = "=0.2.0", path = "components/media/audio" }
-servo-media-auto = { version = "=0.2.0", path = "components/media/backends/auto" }
-servo-media-derive = { version = "=0.2.0", path = "components/media/servo-media-derive" }
-servo-media-dummy = { version = "=0.2.0", path = "components/media/backends/dummy" }
-servo-media-gstreamer = { version = "=0.2.0", path = "components/media/backends/gstreamer" }
-servo-media-gstreamer-render = { version = "=0.2.0", path = "components/media/backends/gstreamer/render" }
-servo-media-gstreamer-render-android = { version = "=0.2.0", path = "components/media/backends/gstreamer/render-android" }
-servo-media-gstreamer-render-unix = { version = "=0.2.0", path = "components/media/backends/gstreamer/render-unix" }
-servo-media-player = { version = "=0.2.0", path = "components/media/player" }
-servo-media-streams = { version = "=0.2.0", path = "components/media/streams" }
-servo-media-traits = { version = "=0.2.0", path = "components/media/traits" }
-servo-media-webrtc = { version = "=0.2.0", path = "components/media/webrtc" }
-webgl_wgpu = { package = "genet-webgl", version = "=0.2.0", path = "components/webgl-wgpu" }
-xpath = { package = "servo-xpath", version = "=0.2.0", path = "components/xpath" }
+servo-config-macro = { version = ">=0.2.0", path = "components/config/macro" }
+servo-media = { version = ">=0.2.0", path = "components/media/servo-media" }
+servo-media-audio = { version = ">=0.2.0", path = "components/media/audio" }
+servo-media-auto = { version = ">=0.2.0", path = "components/media/backends/auto" }
+servo-media-derive = { version = ">=0.2.0", path = "components/media/servo-media-derive" }
+servo-media-dummy = { version = ">=0.2.0", path = "components/media/backends/dummy" }
+servo-media-gstreamer = { version = ">=0.2.0", path = "components/media/backends/gstreamer" }
+servo-media-gstreamer-render = { version = ">=0.2.0", path = "components/media/backends/gstreamer/render" }
+servo-media-gstreamer-render-android = { version = ">=0.2.0", path = "components/media/backends/gstreamer/render-android" }
+servo-media-gstreamer-render-unix = { version = ">=0.2.0", path = "components/media/backends/gstreamer/render-unix" }
+servo-media-player = { version = ">=0.2.0", path = "components/media/player" }
+servo-media-streams = { version = ">=0.2.0", path = "components/media/streams" }
+servo-media-traits = { version = ">=0.2.0", path = "components/media/traits" }
+servo-media-webrtc = { version = ">=0.2.0", path = "components/media/webrtc" }
+webgl_wgpu = { package = "genet-webgl", version = ">=0.2.0", path = "components/webgl-wgpu" }
+xpath = { package = "servo-xpath", version = ">=0.2.0", path = "components/xpath" }
 # End workspace-version dependencies - Don't change this comment, we grep for it in scripts!
 
 # An optimized build for CI, to improve test runtime, but with debug assertions turned on.

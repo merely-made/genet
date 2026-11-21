@@ -2344,70 +2344,85 @@
   };
   globalThis.Attr = Attr;
 
-  // NamedNodeMap: a live, indexed view of one element's attributes. The proxy
-  // adds the indexed and named property access the IDL's getters describe.
+  // NamedNodeMap is a live view of the element's ordered attribute list.
+  var namedNodeMaps = globalThis.__agentTimers.domNamedNodeMaps;
+  if (!namedNodeMaps) namedNodeMaps = globalThis.__agentTimers.domNamedNodeMaps = new WeakMap();
+  var namedNodeMapElements = globalThis.__agentTimers.domNamedNodeMapElements;
+  if (!namedNodeMapElements) namedNodeMapElements = globalThis.__agentTimers.domNamedNodeMapElements = new WeakMap();
+  function namedNodeMapElement(map) {
+    var el = privateGet(namedNodeMapElements, map);
+    if (!el) throw new TypeError('Illegal invocation');
+    return el;
+  }
+  function findAttributeRecord(records, name) {
+    for (var i = 0; i < records.length; i++) {
+      if (records[i].qname === name) return records[i];
+    }
+    return null;
+  }
   function NamedNodeMap() { throw new TypeError('Illegal constructor'); }
   NamedNodeMap.prototype.item = function(i) {
+    var el = namedNodeMapElement(this);
     i = Number(i) >>> 0;
-    var recs = attributeRecords(this.__el);
+    var recs = attributeRecords(el);
     if (i >= recs.length) return null;
     var r = recs[i];
-    return attrFor(this.__el, r.ns, r.prefix, r.local);
+    return attrFor(el, r.ns, r.prefix, r.local);
   };
   NamedNodeMap.prototype.getNamedItem = function(qname) {
-    return this.__el.getAttributeNode(qname);
+    return namedNodeMapElement(this).getAttributeNode(qname);
   };
   NamedNodeMap.prototype.getNamedItemNS = function(ns, local) {
-    return this.__el.getAttributeNodeNS(ns, local);
+    return namedNodeMapElement(this).getAttributeNodeNS(ns, local);
   };
-  NamedNodeMap.prototype.setNamedItem = function(attr) { return this.__el.setAttributeNode(attr); };
-  NamedNodeMap.prototype.setNamedItemNS = function(attr) { return this.__el.setAttributeNodeNS(attr); };
+  NamedNodeMap.prototype.setNamedItem = function(attr) { return namedNodeMapElement(this).setAttributeNode(attr); };
+  NamedNodeMap.prototype.setNamedItemNS = function(attr) { return namedNodeMapElement(this).setAttributeNodeNS(attr); };
   NamedNodeMap.prototype.removeNamedItem = function(qname) {
-    var a = this.__el.getAttributeNode(qname);
+    var el = namedNodeMapElement(this);
+    var a = el.getAttributeNode(qname);
     if (!a) throw new DOMException("No attribute named '" + qname + "'.", "NotFoundError");
-    this.__el.removeAttribute(qname);
+    el.removeAttribute(qname);
     return a;
   };
   NamedNodeMap.prototype.removeNamedItemNS = function(ns, local) {
-    var a = this.__el.getAttributeNodeNS(ns, local);
+    var el = namedNodeMapElement(this);
+    var a = el.getAttributeNodeNS(ns, local);
     if (!a) throw new DOMException("No such attribute.", "NotFoundError");
-    this.__el.removeAttributeNS(ns, local);
+    el.removeAttributeNS(ns, local);
     return a;
   };
   Object.defineProperty(NamedNodeMap.prototype, 'length', {
-    configurable: true, get: function() { return attributeRecords(this.__el).length; }
+    configurable: true, get: function() { return attributeRecords(namedNodeMapElement(this)).length; }
   });
   globalThis.NamedNodeMap = NamedNodeMap;
-  var namedNodeMaps = new WeakMap();
   function namedNodeMapFor(el) {
-    var existing = namedNodeMaps.get(el);
+    var existing = privateGet(namedNodeMaps, el);
     if (existing) return existing;
-    var target = Object.create(NamedNodeMap.prototype);
-    target.__el = el;
-    var proxy = new Proxy(target, {
-      get: function(t, prop) {
-        if (typeof prop === 'string' && /^[0-9]+$/.test(prop)) return t.item(Number(prop));
-        if (typeof prop === 'string' && !(prop in t)) return t.getNamedItem(prop) || undefined;
-        return t[prop];
+    var map = makeIndexedNamedCollection(NamedNodeMap.prototype,
+      function() { return attributeRecords(el); },
+      function(record) { return attrFor(el, record.ns, record.prefix, record.local); },
+      function(records, name) {
+        return attributeName(el, name) === name ? findAttributeRecord(records, name) : null;
       },
-      has: function(t, prop) {
-        if (typeof prop === 'string' && /^[0-9]+$/.test(prop)) return Number(prop) < t.length;
-        return (prop in t) || (typeof prop === 'string' && !!t.getNamedItem(prop));
-      }
-    });
-    namedNodeMaps.set(el, proxy);
-    return proxy;
+      function(record, appendName) {
+        if (attributeName(el, record.qname) === record.qname) appendName(record.qname);
+      });
+    privateSet(namedNodeMapElements, map, el);
+    privateSet(namedNodeMaps, el, map);
+    return map;
   }
   Object.defineProperty(Element.prototype, 'attributes', {
-    configurable: true, get: function() { return namedNodeMapFor(this); }
+    configurable: true,
+    get: function() {
+      var ref = privateGet(formRefs, this);
+      if (!ref || +formNodeType(ref) !== 1) throw new TypeError('Illegal invocation');
+      return namedNodeMapFor(this);
+    }
   });
   Element.prototype.getAttributeNode = function(qname) {
     qname = attributeName(this, String(qname));
-    var recs = attributeRecords(this);
-    for (var i = 0; i < recs.length; i++) {
-      if (recs[i].qname === qname) return attrFor(this, recs[i].ns, recs[i].prefix, recs[i].local);
-    }
-    return null;
+    var record = findAttributeRecord(attributeRecords(this), qname);
+    return record ? attrFor(this, record.ns, record.prefix, record.local) : null;
   };
   Element.prototype.getAttributeNodeNS = function(ns, local) {
     ns = nsArg(ns); local = String(local);
@@ -5591,17 +5606,18 @@
     }
     return null;
   }
-  function makeHtmlCollection(getItems) {
+  function makeIndexedNamedCollection(prototype, getItems, itemValue, findNamedItem, visitNames) {
     function virtualProperty(target, key) {
       if (isArrayIndex(key)) {
         var items = getItems();
-        return +key < items.length ? items[+key] : undefined;
+        return +key < items.length ? itemValue(items[+key]) : undefined;
       }
       if (typeof key === 'string' && !(key in target)) {
-        return namedMatch(getItems(), key) || undefined;
+        var item = findNamedItem(getItems(), key);
+        return item ? itemValue(item) : undefined;
       }
     }
-    var collection = new Proxy(Object.create(HTMLCollection.prototype), {
+    return new Proxy(Object.create(prototype), {
       get: function(target, key, receiver) {
         return virtualProperty(target, key) || Reflect.get(target, key, receiver);
       },
@@ -5619,10 +5635,7 @@
           }
         }
         for (var i = 0; i < items.length; i++) keys.push(String(i));
-        for (var j = 0; j < items.length; j++) {
-          appendName(collectionId(items[j]));
-          appendName(collectionName(items[j]));
-        }
+        for (var j = 0; j < items.length; j++) visitNames(items[j], appendName);
         return keys.concat(Reflect.ownKeys(target));
       },
       getOwnPropertyDescriptor: function(target, key) {
@@ -5639,7 +5652,7 @@
       defineProperty: function(target, key, descriptor) {
         if (isArrayIndex(key)) return false;
         if (typeof key === 'string' && !Reflect.getOwnPropertyDescriptor(target, key)
-            && namedMatch(getItems(), key)) return false;
+            && findNamedItem(getItems(), key)) return false;
         return Reflect.defineProperty(target, key, descriptor);
       },
       deleteProperty: function(target, key) {
@@ -5647,6 +5660,14 @@
       },
       preventExtensions: function() { return false; }
     });
+  }
+  function makeHtmlCollection(getItems) {
+    var collection = makeIndexedNamedCollection(HTMLCollection.prototype, getItems,
+      function(element) { return element; }, namedMatch,
+      function(element, appendName) {
+        appendName(collectionId(element));
+        appendName(collectionName(element));
+      });
     privateSet(htmlCollectionItems, collection, getItems);
     return collection;
   }

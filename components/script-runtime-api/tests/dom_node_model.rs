@@ -209,6 +209,48 @@ fn attributes_are_attr_nodes_works<E: ScriptEngine>() {
     );
 }
 
+fn named_node_map_live_properties<E: ScriptEngine>() {
+    assert_eq!(
+        console::<E>(
+            r#"
+            const el = document.createElement('div');
+            const map = el.attributes;
+            el.setAttributeNS('urn:first', 'x', 'first');
+            el.setAttributeNS('urn:second', 'x', 'second');
+            el.setAttributeNS('urn:case', 'Mixed', 'case');
+            el.setAttribute('item', 'reserved');
+            const first = el.getAttributeNodeNS('urn:first', 'x');
+            const second = el.getAttributeNodeNS('urn:second', 'x');
+            console.log(Object.getOwnPropertyNames(map).join(','));
+            console.log(Object.keys(map).join(','));
+            console.log([map[0] === first, map.x === first, !('Mixed' in map),
+                         map.item === NamedNodeMap.prototype.item, map[4] === undefined].join(' '));
+            const descriptor = Object.getOwnPropertyDescriptor(map, 'x');
+            console.log([descriptor.value === first, descriptor.writable, descriptor.enumerable,
+                         descriptor.configurable, Reflect.set(map, '0', second),
+                         Reflect.deleteProperty(map, 'x')].join(' '));
+            map.note = 'expando';
+            el.setAttribute('note', 'attribute');
+            el.removeAttributeNS('urn:first', 'x');
+            console.log([map[0] === second, map.x === second, first.ownerElement === null,
+                         map.note, map.getNamedItem('note').value].join(' '));
+            new Document().adoptNode(el);
+            console.log(Object.getOwnPropertyNames(map).join(','));
+            console.log([el.attributes === map, map.Mixed.value].join(' '));
+            "#,
+        ),
+        vec![
+            "0,1,2,3,x",
+            "0,1,2,3",
+            "true true true true true",
+            "true false false true false false",
+            "true true true expando attribute",
+            "0,1,2,3,x,Mixed,note",
+            "true case",
+        ],
+    );
+}
+
 fn set_attribute_updates_the_first_qualified_name<E: ScriptEngine>() {
     assert_eq!(
         run::<E>(
@@ -440,6 +482,11 @@ per_backend!(
     html_collection_live_keys_and_expandos,
     html_collection_live_keys_on_boa,
     html_collection_live_keys_on_nova
+);
+per_backend!(
+    named_node_map_live_properties,
+    named_node_map_live_properties_on_boa,
+    named_node_map_live_properties_on_nova
 );
 per_backend!(
     clone_preserves_every_kind_works,

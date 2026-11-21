@@ -376,6 +376,19 @@ repeated the same results on `ad6dac98799` after the Netrender requirement
 changed, with the lockfile still resolving `0.2.0`. The runners and assertion
 maps are retained in `Code/output/genet-get-elements-by-tag-name-ns/`.
 
+**`NamedNodeMap` own properties (2026-11-21).** `Element.attributes` now
+exposes the live attribute list as enumerable indices followed by visible,
+non-enumerable qualified names. When a qualified name repeats, its named
+property resolves to the first attribute. The owner is stored in a private
+slot. On base `3e8e878fd47`, the three supported-property-name assertions passed on Bole
+and Vano, bringing `dom/collections` to 53/53 on each engine. The eight
+`HTMLCollection` files passed all 45 assertions. The method and cross-document
+`NamedNodeMap` fixtures passed 8/8 and 2/2 on each engine. The separate
+custom-elements reactions fixture reproduced its baseline arena lookup panic
+before any assertions on both engines. The DOM node-model and cross-arena
+runtime suites passed all 50 tests. The runners and assertion maps are
+retained in `Code/output/genet-namednodemap/`.
+
 ## Gates
 
 All green on 2026-09-07, genet `ddee26ef559` (and re-verified over

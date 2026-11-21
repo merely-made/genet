@@ -132,7 +132,7 @@ skip = [
     { crate = "r-efi@5.3.0", reason = "getrandom@0.3.4 require this older API line; the other resolved callers use 6.0.0." },
     { crate = "regress@0.11.1", reason = "genet-scripted-dom keeps its local 0.11.1 compatibility patch; Nova uses the independent registry 0.11.1 oracle, while Boa requires 0.12. Keep their sources separate." },
     { crate = "syn@2.0.119", reason = "arg_enum_proc_macro@0.3.4, asn1-rs-derive@0.5.1, asn1-rs-derive@0.6.0, asn1-rs-impl@0.2.0, and other recorded callers require this older API line; the other resolved callers use 3.0.6." },
-    { crate = "synstructure@0.13.2", reason = "asn1-rs-derive@0.5.1, asn1-rs-derive@0.6.0, gc-arena-derive@0.5.3, yoke-derive@0.7.5 require this older API line; the other resolved callers use 0.14.0." },
+    { crate = "synstructure@0.13.2", reason = "asn1-rs-derive@0.5.1, asn1-rs-derive@0.6.0, yoke-derive@0.7.5 require this older API line; the other resolved callers use 0.14.0." },
     { crate = "tinystr@0.7.6", reason = "icu_locid@1.5.0, icu_provider@1.5.0 require this older API line; the other resolved callers use 0.8.4." },
     # Pre-existing duplicate beside uuid 1.29.1, through ipc-channel 0.23.1 and servo-media.
     { crate = "uuid@0.8.2", reason = "ipc-channel@0.23.1 (servo-media-dummy, servo-media-auto) requires this older API line; the other resolved callers use 1.29.1." },

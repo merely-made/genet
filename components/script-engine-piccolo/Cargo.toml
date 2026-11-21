@@ -23,11 +23,12 @@ script-engine-api = { path = "../script-engine-api" }
 # a bare clone resolves; for local piccolo dev, the gitignored
 # `Code/.cargo/config.toml` `paths` override redirects this to the local checkout.
 piccolo = { git = "https://github.com/merely-made/didgeridoo", branch = "main" }
-# gc-arena, pinned to the *same* rev piccolo uses (no skew), for the in-arena
+# gc-arena, from the *same* source piccolo uses (no skew; the patch-only fork
+# mark-ik/gc-arena, whose derive is on syn 3 and synstructure 0.14), for the in-arena
 # weak reflector cache (`GcWeak`). This is the only direct gc-arena dep in
 # genet before G3, and it is local to the piccolo backend; the workspace-wide
 # pin (rule 3) is still resolved at G3 against this same rev.
-gc-arena = { git = "https://github.com/kyren/gc-arena", rev = "5a7534b883b703f23cfb8c3cfdf033460aa77ea9" }
+gc-arena = { git = "https://github.com/mark-ik/gc-arena", branch = "main" }
 
 [lints]
 workspace = true

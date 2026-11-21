@@ -1,7 +1,7 @@
 [package]
 rust-version = "1.97.1"
 name = "genet-events"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
 description = "Engine-neutral DOM event dispatch: listener registry, event path, phases and composedPath over the scripted-DOM arena."
@@ -12,8 +12,8 @@ name = "genet_events"
 path = "lib.rs"
 
 [dependencies]
-genet-scripted-dom = { version = "0.1.2", path = "../genet-scripted-dom" }
-layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
+genet-scripted-dom = { version = ">=0.2.0", path = "../genet-scripted-dom" }
+layout-dom-api = { version = ">=0.2.0", path = "../shared/layout-dom" }
 
 [lints]
 workspace = true

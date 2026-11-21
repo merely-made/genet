@@ -1,6 +1,6 @@
 [package]
 name = "document-session-api"
-version = "0.1.2"
+version = "0.2.0"
 license = "MPL-2.0"
 authors = ["Mark AB (markik)"]
 repository = "https://github.com/merely-made/genet"

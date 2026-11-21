@@ -4,11 +4,11 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 
 rust-version = "1.97.1"
-repository.workspace = true
-description.workspace = true
+repository = "https://github.com/merely-made/genet"
+description = "WebGL over wgpu for Genet: canvas textures on the compositor's device, WebGL state and the shader translation seam."
 
 [lib]
 name = "webgl_wgpu"
@@ -16,7 +16,7 @@ path = "lib.rs"
 
 [dependencies]
 genet-compositor = { workspace = true }
-genet-essl = { path = "../webgl-essl" }
+genet-essl = { version = ">=0.2.0", path = "../webgl-essl" }
 wgpu = { version = "30.0.2", default-features = false, features = ["std", "parking_lot", "dx12", "metal", "vulkan", "wgsl"] }
 
 [dev-dependencies]

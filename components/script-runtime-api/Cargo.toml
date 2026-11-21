@@ -8,10 +8,12 @@
 [package]
 rust-version = "1.97.1"
 name = "genet-runtime"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 license = "MPL-2.0"
-publish = false
+publish = true
+repository = "https://github.com/merely-made/genet"
+description = "Browser host surface for Genet's scripted tier: global scope, console, the event loop, EventTarget and document bindings, built on script-engine-api and generic over the JavaScript engine."
 
 [lib]
 name = "script_runtime_api"
@@ -19,19 +21,19 @@ path = "lib.rs"
 
 [dependencies]
 genet-host-api = { workspace = true }
-genet-browsing = { path = "../shared/browsing-context" }
-script-engine-api = { path = "../script-engine-api" }
+genet-browsing = { version = ">=0.1.0", path = "../shared/browsing-context" }
+script-engine-api = { version = ">=0.2.0", path = "../script-engine-api" }
 # The DOM the host surface scripts against: a NodeId arena implementing
 # LayoutDom + LayoutDomMut, recording DomMutations for retained Livery hosts.
-genet-scripted-dom = { path = "../genet-scripted-dom" }
-genet-events = { path = "../genet-events" }
+genet-scripted-dom = { version = ">=0.2.0", path = "../genet-scripted-dom" }
+genet-events = { version = ">=0.1.0", path = "../genet-events" }
 # The HTML and XML parsers behind DOMParser.parseFromString; the parsed tree is
 # copied into the scripted arena as a new Document.
-genet-static-dom = { path = "../genet-static-dom" }
-livery = { path = "../livery" }
+genet-static-dom = { version = ">=0.2.0", path = "../genet-static-dom" }
+livery = { version = ">=0.1.0", path = "../livery" }
 # QualName / Namespace / LocalName for create_element.
-layout-dom-api = { path = "../shared/layout-dom" }
-cadency = { path = "../cadency" }
+layout-dom-api = { version = ">=0.2.0", path = "../shared/layout-dom" }
+cadency = { version = ">=0.1.0", path = "../cadency" }
 # Prefix (not re-exported by layout-dom-api) for createElementNS qualified names.
 markup5ever = { workspace = true }
 # WHATWG URL resolution for the document base URL + relative `fetch()` / `Request`

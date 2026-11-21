@@ -35,7 +35,7 @@ browser-surface-readback-diagnostics = []
 without-classic-vello = ["netrender/without-classic-vello"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-genet-runtime = { path = "../script-runtime-api", optional = true }
+genet-runtime = { version = ">=0.1.0", path = "../script-runtime-api", optional = true }
 webgl_wgpu = { workspace = true, optional = true }
 
 [lints.rust]
@@ -50,8 +50,8 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 
 [dev-dependencies]
 # IMG-GPU gate (tests/image_gpu.rs): decoded document images through the shared device.
-genet-livery = { version = "0.0.4", path = "../genet-livery" }
-genet-scripted-dom = { version = "0.1.2", path = "../genet-scripted-dom" }
+genet-livery = { version = ">=0.1.0", path = "../genet-livery" }
+genet-scripted-dom = { version = ">=0.2.0", path = "../genet-scripted-dom" }
 paint_list_api = { workspace = true }
 paint_list_render = { workspace = true }
 image = { workspace = true }

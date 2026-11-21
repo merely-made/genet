@@ -253,17 +253,17 @@ openxr = "0.20"
 p384 = { version = "0.13", features = ["ecdh"] }
 p521 = { version = "0.13", features = ["ecdh"] }
 parking_lot = { version = "0.12", features = ["serde"] }
-parley = { package = "genet-parley", version = "0.10.0", path = "support/patches/parley", default-features = true }
+parley = { package = "genet-parley", version = ">=0.11.0", path = "support/patches/parley", default-features = true }
 # The engine-management family (inker, nematic, document-canvas, the three
 # engine adapters, errand, illume, tinct, verso-tile) left for mere on
 # 2026-09-03 under the platform boundary plan, with the doc areas that
 # describe it. Its smolweb protocol crates (nex, spartan, guppy, gopher, gemini,
 # scroll, finger) were errand's wire layer and left this table with it.
-document-session-api = { version = ">=0.1.2", path = "components/shared/document-session-api" }
+document-session-api = { version = ">=0.2.0", path = "components/shared/document-session-api" }
 genet-documents = { version = ">=0.1.0", path = "components/genet-documents", default-features = false }
-genet-document-resources = { version = ">=0.2.1", path = "components/genet-document-resources" }
-genet-host-api = { version = ">=0.2.0", path = "components/genet-host-api" }
-genet-presenter = { version = "0.2.0", path = "components/genet-render-host" }
+genet-document-resources = { version = ">=0.3.0", path = "components/genet-document-resources" }
+genet-host-api = { version = ">=0.3.0", path = "components/genet-host-api" }
+genet-presenter = { version = ">=0.2.0", path = "components/genet-render-host" }
 netrender = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = ">=0.2.0" }
 netrender_device = { git = "https://github.com/merely-made/netrender.git", branch = "main", version = ">=0.2.0" }
 # (No xilem git deps remain. The Masonry-era `xilem` / `masonry` /
@@ -299,7 +299,7 @@ sha2 = "0.11"
 speexdsp-resampler = "0.1.0"
 # Font enumeration + family resolution, the same stack parley uses (so the
 # cascade's font-metrics provider resolves fonts identically to text layout).
-fontique = { package = "genet-fontique", version = "0.10.0", path = "support/patches/fontique" }
+fontique = { package = "genet-fontique", version = ">=0.11.0", path = "support/patches/fontique" }
 fontsan = { version = "0.7.0", default-features = false, features = ["libz-sys", "wuff"] }
 skrifa = "0.44.0"
 smallvec = { version = "1.15", features = ["serde", "union"] }
@@ -362,8 +362,8 @@ zeroize = "1.8"
 # be listed here, between the `Begin` and `End` comments, so that we can easily find and
 # update the version requirements when bumping the workspace version.
 # Begin workspace-version dependencies - Don't change this comment, we grep for it in scripts!
-engine_observables_api = { package = "engine-observables-api", version = ">=0.2.0", path = "components/shared/engine-observables-api" }
-layout_dom_api = { package = "layout-dom-api", version = ">=0.1.1", path = "components/shared/layout-dom" }
+engine_observables_api = { package = "engine-observables-api", version = ">=0.2.1", path = "components/shared/engine-observables-api" }
+layout_dom_api = { package = "layout-dom-api", version = ">=0.2.0", path = "components/shared/layout-dom" }
 genet-compositor = { version = ">=0.2.0", path = "components/genet-compositor" }
 # Moved to the netrender workspace as a neutral, engine-agnostic crate
 # (extraction plan 2026-05-20). genet is now a consumer, not the owner.
@@ -395,7 +395,7 @@ servo-media-streams = { version = ">=0.2.0", path = "components/media/streams" }
 servo-media-traits = { version = ">=0.2.0", path = "components/media/traits" }
 servo-media-webrtc = { version = ">=0.2.0", path = "components/media/webrtc" }
 webgl_wgpu = { package = "genet-webgl", version = ">=0.2.0", path = "components/webgl-wgpu" }
-xpath = { package = "servo-xpath", version = ">=0.2.0", path = "components/xpath" }
+xpath = { package = "genet-xpath", version = ">=0.2.0", path = "components/xpath" }
 # End workspace-version dependencies - Don't change this comment, we grep for it in scripts!
 
 # An optimized build for CI, to improve test runtime, but with debug assertions turned on.

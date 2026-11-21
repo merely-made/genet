@@ -1,14 +1,14 @@
 [package]
-name = "servo-xpath"
+name = "genet-xpath"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 
 rust-version = "1.97.1"
-repository.workspace = true
-description.workspace = true
+repository = "https://github.com/merely-made/genet"
+description = "XPath 1.0 parsing and evaluation over a caller-supplied DOM trait, for Genet. Derived from Servo's xpath component."
 
 [dependencies]
 log = { workspace = true }

@@ -4,11 +4,11 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 
 rust-version = "1.97.1"
-repository.workspace = true
-description.workspace = true
+repository = "https://github.com/merely-made/genet"
+description = "Genet's platform presentation layer: per-OS compositor backends that present a netrender frame, same-device wgpu interop with a host, and the rendering-context contract WebGL binds against."
 
 [lib]
 name = "genet_compositor"

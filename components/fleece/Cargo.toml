@@ -24,7 +24,7 @@ unicode-segmentation = { workspace = true }
 unicode-bidi = { workspace = true }
 
 [dev-dependencies]
-genet-static-dom = { version = "0.1.0", path = "../genet-static-dom" }
+genet-static-dom = { version = ">=0.2.0", path = "../genet-static-dom" }
 
 [lints]
 workspace = true

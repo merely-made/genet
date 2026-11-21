@@ -1,7 +1,7 @@
 [package]
 rust-version = "1.97.1"
 name = "buckram"
-version = "0.0.3"
+version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/merely-made/genet"
@@ -16,7 +16,7 @@ path = "src/lib.rs"
 experimental-fragmentation-kernel = []
 
 [dependencies]
-css-flow = { package = "genet-flow", version = "0.1.0", path = "../shared/css-flow" }
+css-flow = { package = "genet-flow", version = ">=0.1.0", path = "../shared/css-flow" }
 # Grows the box-tree descent's stack on demand; see `box_tree::with_box_tree_stack`.
 stacker = "0.1.21"
 taffy = { package = "genet-taffy", version = "0.16.0", default-features = false, features = ["std", "block_layout", "float_layout", "flexbox", "grid", "calc", "detailed_layout_info"] }

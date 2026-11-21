@@ -13,7 +13,7 @@
 edition = "2021"
 rust-version = "1.88"
 name = "genet-parley"
-version = "0.10.0"
+version = "0.11.0"
 build = false
 include = [
     "src/**/*",
@@ -92,7 +92,7 @@ version = "0.1.1"
 optional = true
 
 [dependencies.fontique]
-version = "0.10.0"
+version = ">=0.11.0"
 path = "../fontique"
 package = "genet-fontique"
 default-features = false

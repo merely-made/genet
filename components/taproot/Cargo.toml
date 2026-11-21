@@ -2,7 +2,7 @@
 rust-version = "1.97.1"
 # Named genet-probe until 2026-09-14.
 name = "taproot"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/merely-made/genet"
@@ -25,13 +25,13 @@ accesskit = ["dep:accesskit", "document-session-api/accesskit"]
 
 [dependencies]
 accesskit = { workspace = true, optional = true }
-document-session-api = { version = "0.1.0", path = "../shared/document-session-api" }
-genet-livery = { version = ">=0.0.1, <0.1", path = "../genet-livery", default-features = false, features = ["scripted-dom"] }
-genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
-layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
+document-session-api = { version = ">=0.2.0", path = "../shared/document-session-api" }
+genet-livery = { version = ">=0.1.0", path = "../genet-livery", default-features = false, features = ["scripted-dom"] }
+genet-scripted-dom = { version = ">=0.2.0", path = "../genet-scripted-dom" }
+layout-dom-api = { version = ">=0.2.0", path = "../shared/layout-dom" }
 
 [dev-dependencies]
-genet-render = { version = "0.2.0", path = "../genet-render", default-features = false, features = ["accesskit"] }
+genet-render = { version = ">=0.2.0", path = "../genet-render", default-features = false, features = ["accesskit"] }
 
 [lints]
 workspace = true

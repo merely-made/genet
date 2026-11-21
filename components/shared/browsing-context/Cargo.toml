@@ -4,7 +4,8 @@ name = "genet-browsing"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
-publish = false
+publish = true
+repository = "https://github.com/merely-made/genet"
 description = "Browsing-context identity, origins, sandbox flags and session history shared by Genet hosts and script agents."
 
 [lib]

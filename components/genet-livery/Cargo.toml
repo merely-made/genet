@@ -1,7 +1,7 @@
 [package]
 rust-version = "1.97.1"
 name = "genet-livery"
-version = "0.0.4"
+version = "0.1.0"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/merely-made/genet"
@@ -27,17 +27,17 @@ scripted-dom = ["dep:genet-scripted-dom"]
 without-table-layout = []
 
 [dependencies]
-buckram = { version = "0.0.3", path = "../buckram" }
+buckram = { version = ">=0.1.0", path = "../buckram" }
 cssparser.workspace = true
 data-url = { workspace = true }
 genet-document-resources = { workspace = true }
 euclid.workspace = true
-genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom", optional = true }
+genet-scripted-dom = { version = ">=0.2.0", path = "../genet-scripted-dom", optional = true }
 image = { workspace = true, optional = true }
 icu_properties.workspace = true
 icu_segmenter.workspace = true
-layout-dom-api = { version = "0.1.1", path = "../shared/layout-dom" }
-livery = { version = "0.0.5", path = "../livery" }
+layout-dom-api = { version = ">=0.2.0", path = "../shared/layout-dom" }
+livery = { version = ">=0.1.0", path = "../livery" }
 paint_list_api.workspace = true
 parley.workspace = true
 serde.workspace = true
@@ -51,8 +51,8 @@ rayon = { workspace = true, optional = true }
 
 [dev-dependencies]
 base64.workspace = true
-genet-scripted-dom = { version = "0.1.1", path = "../genet-scripted-dom" }
-genet-static-dom = { version = "0.1.1", path = "../genet-static-dom" }
+genet-scripted-dom = { version = ">=0.2.0", path = "../genet-scripted-dom" }
+genet-static-dom = { version = ">=0.2.0", path = "../genet-static-dom" }
 netrender = { workspace = true, features = ["vello-cpu"] }
 paint_list_render.workspace = true
 # Tests encode their PNG fixtures with it, with or without `image-decode`.

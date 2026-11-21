@@ -4,11 +4,11 @@ version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
-publish.workspace = true
+publish = true
 
 rust-version = "1.97.1"
-repository.workspace = true
-description.workspace = true
+repository = "https://github.com/merely-made/genet"
+description = "Pure-Rust ESSL frontend for Genet's WebGL: lexer, parser, checker and an ESSL to WGSL pipeline."
 
 [lib]
 name = "webgl_essl"

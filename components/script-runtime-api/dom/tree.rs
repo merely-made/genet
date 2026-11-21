@@ -101,9 +101,12 @@ impl<E: ScriptEngine> NativeFn<E> for AppendChild {
     }
 }
 
-/// `__setAttribute(element, name, value)` — element reflector + two strings.
-pub(crate) struct SetAttribute;
-impl<E: ScriptEngine> NativeFn<E> for SetAttribute {
+/// Write by qualified name for `setAttribute()` or by null-namespace local name
+/// for an internal content-attribute setter. Returns the updated namespace.
+pub(crate) struct SetAttribute<const BY_QUALIFIED_NAME: bool>;
+impl<E: ScriptEngine, const BY_QUALIFIED_NAME: bool> NativeFn<E>
+    for SetAttribute<BY_QUALIFIED_NAME>
+{
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let el = cx.arg(0);
         let Some(id) = cx.owned_node(&el)? else {
@@ -113,8 +116,23 @@ impl<E: ScriptEngine> NativeFn<E> for SetAttribute {
         let value_v = cx.arg(2);
         let name = cx.value_to_string(&name_v)?;
         let value = cx.value_to_string(&value_v)?;
-        id.with_dom(|dom| dom.set_attribute(id.id(), attr_qual(&name), &value));
-        Ok(cx.undefined())
+        let namespace = id.with_dom(|dom| {
+            let node = id.id();
+            let qual = if BY_QUALIFIED_NAME {
+                dom.attribute_qual_name(node, &name)
+                    .unwrap_or_else(|| attr_qual(&name))
+            } else {
+                attr_qual(&name)
+            };
+            let namespace = qual.ns.clone();
+            dom.set_attribute(node, qual, &value);
+            namespace
+        });
+        if namespace.is_empty() {
+            Ok(cx.make_null())
+        } else {
+            cx.make_string(namespace.as_str())
+        }
     }
 }
 

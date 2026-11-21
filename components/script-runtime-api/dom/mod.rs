@@ -187,7 +187,8 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<CreateElement>("__createElement", 1)?;
     engine.set_function::<CreateTextNode>("__createTextNode", 1)?;
     engine.set_function::<AppendChild>("__appendChild", 2)?;
-    engine.set_function::<SetAttribute>("__setAttribute", 3)?;
+    engine.set_function::<SetAttribute<true>>("__setAttribute", 3)?;
+    engine.set_function::<SetAttribute<false>>("__setContentAttribute", 3)?;
     engine.set_function::<SetTextContent>("__setTextContent", 2)?;
     engine.set_function::<GetInnerHtml>("__getInnerHtml", 1)?;
     engine.set_function::<SetInnerHtml>("__setInnerHtml", 2)?;

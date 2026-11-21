@@ -1213,16 +1213,27 @@
     name = attributeName(this, name);
     var oldValue = __getAttribute(this.__ref, name);
     var newValue = String(value);
-    moSetAttribute(this.__ref, name, newValue);
-    if (name === 'style') inlineStyleStates.delete(this);
-    resizeWebGlCanvas(this, name);
-    frameSourceChanged(this, name, oldValue, newValue);
+    // Style, canvas and resource hooks react to null-namespace attributes.
+    if (moSetAttribute(this.__ref, name, newValue) !== null) return;
+    afterSetContentAttribute(this, name, oldValue, newValue);
+  };
+  function setContentAttribute(element, name, value) {
+    validateName(name);
+    name = attributeName(element, name);
+    var oldValue = __getAttributeNS(element.__ref, '', name);
+    moSetAttribute(element.__ref, name, value, true);
+    afterSetContentAttribute(element, name, oldValue, value);
+  }
+  function afterSetContentAttribute(element, name, oldValue, newValue) {
+    if (name === 'style') inlineStyleStates.delete(element);
+    resizeWebGlCanvas(element, name);
+    frameSourceChanged(element, name, oldValue, newValue);
     // The third re-preparation trigger: a connected script element gains a
     // `src` it did not have.
-    if (name === 'src' && oldValue === null && this.localName === 'script') {
-      prepareScriptsAfterInsertion(this, null);
+    if (name === 'src' && oldValue === null && element.localName === 'script') {
+      prepareScriptsAfterInsertion(element, null);
     }
-  };
+  }
   Element.prototype.getAttribute = function(name) { return __getAttribute(this.__ref, attributeName(this, String(name))); };
   Object.defineProperty(Element.prototype, 'innerHTML', {
     configurable: true,
@@ -1336,12 +1347,12 @@
   Object.defineProperty(Element.prototype, 'id', {
     configurable: true,
     get: function() { return this.getAttribute('id') || ''; },
-    set: function(v) { this.setAttribute('id', String(v)); }
+    set: function(v) { setContentAttribute(this, 'id', String(v)); }
   });
   Object.defineProperty(Element.prototype, 'className', {
     configurable: true,
     get: function() { return this.getAttribute('class') || ''; },
-    set: function(v) { this.setAttribute('class', String(v)); }
+    set: function(v) { setContentAttribute(this, 'class', String(v)); }
   });
   Object.defineProperty(Element.prototype, 'localName', {
     configurable: true, get: function() { return __localName(this.__ref); }
@@ -1354,7 +1365,7 @@
   Object.defineProperty(svgScriptProto, 'type', {
     configurable: true,
     get: function() { var v = this.getAttribute('type'); return v === null ? '' : v; },
-    set: function(v) { this.setAttribute('type', String(v)); }
+    set: function(v) { setContentAttribute(this, 'type', String(v)); }
   });
   Object.defineProperty(Element.prototype, 'prefix', {
     configurable: true, get: function() { return __prefix(this.__ref); }
@@ -1653,7 +1664,7 @@
     }
     function write(map) {
       var text = map.length === 0 ? null : cssSerialize(map);
-      if (text === null) el.removeAttribute('style'); else el.setAttribute('style', text);
+      if (text === null) el.removeAttribute('style'); else el.setAttributeNS(null, 'style', text);
       inlineStyleStates.set(el, { text: text, map: cssCloneMap(map) });
     }
     var api = {
@@ -2783,7 +2794,7 @@
     }
     var el = wrapNode(__createElement(def.localName));
     ownerDocuments.set(el, document);
-    if (def.customizedBuiltIn) el.setAttribute('is', def.name);
+    if (def.customizedBuiltIn) setContentAttribute(el, 'is', def.name);
     setElementPrototype(el, proto);
     upgradedCustomElements.set(el, def);
     __ceSetState(el.__ref, 'custom');
@@ -2867,7 +2878,7 @@
     ownerDocuments.set(el, this);
     var isValue = customElementIsOption(options);
     if (isValue !== null) {
-      el.setAttribute('is', isValue);
+      setContentAttribute(el, 'is', isValue);
     }
     var def = customElementDefinitionForElement(el);
     if (def) upgradeCustomElement(el, def);
@@ -3520,7 +3531,7 @@
     }
     gcDefineProperty(proto, 'href', { configurable: true, enumerable: true,
       get: href,
-      set: function(value) { checkReceiver(this); this.setAttribute('href', toUSVString(value)); }
+      set: function(value) { checkReceiver(this); setContentAttribute(this, 'href', toUSVString(value)); }
     });
     proto.toString = function() { return href.call(this); };
     ['origin', 'protocol', 'username', 'password', 'host', 'hostname', 'port', 'pathname', 'search', 'hash'].forEach(function(name) {
@@ -3537,7 +3548,7 @@
         var parsed = components(this, this.getAttribute('href'));
         if (!parsed) return;
         var href = __setHyperlinkUrlComponent(parsed.href, name, text);
-        if (href) this.setAttribute('href', href);
+        if (href) setContentAttribute(this, 'href', href);
       };
       gcDefineProperty(proto, name, descriptor);
     });
@@ -3671,7 +3682,7 @@
       });
       gcDefineProperty(proto, 'value', { configurable: true, enumerable: true,
         get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'optionValue'); },
-        set: function(value) { this.setAttribute('value', String(value)); }
+        set: function(value) { setContentAttribute(this, 'value', String(value)); }
       });
       gcDefineProperty(proto, 'text', { configurable: true, enumerable: true,
         get: function() { return nativeControlGet(formInterfaceRef(this, 'option'), 'optionText'); },
@@ -3686,12 +3697,12 @@
           var value = (this.getAttribute('referrerpolicy') || '').toLowerCase();
           return ['', 'no-referrer', 'no-referrer-when-downgrade', 'same-origin', 'origin', 'strict-origin', 'origin-when-cross-origin', 'strict-origin-when-cross-origin', 'unsafe-url'].indexOf(value) < 0 ? '' : value;
         },
-        set: function(value) { this.setAttribute('referrerpolicy', String(value)); }
+        set: function(value) { setContentAttribute(this, 'referrerpolicy', String(value)); }
       });
       Object.defineProperty(proto, 'srcdoc', {
         configurable: true,
         get: function() { return this.getAttribute('srcdoc') || ''; },
-        set: function(value) { this.setAttribute('srcdoc', String(value)); }
+        set: function(value) { setContentAttribute(this, 'srcdoc', String(value)); }
       });
       Object.defineProperty(proto, 'contentWindow', {
         configurable: true,
@@ -3733,7 +3744,7 @@
       // refusing every canvas by name.
       __noteCanvasContext(this.__ref);
       if (this.__webglContext._externalTextureKey) {
-        this.setAttribute('data-genet-external-texture-key', this.__webglContext._externalTextureKey);
+        setContentAttribute(this, 'data-genet-external-texture-key', this.__webglContext._externalTextureKey);
       }
       return this.__webglContext;
     };
@@ -4270,7 +4281,11 @@
     rangeWillRemove(wrapNode(c)); discardFrameSubtree(wrapNode(c), true); __removeChild(p, c);
     moAfterMutation(p); refreshFramesAfterRemoval();
   }
-  function moSetAttribute(e, n, v) { __setAttribute(e, n, v); moAfterMutation(e); }
+  function moSetAttribute(e, n, v, content) {
+    var namespace = content ? __setContentAttribute(e, n, v) : __setAttribute(e, n, v);
+    moAfterMutation(e);
+    return namespace;
+  }
   function moRemoveAttribute(e, n) { __removeAttribute(e, n); moAfterMutation(e); }
   function moSetAttributeNS(e, ns, q, v) { __setAttributeNS(e, ns, q, v); moAfterMutation(e); }
   function moRemoveAttributeNS(e, ns, l) { __removeAttributeNS(e, ns, l); moAfterMutation(e); }
@@ -5586,14 +5601,14 @@
     var c = this.__el.getAttribute(this.__attr);
     return c ? c.trim().split(/\s+/).filter(function(s) { return s.length; }) : [];
   };
-  DOMTokenList.prototype._write = function(a) { this.__el.setAttribute(this.__attr, a.join(' ')); };
+  DOMTokenList.prototype._write = function(a) { setContentAttribute(this.__el, this.__attr, a.join(' ')); };
   Object.defineProperty(DOMTokenList.prototype, 'length', {
     configurable: true, get: function() { return this._toks().length; }
   });
   Object.defineProperty(DOMTokenList.prototype, 'value', {
     configurable: true,
     get: function() { return this.__el.getAttribute(this.__attr) || ''; },
-    set: function(v) { this.__el.setAttribute(this.__attr, String(v)); }
+    set: function(v) { setContentAttribute(this.__el, this.__attr, String(v)); }
   });
   DOMTokenList.prototype.item = function(i) { var t = this._toks(); i = i >>> 0; return i < t.length ? t[i] : null; };
   DOMTokenList.prototype.contains = function(tok) { return this._toks().indexOf(String(tok)) !== -1; };
@@ -5686,7 +5701,7 @@
         return v === null ? undefined : v;
       },
       set: function(t, k, v) {
-        if (typeof k === 'string') t.__el.setAttribute(datasetToContent(k), String(v));
+        if (typeof k === 'string') setContentAttribute(t.__el, datasetToContent(k), String(v));
         return true;
       },
       has: function(t, k) {
@@ -5783,11 +5798,11 @@
         desc.set = function(value) { this.textContent = String(value); };
       } else if (kind === 'it') {
         desc.get = function() { var value = asciiLower(this.getAttribute('type') || ''); return ['hidden','text','search','tel','url','email','password','date','month','week','time','datetime-local','number','range','color','checkbox','radio','file','submit','image','reset','button'].indexOf(value) >= 0 ? value : 'text'; };
-        desc.set = function(value) { this.setAttribute('type', String(value)); };
+        desc.set = function(value) { setContentAttribute(this, 'type', String(value)); };
       } else if (kind === 's' || kind === 's-null-empty') {
         desc.get = function() { var v = this.getAttribute(attr); return v === null ? '' : v; };
         desc.set = function(v) {
-          this.setAttribute(attr, kind === 's-null-empty' && v === null ? '' : String(v));
+          setContentAttribute(this, attr, kind === 's-null-empty' && v === null ? '' : String(v));
         };
       } else if (kind === 'tc') {
         desc.get = function() { return this.textContent || ''; };
@@ -5813,12 +5828,12 @@
         };
         desc.set = function(v) {
           if (htmlEnum && typeof v === 'symbol') throw new TypeError('Cannot convert a Symbol to a string');
-          this.setAttribute(attr, String(v));
+          setContentAttribute(this, attr, String(v));
         };
       } else if (kind === 'l') {
         var longMissing = miss === null || miss === undefined ? -1 : toLong(miss);
         desc.get = function() { var n = parseHtmlLong(this.getAttribute(attr)); return n === null ? longMissing : n; };
-        desc.set = function(v) { this.setAttribute(attr, String(toLong(v))); };
+        desc.set = function(v) { setContentAttribute(this, attr, String(toLong(v))); };
       } else if (kind === 'meter-double') {
         desc.get = function() {
           var element = this;
@@ -5845,7 +5860,7 @@
           return Math.min(max, Math.max(min, candidate));
         };
         desc.set = function(v) {
-          this.setAttribute(attr, String(toDouble(v)));
+          setContentAttribute(this, attr, String(toDouble(v)));
         };
       } else if (kind === 'd-positive') {
         var doubleMissing = miss === null || miss === undefined ? 0 : +miss;
@@ -5856,7 +5871,7 @@
         desc.set = function(v) {
           // Web IDL double conversion rejects BigInt, Symbol, and non-finite values.
           var n = toDouble(v);
-          if (n > 0) this.setAttribute(attr, String(n));
+          if (n > 0) setContentAttribute(this, attr, String(n));
         };
       } else if (kind === 'l-nonnegative') {
         var nonnegativeMissing = miss === null || miss === undefined ? -1 : toLong(miss);
@@ -5868,7 +5883,7 @@
           // Unary plus performs Web IDL ToNumber, including rejecting BigInt.
           var n = (+v) | 0;
           if (n < 0) throw new DOMException('Value must be nonnegative', 'IndexSizeError');
-          this.setAttribute(attr, String(n));
+          setContentAttribute(this, attr, String(n));
         };
       } else if (kind === 'input-dimension' || kind === 'ul' || kind === 'ul-bounded' || kind === 'ul-positive-fallback' || kind === 'ul-positive') {
         var unsignedMissing = miss === null || miss === undefined ? 0 : toUnsignedLong(miss);
@@ -5895,18 +5910,18 @@
           return Math.min(range[1], Math.max(range[0], parsed));
         };
         desc.set = function(v) {
-          if (kind === 'ul' && !range) { this.setAttribute(attr, String(toUnsignedLong(v))); return; }
+          if (kind === 'ul' && !range) { setContentAttribute(this, attr, String(toUnsignedLong(v))); return; }
           // Web IDL unsigned long conversion precedes HTML's setter fallback.
           var n = v >>> 0;
           if (kind === 'ul-positive' && n === 0) throw new DOMException('Value must be positive', 'IndexSizeError');
-          this.setAttribute(attr, String(n > 2147483647 || (kind === 'ul-positive-fallback' && n === 0) ? unsignedMissing : n));
+          setContentAttribute(this, attr, String(n > 2147483647 || (kind === 'ul-positive-fallback' && n === 0) ? unsignedMissing : n));
         };
       } else if (kind === 't') {
         // tokenlist: a DOMTokenList over the content attribute (e.g. relList -> rel).
         // Every one of these is [SameObject, PutForwards=value] in IDL, so
         // assigning to the IDL attribute writes the content attribute.
         desc.get = function() { return makeDOMTokenList(this, attr); };
-        desc.set = function(v) { this.setAttribute(attr, String(v)); };
+        desc.set = function(v) { setContentAttribute(this, attr, String(v)); };
       } else if (kind === 'form-action') {
         desc.get = function() {
           var doc = ownerDocumentOf(this);
@@ -5915,7 +5930,7 @@
           if (v === null || v === '') return reader(doc.__ref, 'document');
           return __parseDocumentUrl(doc.__ref, v, documentUrlBase(doc, reader), 'href');
         };
-        desc.set = function(v) { this.setAttribute(attr, toUSVString(v)); };
+        desc.set = function(v) { setContentAttribute(this, attr, toUSVString(v)); };
       } else if (kind === 'u') {
         // url: reflect the content attribute resolved against the document base URL
         // (absent -> ""); the raw string is stored on set. `__resolve_url` returns the
@@ -5931,7 +5946,7 @@
           }
           return __resolve_url(v);
         };
-        desc.set = function(v) { this.setAttribute(attr, String(v)); };
+        desc.set = function(v) { setContentAttribute(this, attr, String(v)); };
       }
       // A readonly IDL attribute keeps only its getter, except the
       // PutForwards token lists above, whose setter is the forwarded write.

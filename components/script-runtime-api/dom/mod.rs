@@ -38,7 +38,7 @@
 //! long kinds, table-driven) and `TreeWalker` / `NodeIterator` / `NodeFilter`.
 //! `Comment` / `DocumentFragment` node types (`createComment` /
 //! `createDocumentFragment`, nodeType 8 / 11), `cloneNode` (shallow + deep), and
-//! **live** `HTMLCollection`s — `getElementsByTagName` / `getElementsByClassName` /
+//! **live** `HTMLCollection`s — `getElementsByTagName` / `getElementsByTagNameNS` / `getElementsByClassName` /
 //! `children` are Proxy-backed and re-walked per access, so they reflect later
 //! mutations — plus `DOMTokenList` (`classList` / `relList`), `dataset`, and
 //! `NodeList` (`childNodes`). The reflected-attribute table carries `tokenlist`
@@ -201,6 +201,7 @@ pub(crate) fn install_dom_surface<E: ScriptEngine>(
     engine.set_function::<ParentNode>("__parentNode", 1)?;
     engine.set_function::<ElementsByTagNameCount>("__elementsByTagNameCount", 2)?;
     engine.set_function::<ElementsByTagNameItem>("__elementsByTagNameItem", 3)?;
+    engine.set_function::<ElementsByTagNameNs>("__elementsByTagNameNS", 4)?;
     engine.set_function::<DocumentElement>("__documentElement", 1)?;
     engine.set_function::<DocumentBody>("__documentBody", 1)?;
     engine.set_function::<DocumentHead>("__documentHead", 1)?;

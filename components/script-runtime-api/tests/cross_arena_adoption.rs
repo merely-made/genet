@@ -50,6 +50,44 @@ fn tag_collection_follows_cross_arena_adoption<E: ScriptEngine>() {
     "#);
 }
 
+fn namespace_tag_collection_follows_cross_arena_adoption<E: ScriptEngine>() {
+    let mut rt = runtime::<E>();
+    run(
+        &mut rt,
+        r#"
+        const root = document.createElement('div');
+        const plain = root.appendChild(document.createElementNS(null, 'Entry'));
+        const entry = root.appendChild(document.createElementNS('urn:entries', 'p:Entry'));
+        const elementQuery = Element.prototype.getElementsByTagNameNS;
+        const documentQuery = Document.prototype.getElementsByTagNameNS;
+        const conversions = [];
+        const live = elementQuery.call(root,
+            { toString() { conversions.push('namespace'); return 'urn:entries'; } },
+            { toString() { conversions.push('name'); return 'Entry'; } });
+        if (conversions.join(',') !== 'namespace,name' ||
+            elementQuery.call(root, undefined, 'Entry')[0] !== plain)
+            throw new Error('namespace query argument conversion');
+        for (const invoke of [() => elementQuery.call(document, '*', '*'),
+                              () => documentQuery.call(root, '*', '*'),
+                              () => elementQuery.call(root, '*'),
+                              () => elementQuery.call(root, Symbol(), '*'),
+                              () => elementQuery.call(root, '*', Symbol())]) {
+            let error;
+            try { invoke(); } catch (caught) { error = caught; }
+            if (!(error instanceof TypeError)) throw new Error('namespace query accepted an invalid call');
+        }
+        const inChild = child.document.getElementsByTagNameNS('urn:entries', 'Entry');
+        child.document.body.appendChild(root);
+        if (live[0] !== entry || inChild[0] !== entry ||
+            child.Element.prototype.getElementsByTagNameNS.call(root, 'urn:entries', 'Entry')[0] !== entry)
+            throw new Error('namespace query lost the adopted node');
+        entry.remove();
+        if (live.length || inChild.length || conversions.length !== 2)
+            throw new Error('namespace query ceased to be live or recoerced its arguments');
+        "#,
+    );
+}
+
 fn automatic_insertion_preserves_wrapper_and_routes_events<E: ScriptEngine>() {
     let mut rt = runtime::<E>();
     run(
@@ -444,6 +482,10 @@ macro_rules! backend {
             #[test]
             fn adopted_tag_collection() {
                 super::tag_collection_follows_cross_arena_adoption::<$engine>();
+            }
+            #[test]
+            fn adopted_namespace_tag_collection() {
+                super::namespace_tag_collection_follows_cross_arena_adoption::<$engine>();
             }
             #[test]
             fn automatic_insertion() {

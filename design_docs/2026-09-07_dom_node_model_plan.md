@@ -360,9 +360,21 @@ and `Element-getElementsByTagName.html` passed 19/19 on both Bole and Vano.
 The runner, lockfile resolution and assertion maps are retained in
 `Code/output/genet-htmlcollection/netrender-pin/`.
 
-**Namespace-aware tag queries remain open.** The two remaining
-`HTMLCollection-empty-name.html` failures exercise the missing Document and
-Element `getElementsByTagNameNS` methods.
+**Namespace-aware tag queries (2026-11-21).** Document and Element
+`getElementsByTagNameNS` return live collections of descendants in tree order.
+The filter uses case-sensitive local names and namespace URIs, supports
+wildcards in either argument, and treats an empty namespace as null. On base
+`f5d19426cf0`, the dedicated Document and Element WPTs moved from 0/14 to
+14/14 and from 0/16 to 16/16 on both Bole and Vano. `dom/nodes/case.html`
+moved from 265/285 to 285/285. The original `getElementsByTagName` WPTs
+held at 18/18 and 19/19. All eight `HTMLCollection` WPTs now pass, at
+45/45 on each engine. The full `dom/collections` run is 50/53, with three
+existing `NamedNodeMap` failures. The cross-arena and tag-name runtime suites
+passed all 38 tests, including argument conversion, receiver checks and
+collection liveness across adoption. The namespace-query and collection WPTs
+repeated the same results on `ad6dac98799` after the Netrender requirement
+changed, with the lockfile still resolving `0.2.0`. The runners and assertion
+maps are retained in `Code/output/genet-get-elements-by-tag-name-ns/`.
 
 ## Gates
 

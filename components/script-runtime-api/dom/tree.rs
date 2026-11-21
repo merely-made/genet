@@ -294,44 +294,79 @@ impl<E: ScriptEngine> NativeFn<E> for GetTextContent {
     }
 }
 
-/// Collect matching descendants in tree order. HTML documents compare an
-/// ASCII-lowercased query against HTML elements' qualified names; all other
+/// Collect matching light-tree descendants in tree order, excluding the scope.
+fn collect_matching_elements(
+    dom: &ScriptedDom,
+    root: NodeId,
+    matches: impl Fn(&QualName) -> bool,
+) -> Vec<NodeId> {
+    let mut pending: Vec<_> = dom.dom_children(root).collect();
+    pending.reverse();
+    let mut out = Vec::new();
+    while let Some(node) = pending.pop() {
+        if dom.element_name(node).is_some_and(&matches) {
+            out.push(node);
+        }
+        let start = pending.len();
+        pending.extend(dom.dom_children(node));
+        pending[start..].reverse();
+    }
+    out
+}
+
+/// Lowercase the query for HTML elements in HTML documents. All other
 /// elements use the original query and case-sensitive qualified names.
 fn collect_by_tag(dom: &ScriptedDom, root: NodeId, tag: &str, html: bool) -> Vec<NodeId> {
-    fn walk(
-        dom: &ScriptedDom,
-        node: NodeId,
-        tag: &str,
-        lower: &str,
-        html: bool,
-        out: &mut Vec<NodeId>,
-    ) {
-        for child in dom.dom_children(node).collect::<Vec<_>>() {
-            if dom.element_name(child).is_some_and(|q| {
-                if tag == "*" {
-                    return true;
-                }
-                let expected = if html && q.ns.as_str() == XHTML_NS {
-                    lower
-                } else {
-                    tag
-                };
-                match q.prefix.as_ref() {
-                    Some(prefix) => expected
-                        .strip_prefix(prefix.as_str())
-                        .and_then(|rest| rest.strip_prefix(':'))
-                        .is_some_and(|local| local == q.local.as_str()),
-                    None => expected == q.local.as_str(),
-                }
-            }) {
-                out.push(child);
-            }
-            walk(dom, child, tag, lower, html, out);
+    let lower = tag.to_ascii_lowercase();
+    collect_matching_elements(dom, root, |q| {
+        if tag == "*" {
+            return true;
         }
+        let expected = if html && q.ns.as_str() == XHTML_NS {
+            lower.as_str()
+        } else {
+            tag
+        };
+        match q.prefix.as_ref() {
+            Some(prefix) => expected
+                .strip_prefix(prefix.as_str())
+                .and_then(|rest| rest.strip_prefix(':'))
+                .is_some_and(|local| local == q.local.as_str()),
+            None => expected == q.local.as_str(),
+        }
+    })
+}
+
+/// Snapshot the live namespace query in one walk and pass each reflector to
+/// bootstrap's append callback after releasing the arena borrow.
+pub(crate) struct ElementsByTagNameNs;
+impl<E: ScriptEngine> NativeFn<E> for ElementsByTagNameNs {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let scope = cx.arg(0);
+        let Some(root) = cx.owned_node(&scope)? else {
+            return Ok(cx.undefined());
+        };
+        let namespace = cx.arg(1);
+        let namespace = cx.value_to_string(&namespace)?;
+        let local_name = cx.arg(2);
+        let local_name = cx.value_to_string(&local_name)?;
+        let nodes = root.with_dom(|dom| {
+            collect_matching_elements(dom, root.id(), |q| {
+                (namespace == "*" || q.ns.as_str() == namespace)
+                    && (local_name == "*" || q.local.as_str() == local_name)
+            })
+        });
+        let append = cx.arg(3);
+        let mut reflectors = Vec::with_capacity(nodes.len());
+        for node in nodes {
+            reflectors.push(reflect_pinned::<E>(cx, node.raw() as u64)?);
+        }
+        let this = cx.undefined();
+        for reference in reflectors {
+            E::call_from_call(cx, &append, &this, &[reference])?;
+        }
+        Ok(cx.undefined())
     }
-    let mut out = Vec::new();
-    walk(dom, root, tag, &tag.to_ascii_lowercase(), html, &mut out);
-    out
 }
 
 /// `__elementsByTagNameCount(scope, tag)` → how many descendant elements of `scope`

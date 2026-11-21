@@ -2013,8 +2013,7 @@
   Element.prototype.querySelector = querySelector;
   Element.prototype.querySelectorAll = querySelectorAll;
 
-  // getElementsByTagName / getElementsByClassName, shared by Element and Document
-  // (scope is the receiver), returning live HTMLCollections.
+  // Element and Document descendant queries return live HTMLCollections.
   function getElementsByTagName(tag) {
     var scope = this, ref = this.__ref; tag = String(tag);
     var html = String(isHtmlDocument(scope.nodeType === 9 ? scope : ownerDocumentOf(scope)));
@@ -2024,6 +2023,28 @@
       for (var i = 0; i < n; i++) { out.push(wrapNode(__elementsByTagNameItem(ref, tag, String(i), html))); }
       return out;
     }, true);
+  }
+  var queryTagNameNS = globalThis.__elementsByTagNameNS;
+  delete globalThis.__elementsByTagNameNS;
+  function makeGetElementsByTagNameNS(nodeType) {
+    return {
+      getElementsByTagNameNS(namespace, localName) {
+        var ref = privateGet(formRefs, this);
+        if (!ref || +formNodeType(ref) !== nodeType) throw new TypeError('Illegal invocation');
+        if (arguments.length < 2) throw new TypeError('getElementsByTagNameNS requires two arguments');
+        if (typeof namespace === 'symbol') throw new TypeError('Cannot convert a Symbol to a DOMString');
+        namespace = namespace === null || namespace === undefined ? '' : userAgentString(namespace);
+        if (typeof localName === 'symbol') throw new TypeError('Cannot convert a Symbol to a DOMString');
+        localName = userAgentString(localName);
+        return makeCollection(function() {
+          var out = [];
+          queryTagNameNS(ref, namespace, localName, function(nodeRef) {
+            out.push(wrapNode(nodeRef));
+          });
+          return out;
+        }, true);
+      }
+    }.getElementsByTagNameNS;
   }
   function getElementsByClassName(cls) {
     var ref = this.__ref;
@@ -2042,6 +2063,7 @@
     }, true);
   }
   Element.prototype.getElementsByTagName = getElementsByTagName;
+  Element.prototype.getElementsByTagNameNS = makeGetElementsByTagNameNS(1);
   Element.prototype.getElementsByClassName = getElementsByClassName;
 
   // Element-only tree views: children (a live HTMLCollection of element children),
@@ -3013,6 +3035,7 @@
   };
   Document.prototype.getElementById = function(id) { return wrapNode(__getElementById(this.__ref, String(id))); };
   Document.prototype.getElementsByTagName = getElementsByTagName;
+  Document.prototype.getElementsByTagNameNS = makeGetElementsByTagNameNS(9);
   Document.prototype.getElementsByClassName = getElementsByClassName;
   Document.prototype.querySelector = querySelector;
   Document.prototype.querySelectorAll = querySelectorAll;

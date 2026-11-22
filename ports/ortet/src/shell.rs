@@ -37,10 +37,11 @@ use genet_render_host::RenderCore;
 use genet_winit_host::{AccessKitBridge, BridgeStatus, SurfaceHost, wheel_delta_from_winit};
 use netrender::{ColorLoad, ExternalTexturePlacement, NetrenderOptions, Scene};
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ButtonSource, ElementState, MouseButton, PointerSource, WindowEvent};
+use winit::event_loop::run_on_demand::EventLoopExtRunOnDemand;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, NamedKey};
-use winit::window::{Window, WindowId};
+use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::a11y::{Accessibility, RoutedAction};
 use crate::args::{Action, Config};
@@ -246,7 +247,7 @@ pub fn run(config: Config, fetcher: OrtetFetcher) -> Result<Outcome, String> {
     // Spawn before the window exists so a bad address fails without flashing a
     // window at anyone.
     let session = spawn(engine.as_ref(), &config.address, config.size)?;
-    let event_loop =
+    let mut event_loop =
         EventLoop::new().map_err(|error| format!("could not create the event loop: {error}"))?;
     let mut app = Ortet::new(
         config,
@@ -258,7 +259,7 @@ pub fn run(config: Config, fetcher: OrtetFetcher) -> Result<Outcome, String> {
         webgl,
     );
     event_loop
-        .run_app(&mut app)
+        .run_app_on_demand(&mut app)
         .map_err(|error| format!("the ortet event loop failed: {error}"))?;
     // The timing receipt is written even for a failed run: a run that died
     // part-way still measured the frames it presented, and hiding them would
@@ -423,7 +424,7 @@ struct Ortet {
     engine: Box<dyn SessionEngine<Scene>>,
     address: String,
     session: Box<dyn DocumentSession<Scene>>,
-    window: Option<Arc<Window>>,
+    window: Option<Arc<dyn Window>>,
     host: Option<SurfaceHost>,
     core: Arc<RenderCore>,
     #[cfg(feature = "scripted")]
@@ -438,7 +439,7 @@ struct Ortet {
     scale_factor: f32,
     frames: u32,
     modifiers: SessionModifiers,
-    /// Last cursor position in logical pixels; winit's button events carry none.
+    /// Last cursor position in logical pixels; updated on mouse movement.
     cursor: (f32, f32),
     pointer_captured: bool,
     /// Driving steps still to apply. They run once, after the first frame has
@@ -684,7 +685,7 @@ impl Ortet {
         Ok(false)
     }
 
-    fn schedule_wake(&mut self, event_loop: &ActiveEventLoop) {
+    fn schedule_wake(&mut self, event_loop: &dyn ActiveEventLoop) {
         let now = Instant::now();
         if self
             .wake_deadline
@@ -751,10 +752,10 @@ impl Ortet {
             if let Some(window) = self.window.as_ref() {
                 if let Some(cursor) = result.cursor {
                     window.set_cursor(match cursor {
-                        SessionCursor::Default => winit::window::CursorIcon::Default,
-                        SessionCursor::Pointer => winit::window::CursorIcon::Pointer,
-                        SessionCursor::Text => winit::window::CursorIcon::Text,
-                    });
+                        SessionCursor::Default => winit::cursor::CursorIcon::Default,
+                        SessionCursor::Pointer => winit::cursor::CursorIcon::Pointer,
+                        SessionCursor::Text => winit::cursor::CursorIcon::Text,
+                    }.into());
                 }
                 window.set_ime_allowed(if outcome.installed { self.session.editable_focus() } else { result.editable });
             }
@@ -960,7 +961,7 @@ impl Ortet {
     /// Each phase is timed into one [`FrameTiming`], with the two blocking
     /// phases — acquire and present — kept out of the work total. See
     /// `crate::timing`.
-    fn render(&mut self, event_loop: &ActiveEventLoop) {
+    fn render(&mut self, event_loop: &dyn ActiveEventLoop) {
         let frame_started = Instant::now();
         let mut timing = FrameTiming {
             index: self.frames,
@@ -1124,7 +1125,7 @@ impl Ortet {
 }
 
 impl ApplicationHandler for Ortet {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    fn can_create_surfaces(&mut self, event_loop: &dyn ActiveEventLoop) {
         if self.session.supports_freeze_resume() {
             self.session.resume();
         }
@@ -1132,19 +1133,19 @@ impl ApplicationHandler for Ortet {
             self.request_redraw();
             return;
         }
-        let attributes = Window::default_attributes()
+        let attributes = WindowAttributes::default()
             .with_title(format!("ortet — {}", self.address))
             .with_visible(false)
-            .with_inner_size(winit::dpi::PhysicalSize::new(self.width, self.height));
-        let window = match event_loop.create_window(attributes) {
-            Ok(window) => Arc::new(window),
+            .with_surface_size(winit::dpi::PhysicalSize::new(self.width, self.height));
+        let window: Arc<dyn Window> = match event_loop.create_window(attributes) {
+            Ok(window) => Arc::from(window),
             Err(error) => {
                 self.failure = Some(format!("could not create the window: {error}"));
                 event_loop.exit();
                 return;
             },
         };
-        let size = window.inner_size();
+        let size = window.surface_size();
         self.width = size.width.max(1);
         self.height = size.height.max(1);
         self.scale_factor = window.scale_factor() as f32;
@@ -1207,7 +1208,7 @@ impl ApplicationHandler for Ortet {
             .expect("accessibility publication always supplies a tree");
         let wake_window = window.clone();
         let mut bridge = AccessKitBridge::new(move || wake_window.request_redraw());
-        if let Err(error) = bridge.install(&window, initial) {
+        if let Err(error) = bridge.install(window.as_ref(), initial) {
             self.failure = Some(format!("could not install accessibility bridge: {error}"));
             event_loop.exit();
             return;
@@ -1236,20 +1237,20 @@ impl ApplicationHandler for Ortet {
         }
     }
 
-    fn suspended(&mut self, _event_loop: &ActiveEventLoop) {
+    fn suspended(&mut self, _event_loop: &dyn ActiveEventLoop) {
         if self.session.supports_freeze_resume() {
             self.session.freeze();
         }
         self.wake_deadline = None;
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &dyn ActiveEventLoop) {
         self.schedule_wake(event_loop);
     }
 
     fn window_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
+        event_loop: &dyn ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
@@ -1258,7 +1259,7 @@ impl ApplicationHandler for Ortet {
         }
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => {
+            WindowEvent::SurfaceResized(size) => {
                 self.width = size.width.max(1);
                 self.height = size.height.max(1);
                 if let Some(host) = self.host.as_mut() {
@@ -1269,7 +1270,7 @@ impl ApplicationHandler for Ortet {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.scale_factor = scale_factor as f32;
                 if let Some(window) = self.window.as_ref() {
-                    let size = window.inner_size();
+                    let size = window.surface_size();
                     self.width = size.width.max(1);
                     self.height = size.height.max(1);
                 }
@@ -1299,10 +1300,14 @@ impl ApplicationHandler for Ortet {
                     shift: state.shift_key(),
                     control: state.control_key(),
                     alt: state.alt_key(),
-                    meta: state.super_key(),
+                    meta: state.meta_key(),
                 };
             },
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::PointerMoved {
+                source: PointerSource::Mouse,
+                position,
+                ..
+            } => {
                 let scale = if self.scale_factor > 0.0 {
                     self.scale_factor
                 } else {
@@ -1316,7 +1321,11 @@ impl ApplicationHandler for Ortet {
                     modifiers: self.modifiers,
                 });
             },
-            WindowEvent::MouseInput { state, button, .. } => {
+            WindowEvent::PointerButton {
+                state,
+                button: ButtonSource::Mouse(button),
+                ..
+            } => {
                 let (x, y) = self.cursor;
                 let _ = self.apply_input(SessionInput::PointerButton {
                     x,
@@ -1336,7 +1345,7 @@ impl ApplicationHandler for Ortet {
                 if event.state == ElementState::Pressed
                     && !self.modifiers.meta && !(self.modifiers.control && !self.modifiers.alt)
                     && let Some(text) = event.text.as_deref().or_else(||
-                        matches!(&event.logical_key, Key::Named(NamedKey::Space)).then_some(" "))
+                        matches!(&event.logical_key, Key::Character(text) if text.as_str() == " ").then_some(" "))
                     && !text.is_empty() && text.chars().all(|c| !c.is_control())
                     && matches!(session_key_from_winit(&event.logical_key), SessionKey::Character(_) | SessionKey::Space)
                 {
@@ -1352,7 +1361,9 @@ impl ApplicationHandler for Ortet {
                 }
             },
             WindowEvent::Ime(ime) => {
-                let _ = self.apply_input(SessionInput::Ime(ime_from_winit(ime)));
+                if let Some(ime) = ime_from_winit(ime) {
+                    let _ = self.apply_input(SessionInput::Ime(ime));
+                }
             },
             WindowEvent::Focused(focused) => {
                 if let Some(bridge) = self.a11y_bridge.as_mut() {
@@ -1372,13 +1383,13 @@ impl ApplicationHandler for Ortet {
 
 fn session_key_from_winit(key: &Key) -> SessionKey {
     match key {
+        Key::Character(text) if text.as_str() == " " => SessionKey::Space,
         Key::Character(text) => SessionKey::Character(text.to_string()),
         Key::Named(NamedKey::Enter) => SessionKey::Enter,
         Key::Named(NamedKey::Tab) => SessionKey::Tab,
         Key::Named(NamedKey::Backspace) => SessionKey::Backspace,
         Key::Named(NamedKey::Delete) => SessionKey::Delete,
         Key::Named(NamedKey::Escape) => SessionKey::Escape,
-        Key::Named(NamedKey::Space) => SessionKey::Space,
         Key::Named(NamedKey::ArrowLeft) => SessionKey::ArrowLeft,
         Key::Named(NamedKey::ArrowRight) => SessionKey::ArrowRight,
         Key::Named(NamedKey::ArrowUp) => SessionKey::ArrowUp,
@@ -1400,7 +1411,7 @@ fn scroll_key_from_winit(key: &Key, shift: bool) -> Option<SessionScrollKey> {
         Key::Named(NamedKey::PageDown) => SessionScrollKey::PageDown,
         Key::Named(NamedKey::Home) => SessionScrollKey::Home,
         Key::Named(NamedKey::End) => SessionScrollKey::End,
-        Key::Named(NamedKey::Space) => {
+        Key::Character(text) if text.as_str() == " " => {
             if shift {
                 SessionScrollKey::PageUp
             } else {
@@ -1415,9 +1426,7 @@ fn pointer_button_from_winit(button: MouseButton) -> SessionPointerButton {
     match button {
         MouseButton::Left => SessionPointerButton::Primary,
         MouseButton::Right => SessionPointerButton::Secondary,
-        MouseButton::Middle | MouseButton::Back | MouseButton::Forward | MouseButton::Other(_) => {
-            SessionPointerButton::Auxiliary
-        },
+        _ => SessionPointerButton::Auxiliary,
     }
 }
 
@@ -1428,13 +1437,14 @@ fn button_state_from_winit(state: ElementState) -> SessionButtonState {
     }
 }
 
-fn ime_from_winit(ime: winit::event::Ime) -> SessionIme {
-    match ime {
+fn ime_from_winit(ime: winit::event::Ime) -> Option<SessionIme> {
+    Some(match ime {
         winit::event::Ime::Enabled => SessionIme::Enabled,
         winit::event::Ime::Preedit(text, selection) => SessionIme::Preedit { text, selection },
         winit::event::Ime::Commit(text) => SessionIme::Commit(text),
         winit::event::Ime::Disabled => SessionIme::Disabled,
-    }
+        _ => return None,
+    })
 }
 
 #[cfg(test)]

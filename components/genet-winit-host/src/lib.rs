@@ -59,7 +59,7 @@ impl SurfaceHost {
     /// visible surface without allocating a second wgpu device.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn from_shared_core(
-        window: Arc<Window>,
+        window: Arc<dyn Window>,
         width: u32,
         height: u32,
         core: Arc<RenderCore>,
@@ -71,7 +71,7 @@ impl SurfaceHost {
     /// Boot the core + create this window's surface (native blocking).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn boot(
-        window: Arc<Window>,
+        window: Arc<dyn Window>,
         width: u32,
         height: u32,
         options: NetrenderOptions,
@@ -82,7 +82,7 @@ impl SurfaceHost {
     /// Boot against a native window that needs compositor-visible alpha.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn boot_with_transparency(
-        window: Arc<Window>,
+        window: Arc<dyn Window>,
         width: u32,
         height: u32,
         options: NetrenderOptions,
@@ -95,7 +95,7 @@ impl SurfaceHost {
 
     /// Async boot (the only path on wasm; works everywhere).
     pub async fn boot_async(
-        window: Arc<Window>,
+        window: Arc<dyn Window>,
         width: u32,
         height: u32,
         options: NetrenderOptions,
@@ -220,6 +220,7 @@ pub fn wheel_delta_from_winit(delta: MouseScrollDelta) -> (f32, f32) {
     match delta {
         MouseScrollDelta::LineDelta(x, y) => (-x * WHEEL_LINE_PX, -y * WHEEL_LINE_PX),
         MouseScrollDelta::PixelDelta(p) => (-(p.x as f32), -(p.y as f32)),
+        _ => (0.0, 0.0),
     }
 }
 
@@ -250,6 +251,7 @@ pub fn wheel_delta_from_winit_logical(delta: MouseScrollDelta, scale_factor: f64
             };
             ((-(p.x / scale)) as f32, (-(p.y / scale)) as f32)
         },
+        _ => (0.0, 0.0),
     }
 }
 

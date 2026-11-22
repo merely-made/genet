@@ -499,7 +499,7 @@ mod imp {
             }
         }
 
-        pub fn install(&mut self, window: &Window, initial: TreeUpdate) -> Result<(), String> {
+        pub fn install(&mut self, window: &dyn Window, initial: TreeUpdate) -> Result<(), String> {
             if !self.state.replace_host(initial) {
                 return Err("installation requires a complete host root tree".into());
             }
@@ -610,7 +610,7 @@ mod imp {
         }
 
         /// Native Windows geometry queries read ClientToScreen on demand.
-        pub fn update_window_bounds(&mut self, _window: &Window) {}
+        pub fn update_window_bounds(&mut self, _window: &dyn Window) {}
 
         pub fn update_window_focus(&mut self, _focused: bool) {}
 
@@ -662,7 +662,7 @@ mod imp {
             }
         }
 
-        pub fn install(&mut self, window: &Window, initial: TreeUpdate) -> Result<(), String> {
+        pub fn install(&mut self, window: &dyn Window, initial: TreeUpdate) -> Result<(), String> {
             if !self.state.replace_host(initial) {
                 return Err("installation requires a complete host root tree".into());
             }
@@ -777,7 +777,7 @@ mod imp {
         }
 
         /// Native macOS geometry queries read current view and screen transforms.
-        pub fn update_window_bounds(&mut self, _window: &Window) {}
+        pub fn update_window_bounds(&mut self, _window: &dyn Window) {}
 
         pub fn update_window_focus(&mut self, focused: bool) {
             if let Some(adapter) = self.adapter.as_mut() {
@@ -834,7 +834,7 @@ mod imp {
             }
         }
 
-        pub fn install(&mut self, window: &Window, initial: TreeUpdate) -> Result<(), String> {
+        pub fn install(&mut self, window: &dyn Window, initial: TreeUpdate) -> Result<(), String> {
             if !self.state.replace_host(initial) {
                 return Err("installation requires a complete host root tree".into());
             }
@@ -934,7 +934,7 @@ mod imp {
             })
         }
 
-        pub fn update_window_bounds(&mut self, window: &Window) {
+        pub fn update_window_bounds(&mut self, window: &dyn Window) {
             if let Some(adapter) = self.adapter.as_mut() {
                 set_root_window_bounds(adapter, window);
             }
@@ -952,15 +952,15 @@ mod imp {
         }
     }
 
-    fn set_root_window_bounds(adapter: &mut Adapter, window: &Window) {
+    fn set_root_window_bounds(adapter: &mut Adapter, window: &dyn Window) {
         let outer_size = window.outer_size();
-        let inner_size = window.inner_size();
+        let inner_size = window.surface_size();
         let outer = window.outer_position().ok();
-        let inner = window.inner_position().ok();
+        let inner = Some(window.surface_position());
         let outer_x = outer.map_or(0.0, |position| position.x as f64);
         let outer_y = outer.map_or(0.0, |position| position.y as f64);
-        let inner_x = inner.map_or(outer_x, |position| position.x as f64);
-        let inner_y = inner.map_or(outer_y, |position| position.y as f64);
+        let inner_x = outer_x + inner.map_or(0.0, |position| position.x as f64);
+        let inner_y = outer_y + inner.map_or(0.0, |position| position.y as f64);
         adapter.set_root_window_bounds(
             Rect::new(
                 outer_x,
@@ -996,7 +996,11 @@ mod imp {
             BridgeStatus::Unavailable
         }
 
-        pub fn install(&mut self, _window: &Window, _initial: TreeUpdate) -> Result<(), String> {
+        pub fn install(
+            &mut self,
+            _window: &dyn Window,
+            _initial: TreeUpdate,
+        ) -> Result<(), String> {
             Err("AccessKit OS bridge is not wired for this platform".to_string())
         }
 
@@ -1031,7 +1035,7 @@ mod imp {
         ) -> Result<bool, String> {
             Ok(false)
         }
-        pub fn update_window_bounds(&mut self, _window: &Window) {}
+        pub fn update_window_bounds(&mut self, _window: &dyn Window) {}
 
         pub fn flush_pending(&mut self) -> bool {
             false

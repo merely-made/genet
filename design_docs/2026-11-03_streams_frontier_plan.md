@@ -60,9 +60,29 @@ are in `Code/testing/genet/priorities-20261118/wpt/`.
 
 Existing reader-based collection is not incremental network delivery. Preserve native hook and live-clone rejection until a separately scoped transport/host decision. Done when the chosen producer-to-stream path proves chunk ordering, backpressure, abort, errors, lifecycle, body disturbance and clone behavior with an actual network host and bounded memory, as well as matched Fetch tests. A new transport or additional native body change retains its original explicit checkpoint. Across all phases, new dependencies, version changes, engine revisions and copying the Streams reference implementation retain their respective original checkpoints.
 
+Ortet now opts its native HTTP(S) document Fetch route into the existing
+headers-first runtime hooks. Each reader pull permits one delivery of at most
+16 KiB. The host can retain the remainder of one decoded transport chunk and
+keeps its existing deadline, decoded-body cap, and concurrency policy.
+Aborting the signal drops the host transfer, and bodyless responses settle
+without an open stream.
+
+On 2026-11-22, a native loopback HTTP fixture held the final byte until
+script consumed the first. Both pre-fix controls at `109238e1a49` stalled.
+Bole and Vano passed that fixture on the candidate based on `4394693ff84`.
+Each engine also drained 49,153 bytes in order with no delivery while the
+reader paused, at most 16 KiB per delivery, and one pull for EOF after five
+chunk deliveries. Each rejected a pending body read with `AbortError`,
+closed the server connection, and completed a bodyless follow-up request
+with a one-request admission limit. The frozen binaries, locks, and logs
+are in `Code/output/genet-incremental-fetch/`.
+
+S4 remains active for live response cloning, broader error and lifecycle
+coverage, and the matched Fetch WPT comparison.
+
 ## Open questions
 
-Current remaining conformance and disk-mode C3 Fetch failures need a fresh owner-attributed map. Which transferable scope and incremental host boundary should be implemented first? The original plan's earlier pending S1-S5 statements are superseded by its later recorded rulings and final publication; do not reopen them or claim full Streams conformance.
+Current remaining conformance and disk-mode C3 Fetch failures need a fresh owner-attributed map. Which transferable scope should be implemented first? The original plan's earlier pending S1-S5 statements are superseded by its later recorded rulings and final publication; do not reopen them or claim full Streams conformance.
 
 ## Owner carry, 2026-11-03
 

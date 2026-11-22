@@ -81,6 +81,9 @@ web-sys = { version = "=0.3.106", features = [
     "PointerEvent", "WheelEvent", "Window", "console",
 ] }
 
+[dev-dependencies]
+script-engine-api = { path = "../../components/script-engine-api" }
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)', 'cfg(llvm_pgo)'] }
 

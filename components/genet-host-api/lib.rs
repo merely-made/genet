@@ -295,6 +295,27 @@ pub enum DocumentFetchResult {
     Failed,
 }
 
+/// Events from an accepted asynchronous resource fetch, in delivery order.
+pub enum ResourceFetchEvent {
+    /// Finish without a streaming body, or fail before response headers.
+    Settle(Option<ResourceFetchResponse>),
+    /// Deliver the response headers. The response's bytes must be empty.
+    Start(ResourceFetchResponse),
+    /// Deliver one nonempty body chunk for one pull.
+    Chunk(Vec<u8>),
+    Close,
+    /// Fail the body after delivering response headers.
+    Error,
+}
+
+/// Control for an accepted stream. Dropping the last handle cancels the fetch.
+pub trait ResourceFetchStream: Send + Sync {
+    /// Request one chunk without blocking the script thread.
+    fn request_chunk(&self);
+}
+
+pub type ResourceFetchSink = Box<dyn Fn(ResourceFetchEvent) + Send + Sync>;
+
 /// Host-shell resource-fetch contract: turn a URL into bytes for whichever engine
 /// is hosted underneath. Networking is a *platform-integration* concern the shell
 /// owns — kept off the engine, which only consumes host-owned response records.
@@ -315,6 +336,18 @@ pub trait ResourceFetcher {
     /// policy or response metadata. A byte-only implementation must explicitly
     /// return `None`; local plain GETs can use `from_local_plain_get`.
     fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse>;
+
+    /// Optionally start a headers-first fetch. Returning `None` declines this
+    /// request and leaves the buffered route in charge, without calling `deliver`.
+    /// An accepted request delivers events in order and emits a terminal event
+    /// unless cancelled. Each body chunk requires a pull from the consumer.
+    fn start_streaming_fetch(
+        &self,
+        _request: &ResourceRequest,
+        _deliver: ResourceFetchSink,
+    ) -> Option<std::sync::Arc<dyn ResourceFetchStream>> {
+        None
+    }
 
     /// Acquire a document with its full request policy and response metadata.
     /// Unsupported leaves the legacy loader authoritative. Failed claims the

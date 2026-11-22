@@ -9,7 +9,7 @@
 //! dedicated workers. Page fetches and hosted worker resources are started
 //! off-thread. Their completion wakes the document's host for its next pump.
 
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -17,7 +17,10 @@ use script_engine_api::ScriptEngine;
 use script_runtime_api::{FetchHandler, FetchOutcome, FetchRequest, Runtime, ScriptResourceLoader};
 
 use crate::ResourceFetcher;
-use genet_host_api::{DocumentFetchKind, DocumentFetchResult, ResourceFetchResponse};
+use genet_host_api::{
+    DocumentFetchKind, DocumentFetchResult, ResourceFetchEvent, ResourceFetchResponse,
+    ResourceFetchStream,
+};
 
 #[derive(Clone, Default)]
 pub struct ScriptWake {
@@ -205,6 +208,21 @@ struct Completion {
     _reservation: FetchReservation,
 }
 
+enum QueuedFetch {
+    Buffered(Completion),
+    Streaming {
+        id: u64,
+        requested_url: Arc<str>,
+        event: ResourceFetchEvent,
+    },
+}
+
+struct OpenStream {
+    control: Option<Arc<dyn ResourceFetchStream>>,
+    awaiting: bool,
+    reservation: FetchReservation,
+}
+
 /// Held until a page completion is consumed or discarded. Worker requests
 /// release after delivery to the worker's mailbox.
 struct FetchReservation(Arc<AtomicUsize>);
@@ -217,12 +235,13 @@ impl Drop for FetchReservation {
 
 struct CompletionState {
     closed: bool,
-    queue: VecDeque<Completion>,
+    queue: VecDeque<QueuedFetch>,
+    streams: BTreeMap<u64, OpenStream>,
 }
 
 struct BridgeState {
     fetcher: Arc<dyn ResourceFetcher + Send + Sync>,
-    completions: Mutex<CompletionState>,
+    completions: Arc<Mutex<CompletionState>>,
     active: AtomicUsize,
     admitted: Arc<AtomicUsize>,
     admission_limit: usize,
@@ -232,6 +251,10 @@ struct BridgeState {
 }
 
 impl BridgeState {
+    fn lock_completions(&self) -> std::sync::MutexGuard<'_, CompletionState> {
+        self.completions.lock().expect("script resource mutex poisoned")
+    }
+
     fn try_reserve(&self) -> Option<FetchReservation> {
         if self.closed.load(Ordering::Acquire) {
             return None;
@@ -287,10 +310,11 @@ impl ScriptResourceBridge {
         Self {
             state: Arc::new(BridgeState {
                 fetcher: Arc::new(fetcher),
-                completions: Mutex::new(CompletionState {
+                completions: Arc::new(Mutex::new(CompletionState {
                     closed: false,
                     queue: VecDeque::new(),
-                }),
+                    streams: BTreeMap::new(),
+                })),
                 active: AtomicUsize::new(0),
                 admitted: Arc::new(AtomicUsize::new(0)),
                 admission_limit,
@@ -310,14 +334,10 @@ impl ScriptResourceBridge {
     }
 
     pub fn has_pending(&self) -> bool {
+        let completions = self.state.lock_completions();
         self.state.active.load(Ordering::Acquire) != 0
-            || !self
-                .state
-                .completions
-                .lock()
-                .expect("script resource mutex poisoned")
-                .queue
-                .is_empty()
+            || !completions.queue.is_empty()
+            || completions.streams.values().any(|stream| stream.awaiting)
     }
 
     /// Drop queued results and reject any future delivery. The worker runtime
@@ -331,22 +351,17 @@ impl ScriptResourceBridge {
         // transport thread that currently owns the lock will then report a
         // stale wake instead of waking the session being closed.
         self.state.wake.unregister_generation(self.state.generation);
-        let mut completions = self
-            .state
-            .completions
-            .lock()
-            .expect("script resource mutex poisoned");
+        let mut completions = self.state.lock_completions();
         completions.closed = true;
         completions.queue.clear();
+        let streams = std::mem::take(&mut completions.streams);
+        drop(completions);
+        drop(streams);
     }
 
     pub fn pump<E: ScriptEngine>(&self, runtime: &mut Runtime<E>) -> Result<usize, String> {
         let completions = {
-            let mut queue = self
-                .state
-                .completions
-                .lock()
-                .expect("script resource mutex poisoned");
+            let mut queue = self.state.lock_completions();
             queue.queue.drain(..).collect::<Vec<_>>()
         };
         if self.state.closed.load(Ordering::Acquire) {
@@ -355,8 +370,55 @@ impl ScriptResourceBridge {
         let count = completions.len();
         let mut failures = Vec::new();
         for completion in completions {
-            if let Err(error) = runtime.settle_fetch(completion.id, completion.outcome) {
-                failures.push(format!("fetch {}: {error}", completion.id));
+            let (id, result) = match completion {
+                QueuedFetch::Buffered(completion) => (
+                    completion.id,
+                    runtime.settle_fetch(completion.id, completion.outcome),
+                ),
+                QueuedFetch::Streaming {
+                    id,
+                    requested_url,
+                    event,
+                } => {
+                    let mut state = self.state.lock_completions();
+                    if !state.streams.contains_key(&id) {
+                        continue;
+                    }
+                    let terminal = matches!(
+                        event,
+                        ResourceFetchEvent::Settle(_)
+                            | ResourceFetchEvent::Close
+                            | ResourceFetchEvent::Error
+                    );
+                    let finished = if terminal {
+                        state.streams.remove(&id)
+                    } else {
+                        None
+                    };
+                    // Runtime delivery can run microtasks that pull again or cancel.
+                    drop(state);
+                    drop(finished);
+                    let result = match event {
+                        ResourceFetchEvent::Settle(response) => runtime.settle_fetch(
+                            id,
+                            Self::response_outcome(&requested_url, response),
+                        ),
+                        ResourceFetchEvent::Start(response) => runtime.start_stream(
+                            id,
+                            Self::response_outcome(&requested_url, Some(response)),
+                        ),
+                        ResourceFetchEvent::Chunk(bytes) => runtime.push_chunk(id, &bytes),
+                        ResourceFetchEvent::Close => runtime.close_stream(id),
+                        ResourceFetchEvent::Error => runtime.error_stream(id),
+                    };
+                    if result.is_err() && !terminal {
+                        self.cancel(id);
+                    }
+                    (id, result)
+                },
+            };
+            if let Err(error) = result {
+                failures.push(format!("fetch {id}: {error}"));
             }
         }
         if failures.is_empty() {
@@ -367,11 +429,11 @@ impl ScriptResourceBridge {
     }
 
     fn outcome(&self, request: &FetchRequest) -> FetchOutcome {
-        Self::response_outcome(request, self.state.fetcher.fetch_request(request))
+        Self::response_outcome(&request.url, self.state.fetcher.fetch_request(request))
     }
 
     fn response_outcome(
-        request: &FetchRequest,
+        requested_url: &str,
         response: Option<ResourceFetchResponse>,
     ) -> FetchOutcome {
         match response {
@@ -390,13 +452,76 @@ impl ScriptResourceBridge {
                     status: response.status,
                     status_text: response.status_text,
                     response_type: response.response_type,
-                    redirected: response.redirected || response.final_url != request.url,
+                    redirected: response.redirected || response.final_url != requested_url,
                     url: response.final_url,
                     headers,
                     body: response.bytes,
                 }
             },
             None => FetchOutcome::network_error(),
+        }
+    }
+
+    // Returns the reservation to the buffered path if the host declines.
+    fn try_start_stream(
+        &self,
+        id: u64,
+        request: &FetchRequest,
+        reservation: FetchReservation,
+    ) -> Option<FetchReservation> {
+        let mut completions = self.state.lock_completions();
+        if completions.closed {
+            return None;
+        }
+        completions.streams.insert(
+            id,
+            OpenStream {
+                control: None,
+                awaiting: true,
+                reservation,
+            },
+        );
+        drop(completions);
+
+        let mailbox = Arc::downgrade(&self.state.completions);
+        let wake = self.state.wake.clone();
+        let generation = self.state.generation;
+        let requested_url: Arc<str> = Arc::from(request.url.as_str());
+        let control = self.state.fetcher.start_streaming_fetch(
+            request,
+            Box::new(move |event| {
+                let Some(mailbox) = mailbox.upgrade() else {
+                    return;
+                };
+                let mut completions = mailbox.lock().expect("script resource mutex poisoned");
+                let Some(stream) = completions.streams.get_mut(&id) else {
+                    return;
+                };
+                stream.awaiting = false;
+                completions.queue.push_back(QueuedFetch::Streaming {
+                    id,
+                    requested_url: Arc::clone(&requested_url),
+                    event,
+                });
+                drop(completions);
+                wake.notify_source("fetch", generation, Some(requested_url.to_string()));
+            }),
+        );
+
+        match control {
+            Some(control) => {
+                let mut completions = self.state.lock_completions();
+                if let Some(stream) = completions.streams.get_mut(&id) {
+                    stream.control = Some(control);
+                }
+                None
+            },
+            None => self
+                .state
+                .lock_completions()
+                .streams
+                .remove(&id)
+                .map(|stream| stream.reservation),
         }
     }
 
@@ -409,6 +534,9 @@ impl ScriptResourceBridge {
         let Some(reservation) = self.state.try_reserve() else {
             return Some(FetchOutcome::network_error());
         };
+        let Some(reservation) = self.try_start_stream(id, &request, reservation) else {
+            return None;
+        };
         self.state.active.fetch_add(1, Ordering::AcqRel);
         let state = Arc::clone(&self.state);
         let work = Box::new(move || {
@@ -417,10 +545,7 @@ impl ScriptResourceBridge {
             }
             .outcome(&request);
             let resource = request.url.clone();
-            let mut completions = state
-                .completions
-                .lock()
-                .expect("script resource mutex poisoned");
+            let mut completions = state.lock_completions();
             if completions.closed || state.closed.load(Ordering::Acquire) {
                 drop(completions);
                 state.active.fetch_sub(1, Ordering::AcqRel);
@@ -429,11 +554,11 @@ impl ScriptResourceBridge {
                     .notify_source("fetch", state.generation, Some(resource));
                 return;
             }
-            completions.queue.push_back(Completion {
+            completions.queue.push_back(QueuedFetch::Buffered(Completion {
                 id,
                 outcome,
                 _reservation: reservation,
-            });
+            }));
             state.active.fetch_sub(1, Ordering::AcqRel);
             drop(completions);
             state
@@ -500,11 +625,39 @@ impl FetchHandler for ScriptResourceBridge {
         })
     }
 
+    fn cancel(&self, id: u64) {
+        let mut completions = self.state.lock_completions();
+        let stream = completions.streams.remove(&id);
+        if stream.is_some() {
+            completions.queue.retain(|completion| {
+                !matches!(completion, QueuedFetch::Streaming { id: queued, .. } if *queued == id)
+            });
+        }
+        drop(completions);
+        drop(stream);
+    }
+
+    fn request_chunk(&self, id: u64) {
+        let mut completions = self.state.lock_completions();
+        let Some(stream) = completions.streams.get_mut(&id) else {
+            return;
+        };
+        if stream.awaiting {
+            return;
+        }
+        let control = stream.control.clone();
+        stream.awaiting = true;
+        drop(completions);
+        if let Some(control) = control {
+            control.request_chunk();
+        }
+    }
+
     fn fetch_iframe(&self, request: FetchRequest) -> Option<FetchOutcome> {
         match ResourceFetcher::fetch_document(self, &request, DocumentFetchKind::Iframe) {
             DocumentFetchResult::Unsupported => None,
             DocumentFetchResult::Response(response) => {
-                Some(Self::response_outcome(&request, Some(response)))
+                Some(Self::response_outcome(&request.url, Some(response)))
             },
             DocumentFetchResult::Failed => Some(FetchOutcome::network_error()),
         }

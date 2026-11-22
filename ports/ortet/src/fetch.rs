@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use genet_documents::LocalFetcher;
 use genet_host_api::{
-    DocumentFetchKind, DocumentFetchResult, ResourceFetchPolicy, ResourceFetchResponse,
-    ResourceFetcher, ResourceRequest, ResourceResponse,
+    DocumentFetchKind, DocumentFetchResult, ResourceFetchEvent, ResourceFetchPolicy,
+    ResourceFetchResponse, ResourceFetchSink, ResourceFetchStream, ResourceFetcher,
+    ResourceRequest, ResourceResponse,
 };
 
 /// Which lane serves an address.
@@ -95,6 +96,17 @@ impl ResourceFetcher for OrtetFetcher {
         }
     }
 
+    fn start_streaming_fetch(
+        &self,
+        request: &ResourceRequest,
+        deliver: ResourceFetchSink,
+    ) -> Option<Arc<dyn ResourceFetchStream>> {
+        if lane_for(&request.url) != FetchLane::Remote {
+            return None;
+        }
+        Some(self.remote.as_ref()?.start_streaming(request, deliver))
+    }
+
     fn fetch_document(
         &self,
         request: &ResourceRequest,
@@ -122,14 +134,13 @@ impl ResourceFetcher for OrtetFetcher {
 
 /// http(s) over netfetcher's default transport.
 ///
-/// The document session boundary is synchronous, so the async fetch is run to
-/// completion on a runtime this host owns rather than on the UI thread's own
-/// executor — the arrangement netfetcher's README describes for its consumers.
+/// Document and buffered resource loads run to completion on the host-owned
+/// runtime. Scripted response bodies use that same runtime and transport policy.
 pub struct RemoteFetcher {
     runtime: tokio::runtime::Runtime,
-    context: netfetcher::FetchContext,
+    context: Arc<netfetcher::FetchContext>,
     policy: ResourceFetchPolicy,
-    permits: tokio::sync::Semaphore,
+    permits: Arc<tokio::sync::Semaphore>,
 }
 
 /// Why a native remote resource could not be delivered. The legacy
@@ -167,11 +178,13 @@ impl RemoteFetcher {
             .map_err(|error| format!("could not start the ortet fetch runtime: {error}"))?;
         Ok(Self {
             runtime,
-            context: netfetcher::FetchContext::permissive()
-                .with_redirect_limit(policy.max_redirects)
-                .with_response_max_body_bytes(policy.max_response_bytes),
+            context: Arc::new(
+                netfetcher::FetchContext::permissive()
+                    .with_redirect_limit(policy.max_redirects)
+                    .with_response_max_body_bytes(policy.max_response_bytes),
+            ),
             policy,
-            permits: tokio::sync::Semaphore::new(policy.max_concurrent_fetches),
+            permits: Arc::new(tokio::sync::Semaphore::new(policy.max_concurrent_fetches)),
         })
     }
 }
@@ -257,26 +270,7 @@ impl RemoteFetcher {
                 if response.is_network_error() {
                     return Err(NativeFetchFailure::Network);
                 }
-                let final_url = response
-                    .url_list
-                    .last()
-                    .map_or_else(|| request.url.clone(), ToString::to_string);
-                let content_type = response
-                    .headers
-                    .iter()
-                    .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
-                    .map(|(_, value)| value.clone());
-                let status = response.status;
-                let headers = response.headers.clone();
-                let response_type = match response.response_type {
-                    netfetcher::ResponseType::Basic => "basic",
-                    netfetcher::ResponseType::Cors => "cors",
-                    netfetcher::ResponseType::Opaque => "opaque",
-                    netfetcher::ResponseType::OpaqueRedirect => "opaqueredirect",
-                    netfetcher::ResponseType::Error => "error",
-                }
-                .into();
-                let redirected = response.url_list.len() > 1;
+                let mut metadata = response_metadata(&response, &request.url);
                 let mut body = response.body;
                 let mut bytes = Vec::new();
                 while let Some(chunk) = body.next_chunk().await {
@@ -286,20 +280,144 @@ impl RemoteFetcher {
                     }
                     bytes.extend_from_slice(&chunk);
                 }
-                Ok(ResourceFetchResponse {
-                    final_url,
-                    content_type,
-                    bytes,
-                    status,
-                    // netfetcher exposes the numeric status, not the transport reason phrase.
-                    status_text: String::new(),
-                    headers,
-                    response_type,
-                    redirected,
-                })
+                metadata.bytes = bytes;
+                Ok(metadata)
             })
             .await
             .map_err(|_| NativeFetchFailure::Deadline)?
+        })
+    }
+}
+
+fn response_metadata(response: &netfetcher::Response, requested_url: &str) -> ResourceFetchResponse {
+    ResourceFetchResponse {
+        final_url: response
+            .url_list
+            .last()
+            .map_or_else(|| requested_url.to_owned(), ToString::to_string),
+        content_type: response
+            .headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+            .map(|(_, value)| value.clone()),
+        bytes: Vec::new(),
+        status: response.status,
+        // netfetcher exposes the numeric status, without a transport reason phrase.
+        status_text: String::new(),
+        headers: response.headers.clone(),
+        response_type: match response.response_type {
+            netfetcher::ResponseType::Basic => "basic",
+            netfetcher::ResponseType::Cors => "cors",
+            netfetcher::ResponseType::Opaque => "opaque",
+            netfetcher::ResponseType::OpaqueRedirect => "opaqueredirect",
+            netfetcher::ResponseType::Error => "error",
+        }
+        .into(),
+        redirected: response.url_list.len() > 1,
+    }
+}
+
+// The runtime copies each delivery on the document thread.
+const MAX_STREAM_CHUNK: usize = 16 * 1024;
+
+struct RemoteStream {
+    demand: tokio::sync::mpsc::Sender<()>,
+    task: tokio::task::AbortHandle,
+}
+
+impl ResourceFetchStream for RemoteStream {
+    fn request_chunk(&self) {
+        let _ = self.demand.try_send(());
+    }
+}
+
+impl Drop for RemoteStream {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+impl RemoteFetcher {
+    fn start_streaming(
+        &self,
+        request: &ResourceRequest,
+        deliver: ResourceFetchSink,
+    ) -> Arc<dyn ResourceFetchStream> {
+        let (demand, mut pulls) = tokio::sync::mpsc::channel(1);
+        let context = Arc::clone(&self.context);
+        let permits = Arc::clone(&self.permits);
+        let policy = self.policy;
+        let wire = netfetcher::Request::from_host(request);
+        let requested_url = request.url.clone();
+        let head = request.method.eq_ignore_ascii_case("HEAD");
+        let task = self.runtime.spawn(async move {
+            let mut started = false;
+            let result = tokio::time::timeout(policy.timeout, async {
+                if policy.max_concurrent_fetches == 0 {
+                    return Err(NativeFetchFailure::NoAdmissionCapacity);
+                }
+                let wire = wire.ok_or(NativeFetchFailure::InvalidRequest)?;
+                let _permit = permits
+                    .acquire()
+                    .await
+                    .map_err(|_| NativeFetchFailure::NoAdmissionCapacity)?;
+                let mut response = netfetcher::fetch(wire, &context).await;
+                if response.is_network_error() {
+                    return Err(NativeFetchFailure::Network);
+                }
+                let metadata = response_metadata(&response, &requested_url);
+                if head || matches!(metadata.status, 0 | 101 | 103 | 204 | 205 | 304) {
+                    deliver(ResourceFetchEvent::Settle(Some(metadata)));
+                    return Ok(());
+                }
+
+                deliver(ResourceFetchEvent::Start(metadata));
+                started = true;
+                let mut total = 0;
+                let mut remaining = None;
+                // Hold at most the remainder of one decoded transport chunk.
+                // Do not poll the body again until a reader asks for more.
+                while pulls.recv().await.is_some() {
+                    let mut bytes = match remaining.take() {
+                        Some(bytes) => bytes,
+                        None => loop {
+                            match response.body.next_chunk().await {
+                                None => {
+                                    deliver(ResourceFetchEvent::Close);
+                                    return Ok(());
+                                },
+                                Some(Err(_)) => return Err(NativeFetchFailure::Body),
+                                Some(Ok(bytes)) if bytes.is_empty() => continue,
+                                Some(Ok(bytes)) => {
+                                    if bytes.len() > policy.max_response_bytes - total {
+                                        return Err(NativeFetchFailure::ResponseTooLarge);
+                                    }
+                                    total += bytes.len();
+                                    break bytes;
+                                },
+                            }
+                        },
+                    };
+                    let chunk = bytes.split_to(bytes.len().min(MAX_STREAM_CHUNK));
+                    if !bytes.is_empty() {
+                        remaining = Some(bytes);
+                    }
+                    deliver(ResourceFetchEvent::Chunk(chunk.to_vec()));
+                }
+                Ok(())
+            })
+            .await;
+            if !matches!(result, Ok(Ok(()))) {
+                deliver(if started {
+                    ResourceFetchEvent::Error
+                } else {
+                    ResourceFetchEvent::Settle(None)
+                });
+            }
+        });
+        Arc::new(RemoteStream {
+            demand,
+            task: task.abort_handle(),
         })
     }
 }
@@ -880,3 +998,7 @@ mod tests {
         .is_err());
     }
 }
+
+#[cfg(all(test, feature = "scripted"))]
+#[path = "fetch/stream_tests.rs"]
+mod stream_tests;

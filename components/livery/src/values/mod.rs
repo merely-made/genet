@@ -40,14 +40,15 @@ pub use property::{
     ContainerType, Direction, Display, Duration, EmptyCells, Filter, FilterFunction, FlexBasis,
     FlexDirection, FlexFactor, FlexWrap, Float, FontFamily, FontFeatureSetting,
     FontFeatureSettings, FontSize, FontStyle, FontVariantLigatures, FontWeight, Gap, GridAutoFlow,
-    GridPlacement, GridTemplate, GridTrack, HangingPunctuation, Hyphens, Inset, LineBreak,
-    LineHeight, ListStylePosition, ListStyleType, Margin, Opacity, Order, Orphans, Overflow,
-    OverflowWrap, Padding, Perspective, PerspectiveOrigin, PointerEvents, Position, Radius,
-    RepeatStyle, Rotate, Scale, ShapeOutside, Size, Spacing, TabSize, TableBorderSpacing,
-    TableLayout, TextAlign, TextAlignLast, TextDecorationColor, TextDecorationLine, TextIndent,
-    TextJustify, TextTransform, TextTransformCase, TextWrapMode, TimingFunction, Transform,
-    TransformFunction, TransformOrigin, TransformStyle, TransitionProperty, Translate,
-    VerticalAlign, Visibility, WhiteSpaceCollapse, Widows, WordBreak, WritingMode, ZIndex,
+    GridPlacement, GridTemplate, GridTrack, GridTrackComponent, GridTrackSize, HangingPunctuation,
+    Hyphens, Inset, LineBreak, LineHeight, ListStylePosition, ListStyleType, Margin, Opacity,
+    Order, Orphans, Overflow, OverflowWrap, Padding, Perspective, PerspectiveOrigin, PointerEvents,
+    Position, Radius, RepeatStyle, Rotate, Scale, ShapeOutside, Size, Spacing, TabSize,
+    TableBorderSpacing, TableLayout, TextAlign, TextAlignLast, TextDecorationColor,
+    TextDecorationLine, TextIndent, TextJustify, TextTransform, TextTransformCase, TextWrapMode,
+    TimingFunction, Transform, TransformFunction, TransformOrigin, TransformStyle,
+    TransitionProperty, Translate, VerticalAlign, Visibility, WhiteSpaceCollapse, Widows,
+    WordBreak, WritingMode, ZIndex,
 };
 pub use transform_matrix::{Matrix2D, Matrix3D};
 
@@ -255,20 +256,34 @@ impl ResolveViewport for GridTemplate {
     const RESOLVES_RELATIVE: bool = true;
 
     fn resolve_relative_lengths(&self, environment: RelativeLengthEnvironment) -> Self {
-        match self {
-            Self::None => Self::None,
-            Self::Tracks(tracks) => Self::Tracks(
-                tracks
-                    .iter()
-                    .map(|track| match track {
-                        GridTrack::Length(value) => {
-                            GridTrack::Length(value.resolve_relative(environment))
+        let mut template = self.clone();
+        let resolve = |breadth: &mut GridTrack| {
+            if let GridTrack::Length(length) = breadth {
+                *length = length.resolve_relative(environment);
+            }
+        };
+        let resolve_track = |track: &mut GridTrackSize| match track {
+            GridTrackSize::Breadth(breadth) => resolve(breadth),
+            GridTrackSize::MinMax(min, max) => {
+                resolve(min);
+                resolve(max);
+            },
+        };
+        match &mut template {
+            Self::None => {},
+            Self::Tracks(tracks) => tracks.iter_mut().for_each(resolve),
+            Self::TrackList(components) => {
+                for component in components {
+                    match component {
+                        GridTrackComponent::Single(track) => resolve_track(track),
+                        GridTrackComponent::Repeat(_, tracks) => {
+                            tracks.iter_mut().for_each(resolve_track)
                         },
-                        _ => *track,
-                    })
-                    .collect(),
-            ),
+                    }
+                }
+            },
         }
+        template
     }
 }
 

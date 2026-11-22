@@ -566,7 +566,45 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
      let mut container_border_box = Size {
          width: resolved_style_size
              .get(AbstractAxis::Inline)
-@@ -752,6 +754,7 @@
+@@ -500,16 +502,21 @@
+     inner_node_size = container_content_box.map(Some);
+ 
+     // Column sizing must be re-run (once) if:
+-    //   - The grid container's width was initially indefinite and there are any columns with percentage track sizing functions
++    //   - The grid container's width was initially indefinite and there are any columns with percentage or flexible track sizing functions
+     //   - Any grid item crossing an intrinsically sized track's min content contribution width has changed
+     // TODO: Only rerun sizing for tracks that actually require it rather than for all tracks if any need it.
+     let mut rerun_column_sizing;
+     let mut intrinsic_column_contribution_changed = false;
+ 
++    // CSS Grid 2 §11.7: the intrinsic pass determines the container size.
++    // Flex tracks then resolve against that definite size. Fractions below
++    // one can leave part of it unused, even without a percentage track.
+     let has_percentage_column = columns.iter().any(|track| track.uses_percentage());
++    let has_flexible_column = columns.iter().any(GridTrack::is_flexible);
+     let has_percentage_row = rows.iter().any(|track| track.uses_percentage());
++    let has_flexible_row = rows.iter().any(GridTrack::is_flexible);
+     let parent_width_indefinite = outer_node_size.width.is_none();
+-    rerun_column_sizing = parent_width_indefinite && has_percentage_column;
++    rerun_column_sizing = parent_width_indefinite && (has_percentage_column || has_flexible_column);
+ 
+     if !rerun_column_sizing {
+         // Note: every item must be visited (no short-circuiting) as the closure updates each item's caches
+@@ -548,11 +555,11 @@
+     }
+ 
+     // Row sizing must be re-run (once) if:
+-    //   - The grid container's height was initially indefinite and there are any rows with percentage track sizing functions
++    //   - The grid container's height was initially indefinite and there are any rows with percentage or flexible track sizing functions
+     //   - Column sizing was re-run and any grid item crossing an intrinsically sized track's min content contribution height has changed
+     // TODO: Only rerun sizing for tracks that actually require it rather than for all tracks if any need it.
+     let parent_height_indefinite = outer_node_size.height.is_none();
+-    let mut rerun_row_sizing = parent_height_indefinite && has_percentage_row;
++    let mut rerun_row_sizing = parent_height_indefinite && (has_percentage_row || has_flexible_row);
+     let mut intrinsic_row_contribution_changed = false;
+ 
+     if rerun_row_sizing {
+@@ -752,6 +759,7 @@
      // of in-flow children's subtrees (`items` is sorted by `source_order`, i.e. child index)
      let mut order = items.len() as u32;
      let mut in_flow_items = items.iter_mut().peekable();
@@ -574,7 +612,7 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
      (0..tree.child_count(node)).for_each(|index| {
          if let Some(item) = in_flow_items.next_if(|item| item.source_order as usize == index) {
              oof_candidates.append(&mut item.oof_candidates);
-@@ -798,30 +801,20 @@
+@@ -798,30 +806,20 @@
              // coinciding with the grid's content edges (grid placement does not apply when the
              // grid is not the containing block).
              // https://www.w3.org/TR/css-grid-1/#static-position
@@ -618,7 +656,7 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
              drop(child_style);
  
              oof_candidates.push(OofCandidate {
-@@ -831,12 +824,12 @@
+@@ -831,12 +829,12 @@
                  static_position: Point {
                      x: AxisStaticPosition::from_alignment(
                          justify_self,
@@ -633,7 +671,7 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
                          false,
                      ),
                  },
-@@ -874,6 +867,7 @@
+@@ -874,6 +872,7 @@
              ),
              items: items.iter().map(DetailedGridItemsInfo::from_grid_item).collect(),
              areas,
@@ -641,7 +679,7 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
          },
      );
  
-@@ -964,7 +958,7 @@
+@@ -964,7 +963,7 @@
      border: Rect<f32>,
      scrollbar_gutter: Point<f32>,
      container_border_box: Size<f32>,
@@ -650,7 +688,7 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
      // Convert grid-col-{start/end} into Option's of indexes into the columns vector
      // The Option is None if the style property is Auto and an unresolvable Span
      let maybe_col_indexes = name_resolver
-@@ -1047,7 +1041,7 @@
+@@ -1047,7 +1046,7 @@
          )
      };
  
@@ -659,7 +697,7 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
          top: maybe_row_indexes.start.map(|index| line_as_start_edge(rows, index)).unwrap_or(border.top),
          bottom: maybe_row_indexes
              .end
-@@ -1055,7 +1049,14 @@
+@@ -1055,7 +1054,14 @@
              .unwrap_or(container_border_box.height - border.bottom - scrollbar_gutter.y),
          left: grid_area_left,
          right: grid_area_right,
@@ -675,7 +713,7 @@ diff --git a/src/compute/grid/mod.rs b/src/compute/grid/mod.rs
  }
  
  /// Information from the computation of grid
-@@ -1067,8 +1068,19 @@
+@@ -1067,8 +1073,19 @@
      pub columns: DetailedGridTracksInfo<S>,
      /// <https://drafts.csswg.org/css-grid-1/#grid-items>
      pub items: Vec<DetailedGridItemsInfo>,

@@ -8,6 +8,20 @@ use genet_livery::{Device, InteractionStates, StyleSet, layout, resolve_styles};
 use genet_static_dom::StaticDocument;
 use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
+fn find(
+    dom: &StaticDocument,
+    node: <StaticDocument as LayoutDom>::NodeId,
+    needle: &str,
+) -> Option<<StaticDocument as LayoutDom>::NodeId> {
+    if dom.kind(node) == NodeKind::Element
+        && dom.attribute(node, &Namespace::from(""), &LocalName::from("id")) == Some(needle)
+    {
+        return Some(node);
+    }
+    dom.dom_children(node)
+        .find_map(|child| find(dom, child, needle))
+}
+
 #[test]
 fn probe_positioned_grid_items() {
     positioned_grid_items_with_body_alignment("", 0.0);
@@ -57,19 +71,6 @@ fn positioned_grid_items_with_body_alignment(body_alignment: &str, extra_y: f32)
     );
     let fragments = layout(&document, &styles, 800.0, 600.0).unwrap();
 
-    fn find(
-        dom: &StaticDocument,
-        node: <StaticDocument as LayoutDom>::NodeId,
-        needle: &str,
-    ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
-        if dom.kind(node) == NodeKind::Element
-            && dom.attribute(node, &Namespace::from(""), &LocalName::from("id")) == Some(needle)
-        {
-            return Some(node);
-        }
-        dom.dom_children(node)
-            .find_map(|child| find(dom, child, needle))
-    }
     let by_id = |needle: &str| find(&document, document.document(), needle).expect(needle);
     // css-grid section 9: a grid-placed absolutely positioned item's
     // containing block is its grid area, and with auto insets its static
@@ -132,19 +133,6 @@ fn static_grid_parent_uses_content_static_rectangle_unless_it_is_the_containing_
     );
     let fragments = layout(&document, &styles, 1200.0, 1800.0).expect("layout");
 
-    fn find(
-        dom: &StaticDocument,
-        node: <StaticDocument as LayoutDom>::NodeId,
-        needle: &str,
-    ) -> Option<<StaticDocument as LayoutDom>::NodeId> {
-        if dom.kind(node) == NodeKind::Element
-            && dom.attribute(node, &Namespace::from(""), &LocalName::from("id")) == Some(needle)
-        {
-            return Some(node);
-        }
-        dom.dom_children(node)
-            .find_map(|child| find(dom, child, needle))
-    }
     let rect = |id| {
         fragments
             .get(find(&document, document.document(), id).expect(id))
@@ -167,4 +155,72 @@ fn static_grid_parent_uses_content_static_rectangle_unless_it_is_the_containing_
         281.0,
         "a grid selected by K5a keeps its padding-edge grid area"
     );
+}
+
+#[test]
+fn auto_sized_inline_grid_resolves_half_fr_area_against_its_used_size() {
+    let document = StaticDocument::parse(
+        r#"<html><body><div id="grid"><div id="item"></div><div id="area"></div></div></body></html>"#,
+    );
+    let css = r#"
+        #grid { display: inline-grid; position: relative;
+                grid-template-columns: minmax(0, .5fr); grid-template-rows: minmax(0, .5fr); }
+        #item { width: 200px; height: 200px; }
+        #area { position: absolute; grid-column: 1 / 2; grid-row: 1 / 2;
+                width: 100%; height: 100%; }
+    "#;
+    let styles = resolve_styles(
+        &document,
+        &StyleSet::cambium(&[css]),
+        &Device::screen(400.0, 400.0),
+        &InteractionStates::default(),
+    );
+    let fragments = layout(&document, &styles, 400.0, 400.0).unwrap();
+    let size = |id| {
+        let node = find(&document, document.document(), id).expect(id);
+        let rect = fragments.get(node).expect(id).physical_rect();
+        (rect.width, rect.height)
+    };
+    assert_eq!(
+        [size("grid"), size("area"), size("item")],
+        [(100.0, 100.0), (50.0, 50.0), (200.0, 200.0)]
+    );
+}
+
+#[test]
+fn fractional_rows_are_resolved_after_the_auto_height_is_known() {
+    // flex-sizing-rows-indefinite-height-002: a 100px item yields two 40px
+    // intrinsic rows. Once the grid is 80px high each row uses 0.4 * 80px.
+    for (tracks, height, second_row) in [
+        ("repeat(2, minmax(0, .4fr))", 80.0, 32.0),
+        ("repeat(2, 32px)", 64.0, 32.0),
+        ("40px 40px", 80.0, 40.0),
+    ] {
+        let document = StaticDocument::parse(
+            r#"<html><body><div id="grid"><div id="item"></div></div></body></html>"#,
+        );
+        let css = format!(
+            "#grid {{ display: grid; width: 100px; grid-template-rows: {tracks}; }}
+             #item {{ grid-row: 2 / span 1; width: 100px; height: 100px; }}"
+        );
+        let styles = resolve_styles(
+            &document,
+            &StyleSet::cambium(&[&css]),
+            &Device::screen(400.0, 400.0),
+            &InteractionStates::default(),
+        );
+        let fragments = layout(&document, &styles, 400.0, 400.0).unwrap();
+        let rect = |id| {
+            fragments
+                .get(find(&document, document.document(), id).unwrap())
+                .unwrap()
+                .physical_rect()
+        };
+        let grid = rect("grid");
+        assert_eq!(
+            (grid.height, rect("item").y - grid.y),
+            (height, second_row),
+            "{tracks}"
+        );
+    }
 }

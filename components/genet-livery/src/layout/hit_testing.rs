@@ -55,10 +55,12 @@ where
     D::NodeId: Copy + Eq + Hash,
 {
     let mut children = dom.flat_children(parent).collect::<Vec<_>>();
-    if styles
-        .get(parent)
-        .is_some_and(|style| matches!(style.display, CssDisplay::Flex | CssDisplay::Grid))
-    {
+    if styles.get(parent).is_some_and(|style| {
+        matches!(
+            style.display,
+            CssDisplay::Flex | CssDisplay::Grid | CssDisplay::InlineGrid
+        )
+    }) {
         children.sort_by_key(|child| styles.get(*child).map_or(0, |style| style.order.value()));
     }
     children

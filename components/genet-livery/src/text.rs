@@ -5534,8 +5534,10 @@ where
     match dom.kind(id) {
         NodeKind::Text => true,
         NodeKind::Element => styles.get(id).is_some_and(|style| {
-            matches!(style.display, Display::Inline | Display::InlineBlock)
-                && !matches!(style.position, Position::Absolute | Position::Fixed)
+            matches!(
+                style.display,
+                Display::Inline | Display::InlineBlock | Display::InlineGrid
+            ) && !matches!(style.position, Position::Absolute | Position::Fixed)
                 && !(style.display == Display::Inline
                     && dom.flat_children(id).any(|child| {
                         !is_inline(dom, styles, child)
@@ -5725,7 +5727,9 @@ where
                 // Marker pseudo-elements preserve an authored string verbatim.
                 append_generated_marker(self.text, self.spans, box_id, self.owners, style, &marker);
             },
-            BoxOrigin::Pseudo { owner, pseudo } if crate::generated_image::is_generated_image(css_box) => {
+            BoxOrigin::Pseudo { owner, pseudo }
+                if crate::generated_image::is_generated_image(css_box) =>
+            {
                 // A lone `content: url()` image is one atom on the line; its
                 // geometry comes from the atomic plane like any replaced root.
                 let Some(style) = self.styles.generated_style(owner, pseudo) else {
@@ -6042,7 +6046,9 @@ where
                     self.push_forced_line_break(id, &style);
                     return;
                 }
-                if is_replaced_element(self.dom, id) && style.display != Display::InlineBlock {
+                if is_replaced_element(self.dom, id)
+                    && !matches!(style.display, Display::InlineBlock | Display::InlineGrid)
+                {
                     if let Some(fragment) = self.fragments.atomic_rect(id).copied() {
                         let font_size = super::paint::used_font_size(&style);
                         let (line_width, line_box_height, margin_left, margin_top) =
@@ -6071,7 +6077,7 @@ where
                     }
                     return;
                 }
-                if style.display == Display::InlineBlock {
+                if matches!(style.display, Display::InlineBlock | Display::InlineGrid) {
                     if let Some(fragment) = self.fragments.atomic_rect(id).copied() {
                         let font_size = super::paint::used_font_size(&style);
                         let (line_width, line_box_height, margin_left, margin_top) =

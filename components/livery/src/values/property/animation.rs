@@ -715,6 +715,7 @@ keyword_value! {
         InlineBlock => "inline-block",
         Flex => "flex",
         Grid => "grid",
+        InlineGrid => "inline-grid",
         Table => "table",
         InlineTable => "inline-table",
         TableRowGroup => "table-row-group",

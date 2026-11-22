@@ -166,7 +166,9 @@ where
                             formatting_parent.is_some_and(|parent| {
                                 matches!(
                                     parent.display,
-                                    ComputedDisplay::Flex | ComputedDisplay::Grid
+                                    ComputedDisplay::Flex
+                                        | ComputedDisplay::Grid
+                                        | ComputedDisplay::InlineGrid
                                 )
                             }),
                         )),
@@ -279,7 +281,9 @@ where
         styles.get(id).is_none_or(|style| {
             !matches!(
                 style.display,
-                ComputedDisplay::InlineBlock | ComputedDisplay::InlineTable
+                ComputedDisplay::InlineBlock
+                    | ComputedDisplay::InlineGrid
+                    | ComputedDisplay::InlineTable
             )
         })
     };
@@ -337,6 +341,9 @@ fn display_role(display: ComputedDisplay, replaced: bool) -> DisplayRole {
             normal(Some(DisplayOutside::Inline), Some(DisplayInside::FlowRoot))
         },
         ComputedDisplay::Flex => normal(Some(DisplayOutside::Block), Some(DisplayInside::Flex)),
+        ComputedDisplay::InlineGrid => {
+            normal(Some(DisplayOutside::Inline), Some(DisplayInside::Grid))
+        },
         ComputedDisplay::Grid => normal(Some(DisplayOutside::Block), Some(DisplayInside::Grid)),
         ComputedDisplay::Table => normal(Some(DisplayOutside::Block), Some(DisplayInside::Table)),
         ComputedDisplay::InlineTable => {

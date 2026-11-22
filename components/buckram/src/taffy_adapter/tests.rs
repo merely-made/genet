@@ -523,6 +523,68 @@ fn grid_static_layout_auto_lines_align_in_the_padding_box_when_selected() {
 }
 
 #[test]
+fn fractional_grid_area_uses_the_resolved_container_size() {
+    let mut tree = AlgorithmTree::<(), u8>::new();
+    let item = tree.new_with_children(
+        AlgorithmKind::Leaf,
+        Style {
+            size: taffy::Size {
+                width: length(200.0),
+                height: length(200.0),
+            },
+            ..Style::default()
+        },
+        &[],
+        1,
+    );
+    let placement = taffy::Line {
+        start: line(1),
+        end: line(2),
+    };
+    let positioned = tree.new_with_children_and_block_style(
+        AlgorithmKind::Leaf,
+        BlockStyle {
+            position: crate::BlockPosition::Absolute,
+            ..BlockStyle::default()
+        },
+        Style {
+            position: Position::Absolute,
+            grid_column: placement.clone(),
+            grid_row: placement,
+            ..Style::default()
+        },
+        &[],
+        2,
+    );
+    let root = tree.new_with_children(
+        AlgorithmKind::Grid,
+        Style {
+            display: Display::Grid,
+            grid_template_columns: vec![taffy::style_helpers::flex(0.5)],
+            grid_template_rows: vec![taffy::style_helpers::flex(0.5)],
+            ..Style::default()
+        },
+        &[item, positioned],
+        0,
+    );
+    tree.enable_flex_grid_static_position_provider(positioned);
+    tree.compute_layout_with_measure(
+        root,
+        AlgorithmSize::new(
+            AlgorithmAvailableSpace::MaxContent,
+            AlgorithmAvailableSpace::MaxContent,
+        ),
+        zero_measure,
+    );
+    let grid = tree.layout(root);
+    let area = tree.grid_positioned_area(positioned).expect("grid area");
+    assert_eq!(
+        (grid.width, grid.height, area.width, area.height),
+        (100.0, 100.0, 50.0, 50.0)
+    );
+}
+
+#[test]
 fn grid_positioned_area_keeps_the_final_explicit_track_rectangle() {
     let mut tree = AlgorithmTree::<(), u8>::new();
     let positioned = tree.new_with_children_and_block_style(

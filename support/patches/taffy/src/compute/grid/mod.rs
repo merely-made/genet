@@ -502,16 +502,21 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     inner_node_size = container_content_box.map(Some);
 
     // Column sizing must be re-run (once) if:
-    //   - The grid container's width was initially indefinite and there are any columns with percentage track sizing functions
+    //   - The grid container's width was initially indefinite and there are any columns with percentage or flexible track sizing functions
     //   - Any grid item crossing an intrinsically sized track's min content contribution width has changed
     // TODO: Only rerun sizing for tracks that actually require it rather than for all tracks if any need it.
     let mut rerun_column_sizing;
     let mut intrinsic_column_contribution_changed = false;
 
+    // CSS Grid 2 §11.7: the intrinsic pass determines the container size.
+    // Flex tracks then resolve against that definite size. Fractions below
+    // one can leave part of it unused, even without a percentage track.
     let has_percentage_column = columns.iter().any(|track| track.uses_percentage());
+    let has_flexible_column = columns.iter().any(GridTrack::is_flexible);
     let has_percentage_row = rows.iter().any(|track| track.uses_percentage());
+    let has_flexible_row = rows.iter().any(GridTrack::is_flexible);
     let parent_width_indefinite = outer_node_size.width.is_none();
-    rerun_column_sizing = parent_width_indefinite && has_percentage_column;
+    rerun_column_sizing = parent_width_indefinite && (has_percentage_column || has_flexible_column);
 
     if !rerun_column_sizing {
         // Note: every item must be visited (no short-circuiting) as the closure updates each item's caches
@@ -550,11 +555,11 @@ pub fn compute_grid_layout<Tree: LayoutGridContainer>(
     }
 
     // Row sizing must be re-run (once) if:
-    //   - The grid container's height was initially indefinite and there are any rows with percentage track sizing functions
+    //   - The grid container's height was initially indefinite and there are any rows with percentage or flexible track sizing functions
     //   - Column sizing was re-run and any grid item crossing an intrinsically sized track's min content contribution height has changed
     // TODO: Only rerun sizing for tracks that actually require it rather than for all tracks if any need it.
     let parent_height_indefinite = outer_node_size.height.is_none();
-    let mut rerun_row_sizing = parent_height_indefinite && has_percentage_row;
+    let mut rerun_row_sizing = parent_height_indefinite && (has_percentage_row || has_flexible_row);
     let mut intrinsic_row_contribution_changed = false;
 
     if rerun_row_sizing {

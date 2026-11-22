@@ -968,7 +968,7 @@ value_type = "display"
 inherited = false
 initial = "inline"
 grammar = "[ <display-outside> || <display-inside> ] | <display-listitem> | <display-internal> | <display-box> | <display-legacy>"
-seed_values = ["inline", "block", "list-item", "inline-block", "none", "contents", "flex", "grid", "table", "inline-table", "table-row-group", "table-header-group", "table-footer-group", "table-row", "table-cell", "table-column-group", "table-column", "table-caption"]
+seed_values = ["inline", "block", "list-item", "inline-block", "none", "contents", "flex", "grid", "inline-grid", "table", "inline-table", "table-row-group", "table-header-group", "table-footer-group", "table-row", "table-cell", "table-column-group", "table-column", "table-caption"]
 animation = "discrete"
 source = "css_display_3"
 

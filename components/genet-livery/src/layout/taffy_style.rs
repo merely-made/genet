@@ -17,7 +17,7 @@ pub(in crate::layout) fn to_taffy_style(computed: &ComputedValues, font_size: f3
     let display = match computed.display {
         CssDisplay::None => Display::None,
         CssDisplay::Flex => Display::Flex,
-        CssDisplay::Grid => Display::Grid,
+        CssDisplay::Grid | CssDisplay::InlineGrid => Display::Grid,
         // Buckram commits the table grid before backend dispatch. Its table
         // parts are structural fragments, while cell contents keep their
         // ordinary local formatting contexts.
@@ -701,17 +701,37 @@ pub(in crate::layout) fn grid_template(
     value: &CssGridTemplate,
     em: f32,
 ) -> Vec<GridTemplateComponent<String>> {
+    use livery::values::{GridTrackComponent, GridTrackSize};
+    use taffy::style::TrackSizingFunction;
+    let breadth = |track: CssGridTrack| -> TrackSizingFunction {
+        match track {
+            CssGridTrack::Auto => auto(),
+            CssGridTrack::MinContent => min_content(),
+            CssGridTrack::MaxContent => max_content(),
+            CssGridTrack::Length(value) => length(value.unit.to_px(value.value, em, 16.0)),
+            CssGridTrack::Percent(value) => percent(value),
+            CssGridTrack::Fr(value) => fr(value),
+        }
+    };
+    let size = |track: &GridTrackSize| match *track {
+        GridTrackSize::Breadth(value) => breadth(value),
+        GridTrackSize::MinMax(min, max) => {
+            taffy::style_helpers::minmax(breadth(min).min, breadth(max).max)
+        },
+    };
     match value {
         CssGridTemplate::None => Vec::new(),
         CssGridTemplate::Tracks(tracks) => tracks
             .iter()
+            .map(|track| GridTemplateComponent::Single(breadth(*track)))
+            .collect(),
+        CssGridTemplate::TrackList(tracks) => tracks
+            .iter()
             .map(|track| match track {
-                CssGridTrack::Auto => auto(),
-                CssGridTrack::MinContent => min_content(),
-                CssGridTrack::MaxContent => max_content(),
-                CssGridTrack::Length(value) => length(value.unit.to_px(value.value, em, 16.0)),
-                CssGridTrack::Percent(value) => percent(*value),
-                CssGridTrack::Fr(value) => fr(*value),
+                GridTrackComponent::Single(track) => GridTemplateComponent::Single(size(track)),
+                GridTrackComponent::Repeat(count, tracks) => {
+                    taffy::style_helpers::repeat(*count, tracks.iter().map(size).collect())
+                },
             })
             .collect(),
     }
@@ -967,7 +987,7 @@ pub(in crate::layout) fn resolved_child_containing_size(
 ) -> (Option<f32>, Option<f32>) {
     let fills_available_width = !matches!(
         computed.display,
-        CssDisplay::None | CssDisplay::Inline | CssDisplay::InlineBlock
+        CssDisplay::None | CssDisplay::Inline | CssDisplay::InlineBlock | CssDisplay::InlineGrid
     );
     (
         resolved_explicit_size(computed.width, em, containing_size.0).or(

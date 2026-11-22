@@ -2454,7 +2454,7 @@ where
     D::NodeId: Copy + Eq + Hash,
 {
     styles.get(id).is_some_and(|style| {
-        style.display == CssDisplay::InlineBlock
+        matches!(style.display, CssDisplay::InlineBlock | CssDisplay::InlineGrid)
             // K4e4: an inline-table is an atomic inline like an inline-block;
             // its wrapper occupies line space as a unit.
             || style.display == CssDisplay::InlineTable

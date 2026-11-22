@@ -1,13 +1,13 @@
 # genet's taffy fork — patch log
 
-This is `genet-taffy 0.16.0`, based on upstream `taffy 0.15.1`,
+This is `genet-taffy 0.16.1`, based on upstream `taffy 0.15.1`,
 re-vendored on 2026-10-28 from the current Genet fork of `taffy 0.13.0`.
 The current fork changes were captured and reproduced against pristine 0.13.0
 before porting; the previously committed complete delta had missed later
 changes in five source files.
 
-Buckram and genet-livery use the published package under the dependency key
-`taffy`. Genet develops it through the root path patch. The separate, unused
+Buckram and genet-livery consume the crates.io package under the dependency
+key `taffy`, with a lower bound of `0.16.1`. The separate, unused
 workspace `taffy` declaration also follows upstream 0.15.1.
 
 Upstream now supplies intrinsic sizing keywords, including the representation
@@ -29,6 +29,17 @@ placement data kept in source order afterward.
 The feature patch files and upstream drafts below are historical explanations,
 not patches verified against 0.15.1. The complete delta is the reproduction
 record; its byte-exact apply must be checked whenever source changes.
+
+### Fractional tracks in an intrinsically sized grid
+
+After the intrinsic pass determines the content-box size, flexible tracks
+resolve again against that size on each previously indefinite axis (CSS Grid
+2 §11.7). The container keeps its intrinsic size. A 200px item in an
+auto-sized grid with a single `minmax(0, .5fr)` track on each axis gives a
+100px square grid with a 50px square grid area. Buckram checks the reported
+track area, and Genet-Livery checks the authored CSS and child fragments.
+The complete source delta including this change is 65,510 bytes,
+SHA-256 `b61a5e248506e512b7cbd35394660579474fe7c4c6a06ec453d9ff70870f1644`.
 
 ## How to keep it in sync
 

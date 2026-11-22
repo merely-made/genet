@@ -260,7 +260,7 @@ where
         )
     };
     match container.display {
-        CssDisplay::Grid => stretch(computed.align_self),
+        CssDisplay::Grid | CssDisplay::InlineGrid => stretch(computed.align_self),
         CssDisplay::Flex => {
             let cross_axis_is_block = matches!(
                 container.flex_direction,

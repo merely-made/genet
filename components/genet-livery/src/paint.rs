@@ -1337,7 +1337,10 @@ pub(crate) fn paints_as_inline_box<Id>(
 where
     Id: Copy + Eq + Hash,
 {
-    if !matches!(style.display, Display::Inline | Display::InlineBlock) {
+    if !matches!(
+        style.display,
+        Display::Inline | Display::InlineBlock | Display::InlineGrid
+    ) {
         return false;
     }
     let boxes = fragments.boxes();
@@ -4144,7 +4147,7 @@ fn emit_inline_element_decoration<Id>(
             emit_background(list, style, fragment);
             emit_inline_border(list, style, fragment, index == 0, index == last);
         }
-    } else if style.display == Display::InlineBlock
+    } else if matches!(style.display, Display::InlineBlock | Display::InlineGrid)
         && let Some(fragment) = fragments
             .get(id)
             .filter(|fragment| paintable_fragment(fragment))
@@ -4248,8 +4251,10 @@ where
     match dom.kind(id) {
         NodeKind::Text => true,
         NodeKind::Element => styles.get(id).is_some_and(|style| {
-            matches!(style.display, Display::Inline | Display::InlineBlock)
-                && !matches!(style.position, Position::Absolute | Position::Fixed)
+            matches!(
+                style.display,
+                Display::Inline | Display::InlineBlock | Display::InlineGrid
+            ) && !matches!(style.position, Position::Absolute | Position::Fixed)
                 && !(style.display == Display::Inline
                     && dom.flat_children(id).any(|child| {
                         !is_inline_node(dom, styles, child)

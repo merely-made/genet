@@ -2034,9 +2034,8 @@ const FETCH_BOOTSTRAP: &str = concat!(
   var XHR_UPPER = { DELETE: 1, GET: 1, HEAD: 1, OPTIONS: 1, POST: 1, PUT: 1 };
   var XHR_BAD_METHOD = { CONNECT: 1, TRACE: 1, TRACK: 1 };
   var XHR_TYPES = { '': 1, 'arraybuffer': 1, 'blob': 1, 'document': 1, 'json': 1, 'text': 1 };
-  // Labels this tier decodes as one byte per code point. Everything else falls
-  // back to UTF-8; there is no encoding registry in the scripted tier.
-  var XHR_LATIN1 = { 'windows-1252': 1, 'iso-8859-1': 1, 'latin1': 1, 'us-ascii': 1, 'ascii': 1 };
+  var decodeXhrText = globalThis.__xhr_decode_text;
+  delete globalThis.__xhr_decode_text;
 
   function xhrErr(name, msg) { return new DOMException(msg || name, name); }
   function xhrDocHref() {
@@ -2060,7 +2059,6 @@ const FETCH_BOOTSTRAP: &str = concat!(
     var cm = /;[\t ]*charset[\t ]*=[\t ]*("?)([^";]*)\1/i.exec(s);
     return { essence: essence.toLowerCase(), charset: cm ? cm[2].toLowerCase() : '' };
   }
-  function latin1Decode(b) { return FormOps.binary(b); }
   var hasAnyListener = globalThis.__agentTimers.eventHasListeners;
   function xhrFire(target, type) { target.dispatchEvent(new Event(type)); }
   function xhrProgress(target, type, loaded, total, computable) {
@@ -2298,8 +2296,7 @@ const FETCH_BOOTSTRAP: &str = concat!(
   }
   function xhrText(x) {
     if (!x._bytes || x._bytes.length === 0) return '';
-    var cs = xhrMime(x).charset;
-    return XHR_LATIN1[cs] ? latin1Decode(x._bytes) : utf8Decode(x._bytes);
+    return decodeXhrText(xhrMime(x).charset, bytesToBinaryString(x._bytes));
   }
 
   function xhrGetter(name, fn) {

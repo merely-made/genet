@@ -5,7 +5,7 @@
 //! `XMLHttpRequest` over the fetch host seam. Proves the state machine (the
 //! readyState sequence and its events), the `open` / `setRequestHeader` rules,
 //! the response accessors, abort and timeout, and the synchronous send — all on
-//! one host seam, with no second network path. Backend: Boa.
+//! one host seam, with no second network path. Charset controls run on both engines.
 
 use script_engine_api::ScriptEngine;
 use script_engine_boa::BoaEngine;
@@ -50,7 +50,7 @@ impl FetchHandler for NeverAnswers {
     }
 }
 
-fn read(rt: &mut Runtime<BoaEngine>, expr: &str) -> String {
+fn read<E: ScriptEngine>(rt: &mut Runtime<E>, expr: &str) -> String {
     let v = rt.eval(expr).expect("eval");
     rt.engine_mut()
         .value_to_string(&v)
@@ -347,6 +347,118 @@ impl FetchHandler for Latin1 {
         }
     }
 }
+
+struct EncodedResponse {
+    content_type: &'static str,
+    bytes: &'static [u8],
+}
+
+impl FetchHandler for EncodedResponse {
+    fn fetch(&self, request: FetchRequest) -> FetchOutcome {
+        FetchOutcome {
+            network_error: false,
+            status: 200,
+            status_text: "OK".to_owned(),
+            response_type: "basic".to_owned(),
+            url: request.url,
+            redirected: false,
+            headers: vec![("content-type".to_owned(), self.content_type.to_owned())],
+            body: self.bytes.to_vec(),
+        }
+    }
+}
+
+fn assert_response_charset<E: ScriptEngine>(
+    content_type: &'static str,
+    bytes: &'static [u8],
+    override_mime: Option<&str>,
+    expected: &str,
+) {
+    let mut rt = Runtime::<E>::new().unwrap();
+    rt.set_fetch_handler(Box::new(EncodedResponse {
+        content_type,
+        bytes,
+    }));
+    rt.eval(
+        "var x = new XMLHttpRequest(); x.open('GET', 'http://x/encoded'); x.responseType = 'text';",
+    )
+    .unwrap();
+    if let Some(mime) = override_mime {
+        rt.eval(&format!("x.overrideMimeType({mime:?});")).unwrap();
+    }
+    rt.eval("x.send();").unwrap();
+    rt.run_microtasks();
+    assert_eq!(
+        read(&mut rt, "[x.status, x.responseText, x.response].join('|')"),
+        format!("200|{expected}|{expected}"),
+        "Content-Type {content_type}, override {override_mime:?}",
+    );
+}
+
+fn shift_jis_response_charset<E: ScriptEngine>() {
+    let bytes = b"\x83e\x83X\x83g";
+    assert_response_charset::<E>("text/plain;charset=Shift_JIS", bytes, None, "テスト");
+    assert_response_charset::<E>(
+        "text/plain;charset=UTF-8",
+        bytes,
+        Some("text/plain;charset=Shift-JIS"),
+        "テスト",
+    );
+}
+
+fn windows_1252_response_charset<E: ScriptEngine>() {
+    assert_response_charset::<E>(
+        "text/plain;charset=windows-1252",
+        b"\x80\x93\x94",
+        None,
+        "€“”",
+    );
+    assert_response_charset::<E>(
+        "text/plain;charset=Shift_JIS",
+        b"\x80",
+        Some("text/plain;charset=windows-1252"),
+        "€",
+    );
+    assert_response_charset::<E>(
+        "text/plain;charset=iso-8859-1",
+        b"\x80",
+        Some("text/plain"),
+        "€",
+    );
+}
+
+fn response_charset_fallback_and_bom<E: ScriptEngine>() {
+    assert_response_charset::<E>("text/plain;charset=unrecognized", b"\xC3\xA9", None, "é");
+    assert_response_charset::<E>(
+        "text/plain;charset=windows-1252",
+        b"\xEF\xBB\xBF\xC3\xA9",
+        None,
+        "é",
+    );
+    assert_response_charset::<E>("text/plain;charset=Shift_JIS", b"\xFF\xFEA\0", None, "A");
+}
+
+macro_rules! charset_cases {
+    ($module:ident, $engine:ty) => {
+        mod $module {
+            #[test]
+            fn xhr_response_charset_shift_jis() {
+                super::shift_jis_response_charset::<$engine>();
+            }
+            #[test]
+            fn xhr_response_charset_windows_1252() {
+                super::windows_1252_response_charset::<$engine>();
+            }
+            #[test]
+            fn xhr_response_charset_fallback_and_bom() {
+                super::response_charset_fallback_and_bom::<$engine>();
+            }
+        }
+    };
+}
+charset_cases!(boa, script_engine_boa::BoaEngine);
+#[cfg(not(target_arch = "wasm32"))]
+charset_cases!(nova, script_engine_nova::NovaEngine);
 
 #[test]
 fn abort_runs_the_error_steps_and_resets_to_unsent() {

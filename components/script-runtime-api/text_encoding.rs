@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! Native backing for `TextDecoder`'s per-instance streaming state.
+//! Native text decoding for `TextDecoder` and XHR response bodies.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -159,6 +159,24 @@ fn arg_string<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<S
     cx.value_to_string(&arg)
 }
 
+fn arg_bytes<E: ScriptEngine>(cx: &mut E::CallCx<'_>, index: usize) -> Result<Vec<u8>, E::Error> {
+    let binary = arg_string::<E>(cx, index)?;
+    Ok(binary.chars().map(|ch| ch as u32 as u8).collect())
+}
+
+struct XhrDecodeText;
+impl<E: ScriptEngine> NativeFn<E> for XhrDecodeText {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let label = arg_string::<E>(cx, 0)?;
+        let bytes = arg_bytes::<E>(cx, 1)?;
+        let fallback = Encoding::for_label(label.as_bytes()).unwrap_or(encoding_rs::UTF_8);
+        // XHR uses the Encoding Standard's one-shot decode, where a BOM takes
+        // priority over the label. TextDecoder keeps its explicit encoding.
+        let (text, _, _) = fallback.decode(&bytes);
+        cx.make_string(&text)
+    }
+}
+
 struct TextDecoderCreate;
 impl<E: ScriptEngine> NativeFn<E> for TextDecoderCreate {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
@@ -191,9 +209,8 @@ struct TextDecoderDecode;
 impl<E: ScriptEngine> NativeFn<E> for TextDecoderDecode {
     fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
         let id = arg_string::<E>(cx, 0)?.parse::<u64>().ok();
-        let binary = arg_string::<E>(cx, 1)?;
+        let bytes = arg_bytes::<E>(cx, 1)?;
         let stream = arg_string::<E>(cx, 2)? == "1";
-        let bytes: Vec<u8> = binary.chars().map(|ch| ch as u32 as u8).collect();
         let result = cx.host_data().and_then(|data| {
             let host = data.downcast_ref::<RefCell<HostState>>()?;
             let mut host = host.borrow_mut();
@@ -229,6 +246,7 @@ impl<E: ScriptEngine> NativeFn<E> for TextDecoderRelease {
 pub(crate) fn install_text_encoding_surface<E: ScriptEngine>(
     engine: &mut crate::Surface<'_, '_, E>,
 ) -> Result<(), crate::SurfaceError<E::Error>> {
+    engine.set_function::<XhrDecodeText>("__xhr_decode_text", 2)?;
     engine.set_function::<TextDecoderCreate>("__text_decoder_create", 3)?;
     engine.set_function::<TextDecoderDecode>("__text_decoder_decode", 3)?;
     engine.set_function::<TextDecoderRelease>("__text_decoder_release", 1)?;

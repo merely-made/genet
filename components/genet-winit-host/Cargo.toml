@@ -22,7 +22,7 @@ netrender = { workspace = true }
 # `genet_winit_host::RenderCore` are unaffected by the split.
 genet-presenter = { workspace = true }
 # Windowing + wgpu surface (workspace pins: winit 0.30 / wgpu 29).
-winit = "=0.31.0-beta.4"
+winit = ">=0.31.0-beta.4"
 wgpu = { version = "30.0.2", default-features = false, features = ["std", "wgsl"] }
 # Host-neutral diagnostics facade (P3 raster spans); the app owns the subscriber.
 tracing = "0.1"

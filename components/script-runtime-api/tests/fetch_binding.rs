@@ -210,30 +210,46 @@ fn case_streaming_response_body_delivers_incrementally<E: ScriptEngine>() {
     );
 }
 
-fn case_clone_of_live_streaming_body_rejects<E: ScriptEngine>() {
+fn case_abort_of_live_cloned_body_rejects_both_reads<E: ScriptEngine>() {
     let seen = std::rc::Rc::new(std::cell::RefCell::new(Vec::<(u64, String)>::new()));
     let cancelled = std::rc::Rc::new(std::cell::RefCell::new(Vec::<u64>::new()));
     let mut rt = Runtime::<E>::new().unwrap();
     rt.set_fetch_handler(Box::new(DeferredRecorder {
         seen: seen.clone(),
-        cancelled,
+        cancelled: cancelled.clone(),
     }));
 
-    rt.eval(r#"var C={}; fetch("http://x/live").then(function(r){ C.resp = r; });"#)
-        .unwrap();
+    rt.eval(
+        r#"
+        var C = {}, controller = new AbortController(), reason = {};
+        fetch("http://x/live", {signal: controller.signal}).then(original => {
+            const reader = original.body.getReader();
+            try { original.clone(); } catch (error) { C.locked = error instanceof TypeError; }
+            reader.releaseLock();
+
+            const copy = original.clone();
+            original.text().then(
+                () => C.original = false, error => C.original = (error === reason));
+            copy.text().then(
+                () => C.copy = false, error => C.copy = (error === reason));
+        });
+        "#,
+    )
+    .unwrap();
     rt.run_microtasks();
     let id = seen.borrow()[0].0;
     rt.start_stream(id, ok_meta("http://x/live")).unwrap();
-    // C.resp is a live (still-arriving) streaming Response. The buffered tee cannot
-    // clone it losslessly, so clone() must throw rather than silently truncate.
+    assert_eq!(read(&mut rt, "String(C.locked)"), "true");
+    assert_eq!(rt.pending_fetches(), 1);
+
+    rt.eval("controller.abort(reason)").unwrap();
+    rt.run_microtasks();
     assert_eq!(
-        read(
-            &mut rt,
-            r#"(function(){try{C.resp.clone();return "no-throw";}catch(e){return e instanceof TypeError?"TypeError":"other";}})()"#
-        ),
-        "TypeError"
+        read(&mut rt, "String(C.original) + ':' + String(C.copy)"),
+        "true:true"
     );
-    rt.close_stream(id).unwrap();
+    assert_eq!(cancelled.borrow().as_slice(), &[id]);
+    assert_eq!(rt.pending_fetches(), 0);
 }
 
 fn case_fetch_resolves_to_response_through_the_handler<E: ScriptEngine>() {
@@ -822,7 +838,7 @@ macro_rules! both_engines {
 both_engines! {
     case_deferred_fetch_settles_later => (deferred_fetch_settles_later, deferred_fetch_settles_later_vano),
     case_streaming_response_body_delivers_incrementally => (streaming_response_body_delivers_incrementally, streaming_response_body_delivers_incrementally_vano),
-    case_clone_of_live_streaming_body_rejects => (clone_of_live_streaming_body_rejects, clone_of_live_streaming_body_rejects_vano),
+    case_abort_of_live_cloned_body_rejects_both_reads => (abort_of_live_cloned_body_rejects_both_reads, abort_of_live_cloned_body_rejects_both_reads_vano),
     case_fetch_resolves_to_response_through_the_handler => (fetch_resolves_to_response_through_the_handler, fetch_resolves_to_response_through_the_handler_vano),
     case_post_body_reaches_the_handler => (post_body_reaches_the_handler, post_body_reaches_the_handler_vano),
     case_no_handler_is_a_network_error => (no_handler_is_a_network_error, no_handler_is_a_network_error_vano),

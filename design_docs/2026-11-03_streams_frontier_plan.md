@@ -58,7 +58,7 @@ are in `Code/testing/genet/priorities-20261118/wpt/`.
 
 ## Phase S4: native incremental network bodies
 
-Existing reader-based collection is not incremental network delivery. Preserve native hook and live-clone rejection until a separately scoped transport/host decision. Done when the chosen producer-to-stream path proves chunk ordering, backpressure, abort, errors, lifecycle, body disturbance and clone behavior with an actual network host and bounded memory, as well as matched Fetch tests. A new transport or additional native body change retains its original explicit checkpoint. Across all phases, new dependencies, version changes, engine revisions and copying the Streams reference implementation retain their respective original checkpoints.
+Existing reader-based collection is not incremental network delivery. The native hooks remain the producer boundary. Done when the chosen producer-to-stream path proves chunk ordering, backpressure, abort, errors, lifecycle, body disturbance and clone behavior with an actual network host and bounded memory, as well as matched Fetch tests. A new transport or additional native body change retains its original explicit checkpoint. Across all phases, new dependencies, version changes, engine revisions and copying the Streams reference implementation retain their respective original checkpoints.
 
 Ortet now opts its native HTTP(S) document Fetch route into the existing
 headers-first runtime hooks. Each reader pull permits one delivery of at most
@@ -77,8 +77,24 @@ closed the server connection, and completed a bodyless follow-up request
 with a one-request admission limit. The frozen binaries, locks, and logs
 are in `Code/output/genet-incremental-fetch/`.
 
-S4 remains active for live response cloning, broader error and lifecycle
-coverage, and the matched Fetch WPT comparison.
+Live `Response.clone()` now uses the shared byte-stream tee. The native
+Fetch entry keeps its upstream stream, and the original and cloned responses
+each expose a tee branch. One branch can read ahead while the other queues
+unread bytes. Ortet's existing decoded-body cap bounds the upstream response.
+
+On 2026-11-22, all four loopback controls hit the live-clone guard at
+`67c27d39375`. On the candidate based on `230a314ad97`, Bole and Vano each
+read the complete body from both branches after one branch read ahead.
+Canceling either branch left the other readable before EOF and through
+the final byte. The cancel promise settled after the source ended.
+Runtime controls also verified that cloning a locked body throws and a
+signal abort rejects both branches with the original reason and cancels
+the source once. The 72 Ortet library tests and 48 Fetch binding tests
+passed. Logs, locks, and frozen binaries are in
+`Code/output/genet-live-response-clone/`.
+
+S4 remains active for broader error and lifecycle coverage and the matched
+Fetch WPT comparison.
 
 ## Open questions
 

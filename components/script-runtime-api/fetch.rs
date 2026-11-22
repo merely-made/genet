@@ -753,7 +753,7 @@ const FETCH_BOOTSTRAP: &str = concat!(
     return stream;
   }
   function setBody(self, kind, bytes, stream) {
-    var b = Core.record(); b.kind = kind; b.bytes = bytes; b.nativeLive = false;
+    var b = Core.record(); b.kind = kind; b.bytes = bytes;
     b.stream = stream !== null ? stream : bytes !== null ? bufferedBodyStream(bytes) : null;
     Core.set(bodySlots, self, b); return b;
   }
@@ -768,9 +768,8 @@ const FETCH_BOOTSTRAP: &str = concat!(
   function cloneBodyInto(src, dst) {
     var original = bodyRecord(src);
     if (bodyUnusable(original)) throw new Core.TypeError('Body is disturbed or locked');
-    if (original.nativeLive) throw new Core.TypeError('Cannot clone an in-flight native response');
     var copy = Core.record(); copy.kind = original.kind; copy.bytes = original.bytes;
-    copy.nativeLive = false; copy.stream = null;
+    copy.stream = null;
     if (original.stream !== null) {
       var branches = ReadableOps.tee(original.stream, true, function (chunk) { return Core.clone(chunk); });
       original.stream = branches[0]; copy.stream = branches[1];
@@ -1814,7 +1813,6 @@ const FETCH_BOOTSTRAP: &str = concat!(
   function removeEntry(id, entry) {
     delete __pending[id];
     removeAbortAlgorithm(entry.signal, entry.abortToken);
-    if (entry.response !== null) bodyRecord(entry.response).nativeLive = false;
   }
   function settleEntry(e, o) {
     if (o.networkError) e.reject(new TypeError('Failed to fetch'));
@@ -1871,7 +1869,7 @@ const FETCH_BOOTSTRAP: &str = concat!(
     }
     var id = fetchIds.nextFetchId++, result = Core.deferred(), entry = Core.record();
     entry.resolve = result.resolve; entry.reject = result.reject;
-    entry.signal = signal; entry.stream = null; entry.response = null;
+    entry.signal = signal; entry.stream = null;
     entry.pull = undefined; entry.uploadReader = undefined;
     entry.settled = false; entry.started = false; entry.awaiting = false; entry.method = req.method;
     __pending[id] = entry;
@@ -1945,9 +1943,11 @@ const FETCH_BOOTSTRAP: &str = concat!(
         return Core.resolve(undefined);
       };
       e.stream = ReadableOps.createByte(algorithms, byteStrategy());
-      var body = setBody(r, 'response', null, e.stream); body.nativeLive = true;
+      // Keep the producer bound to its source stream. Cloning only replaces
+      // the exposed body's stream with a branch of the tee.
+      setBody(r, 'response', null, e.stream);
     }
-    e.response = r; e.resolve(r);
+    e.resolve(r);
   };
   globalThis.__fetchPushChunk = function(id, arr) {
     var e = __pending[id]; if (!e || e.stream === null) return;

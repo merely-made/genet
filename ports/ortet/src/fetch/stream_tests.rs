@@ -377,3 +377,116 @@ fn native_fetch_abort_pending_read_bole() {
 fn native_fetch_abort_pending_read_vano() {
     abort_pending_read::<script_engine_nova::NovaEngine>();
 }
+
+fn check_live_clone<E: script_engine_api::ScriptEngine>(read_branches: &str, completion: &str) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base_url = format!("http://{}/", listener.local_addr().unwrap());
+    let (finish, allow_eof) = mpsc::channel();
+    let server = thread::spawn(move || {
+        let mut socket = accept_request(&listener);
+        socket
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nA")
+            .unwrap();
+        if allow_eof.recv_timeout(Duration::from_secs(10)).is_ok() {
+            socket.write_all(b"BC").unwrap();
+        }
+    });
+    let mut document = LiveryScriptedDocument::<E>::from_body(
+        "",
+        OrtetFetcher::with_network().unwrap(),
+        &base_url,
+    )
+    .unwrap();
+    document
+        .evaluate(
+            r#"
+            async function readFirst(reader) {
+                const {value, done} = await reader.read();
+                if (done || value.length !== 1 || value[0] !== 65) throw new Error('wrong first chunk');
+                console.log('first:65');
+                return 'A';
+            }
+            async function readRest(reader, text) {
+                while (true) {
+                    const {value, done} = await reader.read();
+                    if (done) return text;
+                    text += new TextDecoder().decode(value);
+                }
+            }
+            async function testLiveClone(readBranches) {
+                const original = await fetch('/clone');
+                const copy = original.clone();
+                if (!copy.ok || copy.status !== original.status || copy.url !== original.url)
+                    throw new Error('clone metadata changed');
+                await readBranches(original, copy);
+            }
+            "#,
+        )
+        .unwrap();
+    document
+        .evaluate(&format!(
+            "testLiveClone({read_branches}).catch(error => console.log('unexpected:' + error))"
+        ))
+        .unwrap();
+    wait_for(&mut document, "first:65");
+    finish.send(()).unwrap();
+    wait_for(&mut document, completion);
+    assert!(!document.has_external_work());
+    server.join().unwrap();
+}
+
+fn live_clone_delivers_both_bodies<E: script_engine_api::ScriptEngine>() {
+    check_live_clone::<E>(
+        r#"async (original, copy) => {
+            const reader = original.body.getReader();
+            const first = await readFirst(reader);
+            if (copy.bodyUsed) throw new Error('reading original disturbed its copy');
+            const full = await readRest(reader, first);
+            const delayedCopy = await copy.text();
+            console.log('full:' + full + ':' + delayedCopy);
+        }"#,
+        "full:ABC:ABC",
+    );
+}
+
+fn live_clone_cancel_leaves_survivor<E: script_engine_api::ScriptEngine>() {
+    for (discard, survivor) in [("original", "copy"), ("copy", "original")] {
+        check_live_clone::<E>(
+            &format!(
+                r#"async (original, copy) => {{
+                    let canceled = false;
+                    const cancellation = {discard}.body.cancel('discarded').then(() => {{ canceled = true; }});
+                    const reader = {survivor}.body.getReader();
+                    const first = await readFirst(reader);
+                    if (canceled) throw new Error('cancel settled before the source ended');
+                    const full = await readRest(reader, first);
+                    await cancellation;
+                    console.log('survived:' + full);
+                }}"#
+            ),
+            "survived:ABC",
+        );
+    }
+}
+
+#[test]
+fn native_fetch_live_clone_delivers_both_bodies_bole() {
+    live_clone_delivers_both_bodies::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+#[test]
+fn native_fetch_live_clone_delivers_both_bodies_vano() {
+    live_clone_delivers_both_bodies::<script_engine_nova::NovaEngine>();
+}
+
+#[test]
+fn native_fetch_live_clone_cancel_leaves_survivor_bole() {
+    live_clone_cancel_leaves_survivor::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(all(feature = "scripted-nova", target_pointer_width = "64"))]
+#[test]
+fn native_fetch_live_clone_cancel_leaves_survivor_vano() {
+    live_clone_cancel_leaves_survivor::<script_engine_nova::NovaEngine>();
+}

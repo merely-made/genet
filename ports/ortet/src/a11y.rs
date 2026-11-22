@@ -17,13 +17,14 @@ use std::collections::HashMap;
 
 use accesskit::{
     Action, ActionData, HasPopup, Live, Node as AccessNode, NodeId as AccessNodeId, Orientation,
-    Role, Toggled, TreeId, TreeInfo, TreeUpdate,
+    Role, SortDirection, Toggled, TreeId, TreeInfo, TreeUpdate,
 };
 use document_session_api::session_engine::DocumentSession;
 use document_session_api::{
-    DocumentA11yAction, DocumentA11yActionData, DocumentA11yActionRequest, DocumentA11yHasPopup,
-    DocumentA11yLive, DocumentA11yNode, DocumentA11yNodeId, DocumentA11yOrientation,
-    DocumentA11yProjection, DocumentA11yRole, DocumentA11yState, DocumentA11yToggled,
+    DocumentA11yAction, DocumentA11yActionData, DocumentA11yActionRequest, DocumentA11yCount,
+    DocumentA11yHasPopup, DocumentA11yLive, DocumentA11yNode, DocumentA11yNodeId,
+    DocumentA11yOrientation, DocumentA11yProjection, DocumentA11yRole, DocumentA11ySort,
+    DocumentA11yState, DocumentA11yTable, DocumentA11yToggled,
 };
 use genet_winit_host::A11yActionRequest;
 use netrender::Scene;
@@ -240,7 +241,7 @@ fn lower_node(
     if let DocumentA11yRole::Heading { level } = node.role
         && level > 0
     {
-        access.set_level(level as usize);
+        access.set_level(usize::from(level) - 1); // AccessKit is zero-based.
     }
     if let Some(name) = &node.name {
         access.set_label(name.clone());
@@ -316,6 +317,7 @@ fn lower_node(
     if let Some(value) = node.numeric_maximum {
         access.set_max_numeric_value(value);
     }
+    lower_table(&mut access, &node.table);
     if let Some(bounds) = node.bounds {
         access.set_bounds(accesskit::Rect::new(
             bounds.x as f64,
@@ -341,6 +343,39 @@ fn lower_node(
         });
     }
     access
+}
+
+/// Table properties: an unknown count and `aria-sort=none` set nothing, and
+/// ARIA's one-based indexes become AccessKit's zero-based ones.
+fn lower_table(access: &mut AccessNode, table: &DocumentA11yTable) {
+    let known = |count: Option<DocumentA11yCount>| match count? {
+        DocumentA11yCount::Known(count) => Some(count as usize),
+        DocumentA11yCount::Unknown => None,
+    };
+    if let Some(count) = known(table.row_count) {
+        access.set_row_count(count);
+    }
+    if let Some(count) = known(table.column_count) {
+        access.set_column_count(count);
+    }
+    if let Some(index) = table.row_index {
+        access.set_row_index((index as usize).saturating_sub(1));
+    }
+    if let Some(index) = table.column_index {
+        access.set_column_index((index as usize).saturating_sub(1));
+    }
+    if let Some(span) = table.row_span {
+        access.set_row_span(span as usize);
+    }
+    if let Some(span) = table.column_span {
+        access.set_column_span(span as usize);
+    }
+    match table.sort {
+        Some(DocumentA11ySort::Ascending) => access.set_sort_direction(SortDirection::Ascending),
+        Some(DocumentA11ySort::Descending) => access.set_sort_direction(SortDirection::Descending),
+        Some(DocumentA11ySort::Other) => access.set_sort_direction(SortDirection::Other),
+        Some(DocumentA11ySort::None) | None => {},
+    }
 }
 
 fn role(role: DocumentA11yRole, state: DocumentA11yState) -> Role {
@@ -369,6 +404,11 @@ fn role(role: DocumentA11yRole, state: DocumentA11yState) -> Role {
         DocumentA11yRole::Table => Role::Table,
         DocumentA11yRole::Row => Role::Row,
         DocumentA11yRole::Cell => Role::Cell,
+        DocumentA11yRole::Grid => Role::Grid,
+        DocumentA11yRole::TreeGrid => Role::TreeGrid,
+        DocumentA11yRole::ColumnHeader => Role::ColumnHeader,
+        DocumentA11yRole::RowHeader => Role::RowHeader,
+        DocumentA11yRole::GridCell => Role::GridCell,
         DocumentA11yRole::Image => Role::Image,
         DocumentA11yRole::Form => Role::Form,
         DocumentA11yRole::Dialog => Role::Dialog,
@@ -460,6 +500,22 @@ mod tests {
     }
 
     #[test]
+    fn heading_levels_lower_zero_based() {
+        let session = session("<h2>Two</h2><div role=heading aria-level=4>Four</div>");
+        let mut custody = Accessibility::default();
+        let tree = custody
+            .publish(session.accessibility_projection())
+            .expect("publish tree");
+        let level = |label| {
+            tree.nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(label))
+                .and_then(|(_, node)| node.level())
+        };
+        assert_eq!((level("Two"), level("Four")), (Some(1), Some(3)));
+    }
+
+    #[test]
     fn lowering_preserves_checkbox_and_range_state_without_inventing_absence() {
         use document_session_api::{A11yCapability, DocumentA11ySupport};
 
@@ -483,6 +539,7 @@ mod tests {
                     numeric_value: None,
                     numeric_minimum: None,
                     numeric_maximum: None,
+                    table: Default::default(),
                     bounds: None,
                     state: DocumentA11yState::default(),
                     actions: Vec::new(),
@@ -498,6 +555,7 @@ mod tests {
                     numeric_value: None,
                     numeric_minimum: None,
                     numeric_maximum: None,
+                    table: Default::default(),
                     bounds: None,
                     state: DocumentA11yState {
                         checked: Some(true),
@@ -518,6 +576,7 @@ mod tests {
                     numeric_value: Some(4.0),
                     numeric_minimum: Some(0.0),
                     numeric_maximum: Some(10.0),
+                    table: Default::default(),
                     bounds: None,
                     state: DocumentA11yState {
                         orientation: Some(DocumentA11yOrientation::Horizontal),
@@ -559,6 +618,39 @@ mod tests {
         assert_eq!(slider.max_numeric_value(), Some(10.0));
         assert_eq!(slider.orientation(), Some(Orientation::Horizontal));
         assert_eq!(slider.has_popup(), Some(HasPopup::Dialog));
+    }
+
+    #[test]
+    fn grid_roles_and_positions_lower() {
+        let session = session(
+            "<div role=grid aria-label=G aria-rowcount=-1 aria-colcount=3><div role=row \
+             aria-rowindex=4><div role=columnheader aria-label=C aria-colindex=2 \
+             aria-sort=ascending>C</div><div role=gridcell aria-label=X aria-colspan=2>X</div>\
+             </div></div>",
+        );
+        let mut custody = Accessibility::default();
+        let tree = custody
+            .publish(session.accessibility_projection())
+            .expect("publish tree");
+        let labelled = |label| {
+            tree.nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(label))
+                .map(|(_, node)| node.clone())
+                .expect("node")
+        };
+        let grid = labelled("G");
+        assert_eq!(grid.role(), Role::Grid);
+        assert_eq!((grid.row_count(), grid.column_count()), (None, Some(3)));
+        let header = labelled("C");
+        assert_eq!(header.role(), Role::ColumnHeader);
+        assert_eq!(header.column_index(), Some(1));
+        assert_eq!(header.sort_direction(), Some(SortDirection::Ascending));
+        let cell = labelled("X");
+        assert_eq!(cell.role(), Role::GridCell);
+        assert_eq!(cell.column_span(), Some(2));
+        let row = tree.nodes.iter().find(|(_, n)| n.role() == Role::Row);
+        assert_eq!(row.and_then(|(_, n)| n.row_index()), Some(3));
     }
 
     #[test]

@@ -22,6 +22,9 @@ use layout_dom_api::{LayoutDom, LocalName, Namespace, NodeKind};
 
 use crate::render::ScrollOffsets;
 
+#[cfg(all(test, feature = "accesskit"))]
+#[path = "a11y/grid_tests.rs"]
+mod grid_tests;
 #[cfg(test)]
 #[path = "a11y/measure_tests.rs"]
 mod measure_tests;
@@ -40,10 +43,12 @@ fn access_id<D: LayoutDom>(dom: &D, node: D::NodeId) -> AccessNodeId {
     AccessNodeId(dom.opaque_id(node))
 }
 
+mod grid;
 mod pass;
 mod roles;
 mod session;
-use roles::{ARIA_ROLES, aria_token, document_role};
+pub use roles::{ARIA_1_2_ROLES, first_role_token};
+use roles::{aria_token, document_role};
 pub use session::{A11ySession, A11yUpdate};
 
 mod name;
@@ -381,6 +386,11 @@ fn accesskit_role(role: DocumentA11yRole) -> Role {
         DocumentA11yRole::Table => Role::Table,
         DocumentA11yRole::Row => Role::Row,
         DocumentA11yRole::Cell => Role::Cell,
+        DocumentA11yRole::Grid => Role::Grid,
+        DocumentA11yRole::TreeGrid => Role::TreeGrid,
+        DocumentA11yRole::ColumnHeader => Role::ColumnHeader,
+        DocumentA11yRole::RowHeader => Role::RowHeader,
+        DocumentA11yRole::GridCell => Role::GridCell,
         DocumentA11yRole::Image => Role::Image,
         DocumentA11yRole::Form => Role::Form,
         DocumentA11yRole::Dialog => Role::Dialog,
@@ -426,7 +436,8 @@ pub fn accesskit_tree_from_projection(projection: DocumentA11yProjection) -> Tre
             if let DocumentA11yRole::Heading { level } = node.role
                 && level > 0
             {
-                access.set_level(level as usize);
+                // AccessKit levels are zero-based; ARIA's are one-based.
+                access.set_level(usize::from(level) - 1);
             }
             if let Some(name) = &node.name {
                 access.set_label(name.clone());
@@ -499,6 +510,7 @@ pub fn accesskit_tree_from_projection(projection: DocumentA11yProjection) -> Tre
             if let Some(value) = node.numeric_maximum {
                 access.set_max_numeric_value(value);
             }
+            grid::lower_table(&mut access, &node.table);
             if let Some(bounds) = node.bounds {
                 access.set_bounds(Rect::new(
                     bounds.x as f64,
@@ -1710,5 +1722,15 @@ mod tests {
             "an active nested scrollport cannot advertise a stale Click target"
         );
         assert!(after_link.supports_action(Action::ScrollIntoView));
+    }
+
+    /// AccessKit's level is zero-based: an `h1` lowers to 0, `aria-level=3` to 2.
+    #[test]
+    fn heading_levels_lower_zero_based() {
+        assert_eq!(with_role("<h1>Top</h1>", Role::Heading).level(), Some(0));
+        let aria = "<div role=heading aria-level=3>Deep</div>";
+        assert_eq!(with_role(aria, Role::Heading).level(), Some(2));
+        let unset = "<div role=heading>Plain</div>";
+        assert_eq!(with_role(unset, Role::Heading).level(), None);
     }
 }

@@ -60,6 +60,9 @@ pub(crate) enum Refusal {
     ProjectionChanged,
     /// An inserted node was already projected (a move).
     Reinserted,
+    /// A mutation at or inside a native `<table>`: its cells' roles read the
+    /// whole table (HTML header cells) and the table's role.
+    NativeTable,
 }
 
 /// A batch's mutations, sorted for admission.
@@ -152,6 +155,19 @@ fn flat_parent<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<D::NodeId> {
     dom.assigned_slot(node)
         .or_else(|| dom.parent(node))
         .or_else(|| dom.shadow_host(node))
+}
+
+/// Whether `node` is or lies inside an HTML `table` in the DOM tree, which is
+/// the tree the table model reads.
+fn in_native_table<D: LayoutDom>(dom: &D, node: D::NodeId) -> bool {
+    let mut at = Some(node).filter(|n| dom.is_live(*n));
+    while let Some(node) = at {
+        if super::grid::html_tag(dom, node) == Some("table") {
+            return true;
+        }
+        at = dom.parent(node);
+    }
+    false
 }
 
 fn tag<D: LayoutDom>(dom: &D, node: D::NodeId) -> Option<&str> {
@@ -314,6 +330,9 @@ impl<Id: Copy + Eq + Hash> A11ySession<Id> {
         let references = pass.names.resolved_references();
         self.check_references(dom, &references, &batch)?;
         let roots = self.entering_roots(dom, &mut batch)?;
+        if batch.touched.iter().any(|node| in_native_table(dom, *node)) {
+            return Err(Refusal::NativeTable);
+        }
         self.restyled_kept(pass, &mut batch, restyled)?;
         let targets: HashSet<Id> = references.values().flatten().flatten().copied().collect();
         let mut again = self.chains(pass, &batch, &targets)?;

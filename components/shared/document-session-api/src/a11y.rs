@@ -117,6 +117,11 @@ pub enum DocumentA11yRole {
     Table,
     Row,
     Cell,
+    Grid,
+    TreeGrid,
+    ColumnHeader,
+    RowHeader,
+    GridCell,
     Image,
     Form,
     Dialog,
@@ -197,6 +202,39 @@ pub struct DocumentA11yState {
     pub has_popup: Option<DocumentA11yHasPopup>,
 }
 
+/// An authored row or column total. `Unknown` is ARIA's `-1`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DocumentA11yCount {
+    Known(u32),
+    Unknown,
+}
+
+/// The `aria-sort` direction. An explicit `None` differs from no attribute.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DocumentA11ySort {
+    None,
+    Ascending,
+    Descending,
+    Other,
+}
+
+/// Where a node sits in a table, grid or treegrid, as authored.
+///
+/// Indexes are one-based as ARIA writes them and are never computed from DOM
+/// position. Spans come from native `colspan`/`rowspan` on `td`/`th`, else from
+/// `aria-colspan`/`aria-rowspan`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DocumentA11yTable {
+    pub row_count: Option<DocumentA11yCount>,
+    pub column_count: Option<DocumentA11yCount>,
+    pub row_index: Option<u32>,
+    pub column_index: Option<u32>,
+    pub row_span: Option<u32>,
+    pub column_span: Option<u32>,
+    pub sort: Option<DocumentA11ySort>,
+}
+
 /// An action the engine advertises for a semantic node.
 ///
 /// `Click` remains a pointer action: hosts obtain a fresh
@@ -255,6 +293,9 @@ pub struct DocumentA11yNode {
     pub numeric_value: Option<f64>,
     pub numeric_minimum: Option<f64>,
     pub numeric_maximum: Option<f64>,
+    /// Table and grid position; empty outside tables.
+    #[serde(default)]
+    pub table: DocumentA11yTable,
     pub bounds: Option<DocumentA11yBounds>,
     pub state: DocumentA11yState,
     pub actions: Vec<DocumentA11yAction>,
@@ -417,6 +458,7 @@ mod tests {
             numeric_value: None,
             numeric_minimum: None,
             numeric_maximum: None,
+            table: DocumentA11yTable::default(),
             bounds: Some(DocumentA11yBounds {
                 x: 0.0,
                 y: 0.0,

@@ -29,6 +29,9 @@ fn retained_document_capabilities(find_reason: impl Into<String>) -> DocumentCap
     }
 }
 
+#[cfg(test)]
+#[path = "engines/tests/a11y_contract.rs"]
+mod a11y_contract_tests;
 #[cfg(any(feature = "livery", feature = "scripted"))]
 mod clip;
 #[cfg(feature = "livery")]
@@ -108,6 +111,7 @@ fn with_validation_alert(
         numeric_value: None,
         numeric_minimum: None,
         numeric_maximum: None,
+        table: Default::default(),
         bounds: bounds.map(|[x, y, width, height]| DocumentA11yBounds {
             x,
             y,

@@ -89,6 +89,11 @@ pub fn role_token(role: DocumentA11yRole) -> Option<&'static str> {
         Table => "table",
         Row => "row",
         Cell => "cell",
+        Grid => "grid",
+        TreeGrid => "treegrid",
+        ColumnHeader => "columnheader",
+        RowHeader => "rowheader",
+        GridCell => "gridcell",
         Image => "img",
         Form => "form",
         Dialog => "dialog",
@@ -644,7 +649,11 @@ mod lookup_tests {
         let composed = AccessKitLookup::new(&tree, |_| None);
         for nodes in [owner.nodes(), composed.nodes()] {
             assert!(!nodes.is_empty());
-            assert!(nodes.iter().all(|n| n.authored_key.is_none() && n.opaque_address.is_none()));
+            assert!(
+                nodes
+                    .iter()
+                    .all(|n| n.authored_key.is_none() && n.opaque_address.is_none())
+            );
         }
     }
 
@@ -667,9 +676,7 @@ mod lookup_tests {
         let targets = matching_with_lookup(&dom, &Selector::key("fixture/apply"), &lookup);
         assert_eq!(targets, [SemanticTarget::Contributed(id)]);
         assert!(matching_with_lookup(&dom, &Selector::key("fixture"), &lookup).is_empty());
-        assert!(
-            matching_with_lookup(&dom, &Selector::key("Edited copy"), &lookup).is_empty()
-        );
+        assert!(matching_with_lookup(&dom, &Selector::key("Edited copy"), &lookup).is_empty());
     }
 
     #[test]

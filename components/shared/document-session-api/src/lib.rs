@@ -43,10 +43,11 @@ pub use text_input::{SessionTextInputRect, SessionTextInputState};
 
 pub use a11y::{
     A11yCapability, DocumentA11yAction, DocumentA11yActionData, DocumentA11yActionRequest,
-    DocumentA11yBounds, DocumentA11yClickTarget, DocumentA11yHasPopup, DocumentA11yLive,
-    DocumentA11yNode, DocumentA11yNodeId, DocumentA11yOrientation, DocumentA11yPoint,
-    DocumentA11yProjection, DocumentA11yRole, DocumentA11yState, DocumentA11ySupport,
-    DocumentA11ySupportError, DocumentA11yToggled,
+    DocumentA11yBounds, DocumentA11yClickTarget, DocumentA11yCount, DocumentA11yHasPopup,
+    DocumentA11yLive, DocumentA11yNode, DocumentA11yNodeId, DocumentA11yOrientation,
+    DocumentA11yPoint, DocumentA11yProjection, DocumentA11yRole, DocumentA11ySort,
+    DocumentA11yState, DocumentA11ySupport, DocumentA11ySupportError, DocumentA11yTable,
+    DocumentA11yToggled,
 };
 pub use capabilities::{
     CapabilityStatus, DocumentCapabilities, DocumentCapabilityStatus, WebFeatureStatus,
@@ -60,10 +61,10 @@ pub use session_engine::{
     ContentLineage, ContentReport, DocumentClip, DocumentClipArtifact, DocumentClipArtifactRole,
     DocumentFindDirection, DocumentFindMatch, DocumentFindQuery, DocumentFindReveal,
     DocumentFindState, DocumentSession, DocumentZoomState, EngineKindIndex, EngineKinds,
-    OutlineEntry, SessionButtonState, SessionClick, SessionCursor, SessionEffect, SessionEngine,
-    SessionError, SessionExternalTextureDraw, SessionFocusDirection, SessionFormMethod,
-    SessionDocumentRequest, SessionEncodedFormSubmission, SessionRequestSpawnResult,
-    SessionFormSubmission, SessionIme, SessionInput, SessionInputResult, SessionKey, SessionLink,
-    SessionModifiers, SessionNavigationCommand, SessionPendingWork, SessionPointerButton,
-    SessionRegistry, SessionScrollKey, SessionSpawnRequest, SessionTextTarget,
+    OutlineEntry, SessionButtonState, SessionClick, SessionCursor, SessionDocumentRequest,
+    SessionEffect, SessionEncodedFormSubmission, SessionEngine, SessionError,
+    SessionExternalTextureDraw, SessionFocusDirection, SessionFormMethod, SessionFormSubmission,
+    SessionIme, SessionInput, SessionInputResult, SessionKey, SessionLink, SessionModifiers,
+    SessionNavigationCommand, SessionPendingWork, SessionPointerButton, SessionRegistry,
+    SessionRequestSpawnResult, SessionScrollKey, SessionSpawnRequest, SessionTextTarget,
 };

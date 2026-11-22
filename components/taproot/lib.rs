@@ -30,9 +30,11 @@
 
 use std::collections::BTreeMap;
 
-use genet_livery::{Device, InteractionStates, StylePlane, StyleSet, rendered_visible, resolve_styles};
 #[cfg(any(test, feature = "estimated-probe-fixtures"))]
 use genet_livery::layout;
+use genet_livery::{
+    Device, InteractionStates, StylePlane, StyleSet, rendered_visible, resolve_styles,
+};
 use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::{LayoutDom, LocalName, Namespace};
 
@@ -334,7 +336,10 @@ pub fn matching_estimated_fixture(dom: &ScriptedDom, sel: &Selector) -> Vec<Node
     let mut out = Vec::new();
     fn walk(dom: &ScriptedDom, node: NodeId, sel: &Selector, role: &str, out: &mut Vec<NodeId>) {
         if !aria_hidden(dom, node)
-            && (attr(dom, node, "role").as_deref() == Some(role)
+            && (attr(dom, node, "role")
+                .and_then(|value| genet_render::a11y::first_role_token(&value))
+                .as_deref()
+                == Some(role)
                 || (role == "button"
                     && dom
                         .element_name(node)
@@ -696,7 +701,8 @@ mod tests {
     fn a_role_selector_finds_the_first_tab() {
         let dom = strip_dom();
         let s = surfaces(&dom);
-        let hit = resolve_estimated_fixture(&s, &Selector::role("tab")).expect("role=tab must resolve");
+        let hit =
+            resolve_estimated_fixture(&s, &Selector::role("tab")).expect("role=tab must resolve");
         assert_eq!(hit.point.0, 540.0, "first tab centre x = 40 + surface 500");
     }
 
@@ -704,8 +710,9 @@ mod tests {
     fn a_button_role_selector_honors_the_native_button_role() {
         let dom = strip_dom();
         let s = surfaces(&dom);
-        let hit = resolve_estimated_fixture(&s, &Selector::role("button").containing("Example Domain"))
-            .expect("a native button has the button role without a redundant role attribute");
+        let hit =
+            resolve_estimated_fixture(&s, &Selector::role("button").containing("Example Domain"))
+                .expect("a native button has the button role without a redundant role attribute");
         assert_eq!(hit.point, swatch_centre(200.0));
     }
 
@@ -730,7 +737,9 @@ mod tests {
     fn a_miss_returns_none() {
         let dom = strip_dom();
         let s = surfaces(&dom);
-        assert!(resolve_estimated_fixture(&s, &Selector::class("tab").containing("Nope")).is_none());
+        assert!(
+            resolve_estimated_fixture(&s, &Selector::class("tab").containing("Nope")).is_none()
+        );
         assert!(resolve_estimated_fixture(&s, &Selector::role("separator")).is_none());
     }
 
@@ -785,7 +794,8 @@ mod tests {
     fn an_aria_hidden_button_has_no_role_but_a_class_still_clicks_it() {
         let dom = decoy_dom("", Some(("aria-hidden", "true")));
         let s = surfaces(&dom);
-        let by_role = resolve_estimated_fixture(&s, &Selector::role("button").containing("Go")).expect("role hit");
+        let by_role = resolve_estimated_fixture(&s, &Selector::role("button").containing("Go"))
+            .expect("role hit");
         assert_eq!(
             by_role.point,
             (620.0, 20.0),
@@ -807,7 +817,10 @@ mod tests {
         dom.append_child(wrapper, first);
         let real = dom.dom_children(root).next().expect("real button");
         dom.insert_before(root, wrapper, Some(real));
-        assert_eq!(matching_estimated_fixture(&dom, &Selector::role("button")), vec![real]);
+        assert_eq!(
+            matching_estimated_fixture(&dom, &Selector::role("button")),
+            vec![real]
+        );
     }
 
     #[test]
@@ -977,9 +990,17 @@ mod tests {
         let mut surfaces = surfaces(&dom);
         surfaces.insert(0, other);
         let selector = Selector::class("tab").containing("Links");
-        assert_eq!(resolve_estimated_fixture(&surfaces, &selector).unwrap().surface, "other");
+        assert_eq!(
+            resolve_estimated_fixture(&surfaces, &selector)
+                .unwrap()
+                .surface,
+            "other"
+        );
         let scoped = selector.clone().on_surface("strip");
-        assert_eq!(resolve_estimated_fixture(&surfaces, &scoped).unwrap().point, (620.0, 22.0));
+        assert_eq!(
+            resolve_estimated_fixture(&surfaces, &scoped).unwrap().point,
+            (620.0, 22.0)
+        );
         assert!(resolve_estimated_fixture(&surfaces, &selector.on_surface("absent")).is_none());
     }
 

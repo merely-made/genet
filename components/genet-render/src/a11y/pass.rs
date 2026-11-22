@@ -144,6 +144,7 @@ where
             numeric_value: aria_number(dom, node, "aria-valuenow"),
             numeric_minimum: aria_number(dom, node, "aria-valuemin"),
             numeric_maximum: aria_number(dom, node, "aria-valuemax"),
+            table: super::grid::table_properties(dom, node),
             bounds: self.bounds(node, inherited),
             state,
             actions: neutral_actions(dom, node, role, state, inherited.active),

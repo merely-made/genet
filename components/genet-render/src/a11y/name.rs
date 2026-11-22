@@ -160,14 +160,12 @@ impl<'a, D: LayoutDom> Names<'a, D> {
     /// attribute here: the neutral role enum does not model it.
     fn content_barred(&self, node: D::NodeId) -> Option<bool> {
         use document_session_api::DocumentA11yRole as Role;
-        if attr(self.dom, node, "role")
-            .is_some_and(|r| r.trim().eq_ignore_ascii_case("alertdialog"))
-        {
+        if super::roles::explicit_role(self.dom, node).as_deref() == Some("alertdialog") {
             return Some(true);
         }
         match super::document_role(self.dom, node) {
             Role::Dialog | Role::Article => Some(true),
-            Role::Group | Role::Table => Some(false),
+            Role::Group | Role::Table | Role::Grid | Role::TreeGrid => Some(false),
             _ => None,
         }
     }
@@ -195,12 +193,12 @@ impl<'a, D: LayoutDom> Names<'a, D> {
     /// Whether `node`'s own role allows a name from its contents: an explicit
     /// `role` token first, then the role the element maps to.
     fn content_allowed(&self, node: D::NodeId) -> bool {
-        let explicit = attr(self.dom, node, "role").map(|r| r.trim().to_ascii_lowercase());
+        // An unmodelled winner outside the list (e.g. `presentation`) is
+        // treated as a lone one is: the native role decides.
+        let explicit = super::roles::explicit_role(self.dom, node)
+            .filter(|r| NAME_FROM_CONTENTS.contains(&r.as_str()) || super::roles::modelled(r));
         let token = explicit
             .as_deref()
-            .filter(|r| {
-                NAME_FROM_CONTENTS.contains(r) || super::ARIA_ROLES.iter().any(|(t, _)| t == r)
-            })
             .or_else(|| super::aria_token(super::document_role(self.dom, node)));
         token.is_some_and(|token| NAME_FROM_CONTENTS.contains(&token))
     }
@@ -408,8 +406,8 @@ impl<'a, D: LayoutDom> Names<'a, D> {
                 Some("select") if role == Role::Unknown => role = Role::ListBox,
                 Some("input")
                     if role == Role::TextField
-                        && !attr(self.dom, node, "role")
-                            .is_some_and(|v| v.trim().eq_ignore_ascii_case("textbox"))
+                        && super::roles::explicit_role(self.dom, node).as_deref()
+                            != Some("textbox")
                         && attr(self.dom, node, "type").is_some_and(|v| {
                             v.eq_ignore_ascii_case("range") || v.eq_ignore_ascii_case("number")
                         }) =>
@@ -1041,19 +1039,45 @@ mod tests {
     fn button_inputs_are_named_by_value_alt_title_then_a_default() {
         let name = |html: &str| alternatives(html).0;
         // Control: a native button already names itself from content.
-        assert_eq!(name("<button id=target>Save</button>").as_deref(), Some("Save"));
+        assert_eq!(
+            name("<button id=target>Save</button>").as_deref(),
+            Some("Save")
+        );
         for kind in ["button", "submit", "reset"] {
-            let got = name(&format!("<input id=target type={kind} value='{kind} label'>"));
+            let got = name(&format!(
+                "<input id=target type={kind} value='{kind} label'>"
+            ));
             assert_eq!(got, Some(format!("{kind} label")));
         }
-        assert_eq!(name("<input id=target type=IMAGE alt='image label' value=Wrong>").as_deref(), Some("image label"));
+        assert_eq!(
+            name("<input id=target type=IMAGE alt='image label' value=Wrong>").as_deref(),
+            Some("image label")
+        );
         // Fallbacks: image alt, then value, then title, then the default.
-        assert_eq!(name("<input id=target type=image alt='' value=Value title=Tip>").as_deref(), Some("Value"));
-        assert_eq!(name("<input id=target type=image title=Tip>").as_deref(), Some("Tip"));
-        assert_eq!(name("<input id=target type=image>").as_deref(), Some("Submit Query"));
-        assert_eq!(name("<input id=target type=submit>").as_deref(), Some("Submit"));
-        assert_eq!(name("<input id=target type=reset value=''>").as_deref(), Some("Reset"));
-        assert_eq!(name("<input id=target type=reset title=Tip>").as_deref(), Some("Tip"));
+        assert_eq!(
+            name("<input id=target type=image alt='' value=Value title=Tip>").as_deref(),
+            Some("Value")
+        );
+        assert_eq!(
+            name("<input id=target type=image title=Tip>").as_deref(),
+            Some("Tip")
+        );
+        assert_eq!(
+            name("<input id=target type=image>").as_deref(),
+            Some("Submit Query")
+        );
+        assert_eq!(
+            name("<input id=target type=submit>").as_deref(),
+            Some("Submit")
+        );
+        assert_eq!(
+            name("<input id=target type=reset value=''>").as_deref(),
+            Some("Reset")
+        );
+        assert_eq!(
+            name("<input id=target type=reset title=Tip>").as_deref(),
+            Some("Tip")
+        );
         // A plain button input has no default.
         assert_eq!(name("<input id=target type=button>").as_deref(), Some(""));
     }
@@ -1061,11 +1085,24 @@ mod tests {
     #[test]
     fn button_input_names_yield_to_aria_and_labels_and_title_stays_a_description() {
         let both = |html| alternatives(html);
-        assert_eq!(both("<input id=target type=submit value=V aria-label=Aria>").0.as_deref(), Some("Aria"));
+        assert_eq!(
+            both("<input id=target type=submit value=V aria-label=Aria>")
+                .0
+                .as_deref(),
+            Some("Aria")
+        );
         assert_eq!(both("<span id=l>Ref</span><input id=target type=submit value=V aria-labelledby=l aria-label=Aria>").0.as_deref(), Some("Ref"));
-        assert_eq!(both("<label for=target>Label</label><input id=target type=submit value=V>").0.as_deref(), Some("Label"));
+        assert_eq!(
+            both("<label for=target>Label</label><input id=target type=submit value=V>")
+                .0
+                .as_deref(),
+            Some("Label")
+        );
         let (name, description) = both("<input id=target type=submit value=V title=Tip>");
-        assert_eq!((name.as_deref(), description.as_deref()), (Some("V"), Some("Tip")));
+        assert_eq!(
+            (name.as_deref(), description.as_deref()),
+            (Some("V"), Some("Tip"))
+        );
         // Title that names the control is not repeated as its description.
         assert_eq!(both("<input id=target type=reset title=Tip>").1, None);
     }
@@ -1075,77 +1112,192 @@ mod tests {
         let name = |html: &str| alternatives(html).0;
         // Controls: roles that allow name from content still take it, and a
         // barred role inside a content traversal still contributes its text.
-        assert_eq!(name("<button id=target>Save <b>it</b></button>").as_deref(), Some("Save it"));
-        assert_eq!(name("<button id=target>Go <div role=group>there</div></button>").as_deref(), Some("Go there"));
-        assert_eq!(name("<div role=group id=target>Text</div>").as_deref(), None);
+        assert_eq!(
+            name("<button id=target>Save <b>it</b></button>").as_deref(),
+            Some("Save it")
+        );
+        assert_eq!(
+            name("<button id=target>Go <div role=group>there</div></button>").as_deref(),
+            Some("Go there")
+        );
+        assert_eq!(
+            name("<div role=group id=target>Text</div>").as_deref(),
+            None
+        );
         assert_eq!(name("<div role=group><div role=group><h3>No</h3></div><h2>Nor</h2>Content</div><div role=group id=target><div role=group>Not this</div></div>").as_deref(), None);
-        assert_eq!(name("<div role=group id=target title=Tip>Text</div>").as_deref(), Some("Tip"));
-        assert_eq!(name("<div role=group id=target aria-label=Own>Text</div>").as_deref(), Some("Own"));
+        assert_eq!(
+            name("<div role=group id=target title=Tip>Text</div>").as_deref(),
+            Some("Tip")
+        );
+        assert_eq!(
+            name("<div role=group id=target aria-label=Own>Text</div>").as_deref(),
+            Some("Own")
+        );
         // A misspelled labelledby is no labelledby.
-        assert_eq!(name("<h2 id=h>first</h2><div role=group id=target aria-labeledby=h><p>inside</p></div>").as_deref(), None);
+        assert_eq!(
+            name(
+                "<h2 id=h>first</h2><div role=group id=target aria-labeledby=h><p>inside</p></div>"
+            )
+            .as_deref(),
+            None
+        );
         // Referenced, the barred node's content does count (AccName 2F).
         assert_eq!(name("<div role=group id=g>Referred text</div><button id=target aria-labelledby=g></button>").as_deref(), Some("Referred text"));
         // Layout-independent roles that stay text carriers are unchanged.
         assert_eq!(name("<p id=target>Para</p>").as_deref(), Some("Para"));
         assert_eq!(name("<div id=target>Plain</div>").as_deref(), Some("Plain"));
-        assert_eq!(name("<div role=alert id=target>Warn</div>").as_deref(), Some("Warn"));
+        assert_eq!(
+            name("<div role=alert id=target>Warn</div>").as_deref(),
+            Some("Warn")
+        );
     }
 
     #[test]
     fn dialogs_and_articles_are_named_by_their_first_heading_depth_first() {
         let name = |html: &str| alternatives(html).0;
         for role in ["dialog", "alertdialog", "article"] {
-            let html = format!("<div role={role} id=target><h2>{role} heading</h2><p>More</p></div>");
+            let html =
+                format!("<div role={role} id=target><h2>{role} heading</h2><p>More</p></div>");
             assert_eq!(name(&html), Some(format!("{role} heading")), "{role}");
         }
         // Depth first in document order: the h3 inside the group precedes the h2.
         assert_eq!(name("<div role=article id=target><div role=group><h3>deep first</h3></div><h2>later</h2></div>").as_deref(), Some("deep first"));
         // Hidden headings are skipped; role=heading counts.
-        assert_eq!(name("<div role=dialog id=target><h2 hidden>No</h2><div role=heading>Yes</div></div>").as_deref(), Some("Yes"));
+        assert_eq!(
+            name("<div role=dialog id=target><h2 hidden>No</h2><div role=heading>Yes</div></div>")
+                .as_deref(),
+            Some("Yes")
+        );
         // Native article and dialog take the heading too.
-        assert_eq!(name("<article id=target><h2>Native article</h2><p>text</p></article>").as_deref(), Some("Native article"));
-        assert_eq!(name("<dialog open id=target><h2>Native dialog</h2><p>text</p></dialog>").as_deref(), Some("Native dialog"));
+        assert_eq!(
+            name("<article id=target><h2>Native article</h2><p>text</p></article>").as_deref(),
+            Some("Native article")
+        );
+        assert_eq!(
+            name("<dialog open id=target><h2>Native dialog</h2><p>text</p></dialog>").as_deref(),
+            Some("Native dialog")
+        );
         // Order: aria-label first; no heading falls back to title, then to nothing.
-        assert_eq!(name("<div role=dialog id=target aria-label=Own><h2>H</h2></div>").as_deref(), Some("Own"));
-        assert_eq!(name("<div role=dialog id=target title=Tip><p>no heading</p></div>").as_deref(), Some("Tip"));
-        assert_eq!(name("<div role=dialog id=target><p>no heading</p></div>").as_deref(), None);
+        assert_eq!(
+            name("<div role=dialog id=target aria-label=Own><h2>H</h2></div>").as_deref(),
+            Some("Own")
+        );
+        assert_eq!(
+            name("<div role=dialog id=target title=Tip><p>no heading</p></div>").as_deref(),
+            Some("Tip")
+        );
+        assert_eq!(
+            name("<div role=dialog id=target><p>no heading</p></div>").as_deref(),
+            None
+        );
         // A group never takes a heading.
-        assert_eq!(name("<div role=group id=target><h2>H</h2></div>").as_deref(), None);
+        assert_eq!(
+            name("<div role=group id=target><h2>H</h2></div>").as_deref(),
+            None
+        );
         // A heading name that names the dialog is not repeated as a description.
-        assert_eq!(alternatives("<div role=dialog id=target title=Tip><h2>H</h2></div>"), (Some("H".into()), Some("Tip".into())));
+        assert_eq!(
+            alternatives("<div role=dialog id=target title=Tip><h2>H</h2></div>"),
+            (Some("H".into()), Some("Tip".into()))
+        );
     }
 
     #[test]
     fn tables_take_their_caption_never_their_cells_and_abbr_prefers_its_title() {
         let name = |html: &str| alternatives(html).0;
         assert_eq!(name("<table id=target><caption>Caption label</caption><tr><th>a</th><td>1</td></tr></table>").as_deref(), Some("Caption label"));
-        assert_eq!(name("<table id=target><tr><th>a</th><td>1</td></tr></table>").as_deref(), None);
-        assert_eq!(name("<table id=target title=Tip><caption></caption><tr><td>1</td></tr></table>").as_deref(), Some("Tip"));
-        assert_eq!(name("<table id=target aria-label=Own><caption>Cap</caption><tr><td>1</td></tr></table>").as_deref(), Some("Own"));
-        assert_eq!(name("<div role=table id=target><div role=row><div role=cell>cell</div></div></div>").as_deref(), None);
+        assert_eq!(
+            name("<table id=target><tr><th>a</th><td>1</td></tr></table>").as_deref(),
+            None
+        );
+        assert_eq!(
+            name("<table id=target title=Tip><caption></caption><tr><td>1</td></tr></table>")
+                .as_deref(),
+            Some("Tip")
+        );
+        assert_eq!(
+            name(
+                "<table id=target aria-label=Own><caption>Cap</caption><tr><td>1</td></tr></table>"
+            )
+            .as_deref(),
+            Some("Own")
+        );
+        assert_eq!(
+            name("<div role=table id=target><div role=row><div role=cell>cell</div></div></div>")
+                .as_deref(),
+            None
+        );
         // Control: a cell is still named from its content.
-        assert_eq!(name("<table><tr><td id=target>cell</td></tr></table>").as_deref(), Some("cell"));
-        assert_eq!(name("<abbr id=target title='Web Platform Tests'>WPT</abbr>").as_deref(), Some("Web Platform Tests"));
+        assert_eq!(
+            name("<table><tr><td id=target>cell</td></tr></table>").as_deref(),
+            Some("cell")
+        );
+        assert_eq!(
+            name("<abbr id=target title='Web Platform Tests'>WPT</abbr>").as_deref(),
+            Some("Web Platform Tests")
+        );
         assert_eq!(name("<abbr id=target>WPT</abbr>").as_deref(), Some("WPT"));
-        assert_eq!(name("<abbr id=target title='' >WPT</abbr>").as_deref(), Some("WPT"));
-        assert_eq!(name("<abbr id=target aria-label=Own title=Tip>WPT</abbr>").as_deref(), Some("Own"));
+        assert_eq!(
+            name("<abbr id=target title='' >WPT</abbr>").as_deref(),
+            Some("WPT")
+        );
+        assert_eq!(
+            name("<abbr id=target aria-label=Own title=Tip>WPT</abbr>").as_deref(),
+            Some("Own")
+        );
         // Inside a content traversal the abbr contributes its content.
-        assert_eq!(name("<button id=target><abbr title='Long form'>WPT</abbr> run</button>").as_deref(), Some("WPT run"));
+        assert_eq!(
+            name("<button id=target><abbr title='Long form'>WPT</abbr> run</button>").as_deref(),
+            Some("WPT run")
+        );
         // The title that names an abbr is not repeated as its description.
         assert_eq!(alternatives("<abbr id=target title=Tip>WPT</abbr>").1, None);
         // Other generics are unchanged: content first, title only as fallback.
-        assert_eq!(name("<span id=target title=Tip>Text</span>").as_deref(), Some("Text"));
+        assert_eq!(
+            name("<span id=target title=Tip>Text</span>").as_deref(),
+            Some("Text")
+        );
     }
 
     #[test]
     #[should_panic(expected = "assertion `left == right` failed")]
     fn deliberately_wrong_group_expectation_fails() {
-        assert_eq!(alternatives("<div role=group id=target>Text</div>").0.as_deref(), Some("Text"));
+        assert_eq!(
+            alternatives("<div role=group id=target>Text</div>")
+                .0
+                .as_deref(),
+            Some("Text")
+        );
     }
 
     #[test]
     #[should_panic(expected = "assertion `left == right` failed")]
     fn deliberately_wrong_button_input_expectation_fails() {
-        assert_eq!(alternatives("<input id=target type=submit value=Real>").0.as_deref(), Some("Wrong"));
+        assert_eq!(
+            alternatives("<input id=target type=submit value=Real>")
+                .0
+                .as_deref(),
+            Some("Wrong")
+        );
+    }
+
+    #[test]
+    fn name_rules_read_the_first_recognised_role_token() {
+        let name = |html: &str| alternatives(html).0;
+        // A name-from-content role after an unknown token still names.
+        assert_eq!(
+            name("<div id=target role='foo BUTTON'>Save</div>").as_deref(),
+            Some("Save")
+        );
+        // Grid first: barred from content, so the direct text is not used.
+        assert_eq!(name("<div id=target role='grid button'>Save</div>"), None);
+        // alertdialog, alone or after an unknown token, takes its first heading.
+        let dialog = |role| {
+            name(&format!(
+                "<div id=target role='{role}'><h2>Title</h2><p>Body</p></div>"
+            ))
+        };
+        assert_eq!(dialog("alertdialog dialog").as_deref(), Some("Title"));
+        assert_eq!(dialog("x alertdialog").as_deref(), Some("Title"));
     }
 }

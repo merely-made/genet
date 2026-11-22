@@ -161,7 +161,7 @@ impl Host {
     }
 
     /// A batch the session must refuse, for `reason`.
-    fn refused(&mut self, reason: Refusal, edit: impl FnOnce(&mut ScriptedDom)) {
+    pub(super) fn refused(&mut self, reason: Refusal, edit: impl FnOnce(&mut ScriptedDom)) {
         assert_eq!(self.frame_with(edit, true, None), A11yUpdate::Rebuilt);
         assert_eq!(self.session.refusal(), Some(reason));
     }
@@ -387,7 +387,7 @@ fn an_inserted_row_may_reference_inside_itself() {
 }
 
 /// A fixture element appended to the body before the session starts.
-fn host_with(build: impl FnOnce(&mut ScriptedDom)) -> Host {
+pub(super) fn host_with(build: impl FnOnce(&mut ScriptedDom)) -> Host {
     let mut dom = table_dom(FIRST);
     build(&mut dom);
     dom.drain_mutations(&mut Vec::new());
@@ -398,7 +398,7 @@ fn body(dom: &ScriptedDom) -> NodeId {
     dom.first_tag(dom.document(), "body").expect("body")
 }
 
-fn append_html(dom: &mut ScriptedDom, html: &str) {
+pub(super) fn append_html(dom: &mut ScriptedDom, html: &str) {
     let holder = dom.create_element(layout_dom_api::QualName::new(
         None,
         layout_dom_api::Namespace::from("http://www.w3.org/1999/xhtml"),

@@ -93,6 +93,14 @@ use netrender_device::compositor::SurfaceKey;
 
 mod errors;
 mod iosurface;
+#[cfg(target_os = "macos")]
+mod pane_drag;
+#[cfg(target_os = "macos")]
+mod imported_pane;
+#[cfg(target_os = "macos")]
+pub use imported_pane::MacosImportedPane;
+#[cfg(target_os = "macos")]
+pub use pane_drag::OpaquePaneDrag;
 
 pub use errors::BackendError;
 use iosurface::{
@@ -171,6 +179,13 @@ struct CALayerSurface {
 unsafe impl Send for MacosCALayerBackend {}
 
 impl MacosCALayerBackend {
+    /// Start tracking an opaque declared pane at pointer-down. Its contents must cover
+    /// the entire layer. Returns None for an unknown key or an already-active drag.
+    #[cfg(target_os = "macos")]
+    pub fn begin_opaque_pane_drag(&self, key: SurfaceKey) -> Option<OpaquePaneDrag> {
+        OpaquePaneDrag::begin(&self.surfaces.get(&key)?.layer)
+    }
+
     /// Construct a backend over the embedder-supplied root layer.
     ///
     /// `root_layer` must be a raw pointer to a **`CALayer`**, not an

@@ -29,6 +29,8 @@ pub use crate::compositor::{
 pub use crate::compositor_calayer::{
     BackendError as MacosCALayerBackendError, MacosCALayerBackend,
 };
+#[cfg(target_os = "macos")]
+pub use crate::compositor_calayer::{MacosImportedPane, OpaquePaneDrag};
 #[cfg(target_os = "windows")]
 pub use crate::compositor_dxgi::{BackendError as WindowsDxgiBackendError, WindowsDxgiBackend};
 pub use crate::compositor_factory::{

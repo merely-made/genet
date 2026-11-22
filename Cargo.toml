@@ -461,6 +461,9 @@ layout-dom-api = { path = "components/shared/layout-dom" }
 # xml5ever = { path = "../html5ever/xml5ever" }
 # tendril = { path = "../html5ever/tendril" }
 gpu-allocator = { path = "support/patches/gpu-allocator" }
+# arboard 3.7.0 still takes x11rb 0.13; winit 0.31 takes 0.14. The fork's one
+# change is the x11rb row, so it leaves when arboard releases on 0.14.
+arboard = { git = "https://github.com/mark-ik/arboard", branch = "mark-ik/x11rb-0.14" }
 # The parley and fontique forks were published under the `genet-parley` /
 # `genet-fontique` identities on 2026-09-14 and left this table: the workspace
 # dependencies now name them with `package =` plus an explicit path, so the

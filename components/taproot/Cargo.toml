@@ -19,7 +19,8 @@ default = ["image-decode"]
 image-decode = ["genet-livery/image-decode"]
 # Synthetic DOM/layout probes for compatibility tests only. Production
 # selectors must use the host's retained projection and painted geometry.
-estimated-probe-fixtures = []
+# The fixtures read role tokens through genet-render.
+estimated-probe-fixtures = ["dep:genet-render"]
 # Read-only access to an already composed host tree, without a platform adapter.
 accesskit = ["dep:accesskit", "document-session-api/accesskit"]
 
@@ -27,6 +28,7 @@ accesskit = ["dep:accesskit", "document-session-api/accesskit"]
 accesskit = { workspace = true, optional = true }
 document-session-api = { version = ">=0.2.0", path = "../shared/document-session-api" }
 genet-livery = { version = ">=0.1.0", path = "../genet-livery", default-features = false, features = ["scripted-dom"] }
+genet-render = { version = ">=0.2.0", path = "../genet-render", default-features = false, optional = true }
 genet-scripted-dom = { version = ">=0.2.0", path = "../genet-scripted-dom" }
 layout-dom-api = { version = ">=0.2.0", path = "../shared/layout-dom" }
 

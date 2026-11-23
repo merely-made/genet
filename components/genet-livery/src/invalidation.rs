@@ -193,6 +193,7 @@ where
             if let DomMutation::AttributeChanged { node, name, .. } = mutation
                 && name.ns == Namespace::from("")
                 && name.local == LocalName::from("title")
+                && dom.is_live(*node)
                 && dom.element_name(*node).is_some_and(|name| {
                     matches!(name.ns.as_str(), "" | "http://www.w3.org/1999/xhtml")
                 })

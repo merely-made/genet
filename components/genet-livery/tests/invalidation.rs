@@ -56,6 +56,33 @@ fn assert_matches_full(
 }
 
 #[test]
+fn title_change_on_a_retired_element_preserves_the_live_batch() {
+    let mut dom = ScriptedDom::from_serialized_document(
+        "<html><body><div id='retired'></div><div id='live'></div></body></html>",
+    );
+    let styles = StyleSet::cambium(&[".changed { color: #008000; }"]);
+    let states = InteractionStates::default();
+    let device = Device::screen(800.0, 600.0);
+    let mut session = IncrementalStyle::new();
+    let mut mutations = Vec::new();
+    dom.drain_mutations(&mut mutations);
+    session.update(&dom, &styles, &device, &states, &mutations);
+
+    let retired = by_id(&dom, "retired");
+    let live = by_id(&dom, "live");
+    dom.set_attribute(retired, attr("title"), "before removal");
+    dom.remove(retired);
+    dom.set_attribute(live, attr("class"), "changed");
+    mutations.clear();
+    dom.drain_mutations(&mut mutations);
+    assert!(!dom.is_live(retired));
+    session.update(&dom, &styles, &device, &states, &mutations);
+
+    assert!(session.styles().get(retired).is_none());
+    assert_matches_full(&dom, &session, &styles, &states);
+}
+
+#[test]
 fn class_snapshot_restyles_one_branch_and_preserves_sibling_matching() {
     let mut dom = ScriptedDom::from_serialized_document(
         "<html><body>\

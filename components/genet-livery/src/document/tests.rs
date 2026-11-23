@@ -4915,3 +4915,5 @@ fn late_batch_failure_does_not_publish_document_frame() {
         "the earlier successful batch remains published in the shaping cache"
     );
 }
+
+mod mutation_oracle;

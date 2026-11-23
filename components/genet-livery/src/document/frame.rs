@@ -28,9 +28,8 @@ where
         self.style_session.invalidate();
     }
 
-    /// The latest retained-layout damage classification. The current K5g
-    /// correctness path still rebuilds a full layout; K5h will replace these
-    /// named roots rather than treating `RestyleStats` as geometry proof.
+    /// Layout damage for the pending frame, or the most recently completed frame.
+    /// Multiple DOM batches before one frame contribute to the same set of roots.
     pub fn last_layout_damage(&self) -> Option<&LayoutDamage<D::NodeId>> {
         self.last_layout_damage.as_ref()
     }
@@ -52,7 +51,18 @@ where
             matches!(mutation, DomMutation::AttributeChanged { name, .. }
                 if name.ns == Namespace::from("") && name.local == LocalName::from("style"))
         });
+        // The retained fragments still describe the last completed layout. An
+        // edit in a later batch cannot retire pending damage in another root.
         let mut roots = Vec::new();
+        if self.layout_dirty
+            && let Some(previous) = &mut self.last_layout_damage
+        {
+            if previous.full_document {
+                return;
+            }
+            roots = std::mem::take(&mut previous.roots);
+            roots.retain(|root| self.dom.is_live(*root));
+        }
         let mut form_trees = FormTrees::default();
         for mutation in mutations {
             for_each_mutation_dependency(&self.dom, mutation, &mut form_trees, |dependency| {
@@ -210,6 +220,7 @@ where
         }
         if !viewport_changed
             && self.layout_dirty
+            && self.style_only_damage
             && self.transitions.is_empty()
             && self.keyframe_animation.is_none()
             && let Some(node) = self
@@ -253,6 +264,7 @@ where
         }
         if !viewport_changed
             && self.layout_dirty
+            && self.style_only_damage
             && self.transitions.is_empty()
             && self.keyframe_animation.is_none()
             && let Some(node) = self
@@ -296,6 +308,7 @@ where
         }
         if !viewport_changed
             && self.layout_dirty
+            && self.style_only_damage
             && self.transitions.is_empty()
             && self.keyframe_animation.is_none()
             && self

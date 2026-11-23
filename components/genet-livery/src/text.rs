@@ -3513,13 +3513,13 @@ where
 
     /// Replace text data produced by one retained formatting subtree without
     /// disturbing shaped commands, clusters, and text order outside it. The
-    /// caller supplies DOM text order because a selected root may gain its
+    /// caller supplies flat-tree text order because a selected root may gain its
     /// first text source, which has no old frame position to reuse.
     pub(crate) fn replace_subtree_from(
         &mut self,
         fresh: &Self,
         replaced: &HashSet<Id>,
-        dom_text_order: &[Id],
+        text_source_order: &[Id],
     ) {
         let mut merged = Self::default();
         merged.append_prepared_from(self, |source| !replaced.contains(&source));
@@ -3533,7 +3533,7 @@ where
         let fresh_group_base = merged.next_text_group;
         merged.copy_text_from(fresh, |source| replaced.contains(&source), fresh_group_base);
         merged.next_text_group = fresh_group_base.saturating_add(fresh.next_text_group);
-        merged.text_order = dom_text_order
+        merged.text_order = text_source_order
             .iter()
             .copied()
             .filter(|source| merged.text_values.contains_key(source))

@@ -260,3 +260,59 @@ fn scroll_batch_refuses_without_a_restyled_set() {
     session.session.invalidate();
     session.refused(|dom| scroll_by_one(dom, FIRST));
 }
+
+#[test]
+fn retained_text_edit_preserves_find_in_an_unrelated_shadow_tree() {
+    // The first assigned node in light DOM comes last in the rendered tree.
+    let html = table_html(FIRST).replace("</body>", r#"
+        <div id="host"><template shadowrootmode="open"><div>shadow-needle</div><slot name="first"></slot><slot name="last"></slot></template><span slot="last">shared last</span><span id="first" slot="first">shared first</span><span>unassigned</span></div>
+        <div id="edited" style="display:flex;width:300px;height:20px">original<span>tail</span></div>
+        </body>"#);
+    let mut session = Session::new(&html);
+    let first = session
+        .dom
+        .dom_children(by_id(&session.dom, "first"))
+        .next()
+        .unwrap();
+    let shadow = session.layout.text_range_for_text("shadow-needle").unwrap();
+    assert_eq!(
+        session
+            .layout
+            .text_range_for_text("shared")
+            .unwrap()
+            .anchor_node,
+        first
+    );
+    assert!(session.layout.text_range_for_text("unassigned").is_none());
+    assert!(
+        session.batch(|dom| {
+            let text = dom.dom_children(by_id(dom, "edited")).next().unwrap();
+            dom.set_text(text, "changed");
+        }),
+        "the unrelated edit must take the local formatting path"
+    );
+
+    let (styles, fresh) = fresh_layout(&session.dom, &session.styles_set, &mut session.text);
+    let reference = observe(&session.dom, &styles, &fresh, &mut session.text, &[]);
+    session.observed(&[]).assert_eq(&reference);
+    let reference_shadow = fresh.text_range_for_text("shadow-needle").unwrap();
+    let reference_shared = fresh.text_range_for_text("shared").unwrap();
+    assert_eq!(reference_shadow, shadow);
+    assert_eq!(reference_shared.anchor_node, first);
+    let expected_selection = fresh.text_selection(reference_shadow).unwrap();
+    assert!(!expected_selection.rects.is_empty());
+    assert_eq!(
+        session.layout.text_range_for_text("shadow-needle"),
+        Some(reference_shadow)
+    );
+    assert_eq!(
+        session.layout.text_selection(shadow),
+        Some(expected_selection)
+    );
+    assert_eq!(
+        session.layout.text_range_for_text("shared"),
+        Some(reference_shared)
+    );
+    assert!(session.layout.text_range_for_text("unassigned").is_none());
+    assert!(session.layout.text_range_for_text("changed").is_some());
+}

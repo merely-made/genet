@@ -214,7 +214,7 @@ where
         fresh: &Self,
         node: Id,
         replaced_nodes: &HashSet<Id>,
-        dom_text_order: &[Id],
+        text_source_order: &[Id],
     ) -> bool {
         let Some(root_box) = retained_root_box(self.buckram.boxes(), node) else {
             return false;
@@ -304,7 +304,7 @@ where
                     .as_ref()
                     .expect("a checked fresh text frame is present"),
                 replaced_nodes,
-                dom_text_order,
+                text_source_order,
             );
         true
     }

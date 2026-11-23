@@ -182,7 +182,7 @@ where
                 }
                 replaced.extend(previous.generated_subtree_nodes(root));
                 local.reconcile_identifiers(previous);
-                let sources = text_sources_in_dom_order(dom);
+                let sources = text_sources_in_flat_tree_order(dom);
                 return Ok(previous.replace_reconciled_local_formatting_subtree_from(
                     &local, root, &replaced, &sources,
                 ));
@@ -198,13 +198,14 @@ where
     }
 }
 
-pub(in crate::layout) fn text_sources_in_dom_order<D: LayoutDom>(dom: &D) -> Vec<D::NodeId> {
+pub(in crate::layout) fn text_sources_in_flat_tree_order<D: LayoutDom>(dom: &D) -> Vec<D::NodeId> {
     fn visit<D: LayoutDom>(dom: &D, node: D::NodeId, sources: &mut Vec<D::NodeId>) {
         // Native controls retain text under the element's own ID.
         if dom.kind(node) == NodeKind::Text || dom.form_control_state(node).is_some() {
             sources.push(node);
         }
-        for child in dom.dom_children(node) {
+        // Follow the same shadow and slot distribution that produced the text fragments.
+        for child in dom.flat_children(node) {
             visit(dom, child, sources);
         }
     }

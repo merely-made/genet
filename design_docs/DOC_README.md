@@ -354,6 +354,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
   `contentWindow` needs realms in `ScriptEngine` or stays permanently partial —
   plus `document.domain`, the cross-origin `WindowProxy`, COOP/COEP enforcement,
   child navigation, lazy loading, focus, and a headed script-driven receipt.)
+- [webassembly_object_plan](2026-11-22_webassembly_object_plan.md)
+  (**written 2026-11-22, nothing built**: a probe that gives scripts on Vano a
+  `WebAssembly` object backed by wasmi natively, memory aliasing included; D1 to
+  D3 ruled.)
 - [websocket_plan](2026-09-07_websocket_plan.md)
   (**landed 2026-09-07**: `WebSocket` and `CloseEvent` as a script-visible state
   machine over an extended netfetcher transport. Two halves, because WebSocket is

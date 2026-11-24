@@ -2142,12 +2142,19 @@ where
         explicit_inheritance |= pseudo_inheritance;
         resolve_viewport_units(&mut pseudo_style, device, tree_counts);
         resolve_font_metrics(&mut pseudo_style, Some(&computed));
-        // First slice admits inline text only. Unsupported box geometries
-        // remain absent rather than being silently flattened to inline.
-        if computed.display != livery::values::Display::None
-            && pseudo_style.display == livery::values::Display::Inline
+        // Inline generated content and out-of-flow text boxes have layout
+        // representations. Preserve other display modes for a future formatter.
+        let inline = pseudo_style.display == livery::values::Display::Inline
             && pseudo_style.position == Position::Static
-            && pseudo_style.float == livery::values::Float::None
+            && pseudo_style.float == livery::values::Float::None;
+        let positioned = matches!(pseudo_style.position, Position::Absolute | Position::Fixed)
+            && matches!(
+                pseudo_style.display,
+                livery::values::Display::Inline | livery::values::Display::Block
+            )
+            && pseudo_style.content.single_image().is_none();
+        if computed.display != livery::values::Display::None
+            && (inline || positioned)
             && let Some(text) = pseudo_style
                 .content
                 .resolve(|name| generated_content_attribute(selector_tree.dom(), id, name))

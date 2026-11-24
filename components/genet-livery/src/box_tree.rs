@@ -260,12 +260,25 @@ fn generated_text_input<D>(
     }
     // The pseudo retains its own provenance. It is not inserted into the DOM,
     // and its text is resolved by the same style-plane consumer as AccName.
-    children.push(BoxTreeInput::text(
-        BoxOrigin::Pseudo { owner, pseudo },
-        flow_axes(style),
-        false,
-        false,
-    ));
+    let origin = BoxOrigin::Pseudo { owner, pseudo };
+    let text = BoxTreeInput::text(origin, flow_axes(style), false, false);
+    if matches!(
+        style.position,
+        ComputedPosition::Absolute | ComputedPosition::Fixed
+    ) {
+        // An out-of-flow pseudo needs a principal box for its own border and
+        // insets. Keep the generated text inside it with its pseudo provenance.
+        children.push(BoxTreeInput::new(
+            origin,
+            display_role(style.display, false),
+            flow_axes(style),
+            positioning_scheme(style.position),
+            false,
+            vec![text],
+        ));
+    } else {
+        children.push(text);
+    }
 }
 
 /// A generated image rides the atomic-inline lane, which supports an owner

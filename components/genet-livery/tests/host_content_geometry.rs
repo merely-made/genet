@@ -481,3 +481,60 @@ fn used_foreground_keeps_encoded_channels_alpha_palette_and_element_scheme() {
     }
     assert_ne!(plane.used_color(id("parent")), plane.used_color(id("leaf")));
 }
+
+#[test]
+fn empty_positioned_pseudo_paints_and_hits_its_origin_above_an_intervening_box() {
+    let fixture = Fixture::new(
+        "<div class='owner'></div><div class='overlap'></div>",
+        ".owner, .overlap { position:absolute; width:80px; height:50px; left:10px; top:10px }
+         .overlap { background:#00ff00 }
+         .owner::before { content:''; position:absolute; left:20px; top:15px;
+                         width:40px; height:20px; z-index:7; background:#ff0000 }",
+    );
+    let list = emit_paint_list_with_text_system_scrolled_with_images(
+        &fixture.dom,
+        &fixture.styles,
+        &fixture.fragments,
+        DeviceIntSize::new(320, 240),
+        1,
+        &mut TextSystem::new(),
+        &fixture.scroll,
+        &HashMap::new(),
+    );
+    let painted: Vec<_> = list
+        .commands()
+        .iter()
+        .filter_map(|command| {
+            let PaintCmd::DrawRect(item) = command else {
+                return None;
+            };
+            let red = paint_list_api::ColorF::new(1.0, 0.0, 0.0, 1.0);
+            let green = paint_list_api::ColorF::new(0.0, 1.0, 0.0, 1.0);
+            (item.color == red || item.color == green)
+                .then_some((item.color == red, item.placement.bounds))
+        })
+        .collect();
+    let rect = |left, top, right, bottom| {
+        LayoutRect::new(LayoutPoint::new(left, top), LayoutPoint::new(right, bottom))
+    };
+    assert_eq!(
+        painted,
+        [
+            (false, rect(10., 10., 90., 60.)),
+            (true, rect(30., 25., 70., 45.))
+        ]
+    );
+    let owner = fixture.node("owner");
+    let overlap = fixture.node("overlap");
+    let hits = genet_livery::hit_test_all_with_scroll(
+        &fixture.dom,
+        &fixture.styles,
+        &fixture.fragments,
+        &fixture.scroll,
+        31.,
+        26.,
+    );
+    assert!(hits.starts_with(&[owner, overlap, owner]), "{hits:?}");
+    assert_eq!(fixture.hit((31., 26.)), Some(owner));
+    assert_eq!(fixture.hit((29., 26.)), Some(overlap));
+}

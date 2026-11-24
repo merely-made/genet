@@ -60,6 +60,11 @@ pub struct IntersectionReport {
 
 /// The host's layout seam for CSSOM View element geometry and scrolling.
 pub trait GeometryHandler {
+    /// Elements hit at a viewport point in topmost-first paint order.
+    fn elements_from_point(&self, _x: f32, _y: f32) -> Vec<u64> {
+        Vec::new()
+    }
+
     /// Content-box dimensions in CSS pixels, or None when not rendered.
     fn content_box_size(&self, _node: u64) -> Option<(f32, f32)> {
         None
@@ -119,6 +124,51 @@ fn number_arg<E: ScriptEngine>(
         .parse::<f32>()
         .ok()
         .filter(|number| number.is_finite()))
+}
+
+/// Resolve against the receiver's active document, including in child realms.
+/// Detached documents can share its DOM arena but have no viewport.
+pub(crate) struct FromPoint<const ALL: bool>;
+impl<E: ScriptEngine, const ALL: bool> NativeFn<E> for FromPoint<ALL> {
+    fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+        let receiver = cx.arg(0);
+        let Some(doc) = cx.owned_node(&receiver)? else {
+            return Ok(cx.undefined());
+        };
+        let x = cx.arg(1);
+        let y = cx.arg(2);
+        let x = cx.value_to_number(&x)? as f32;
+        let y = cx.value_to_number(&y)? as f32;
+        if !x.is_finite() || !y.is_finite() {
+            return Ok(cx.undefined());
+        }
+        let geometry = {
+            let host = doc.host().borrow();
+            if doc.id() != host.dom.document() {
+                return Ok(cx.undefined());
+            }
+            host.geometry.clone()
+        };
+        if let Some(geometry) = geometry {
+            let hits = geometry.elements_from_point(x, y);
+            if !ALL {
+                return match hits.first() {
+                    Some(raw) => reflect_pinned::<E>(cx, *raw),
+                    None => Ok(cx.undefined()),
+                };
+            }
+            let mut reflectors = Vec::with_capacity(hits.len());
+            for raw in hits {
+                reflectors.push(reflect_pinned::<E>(cx, raw)?);
+            }
+            let append = cx.arg(3);
+            let this = cx.undefined();
+            for reference in reflectors {
+                E::call_from_call(cx, &append, &this, &[reference])?;
+            }
+        }
+        Ok(cx.undefined())
+    }
 }
 
 /// `__geomRects(ref)` -> newline-separated `x,y,width,height`, empty without a box.

@@ -3048,6 +3048,34 @@
     e.__initialized = false; // must call initEvent() before dispatch
     return e;
   };
+  var nativeElementFromPoint = globalThis.__geomElementFromPoint;
+  var nativeElementsFromPoint = globalThis.__geomElementsFromPoint;
+  delete globalThis.__geomElementFromPoint;
+  delete globalThis.__geomElementsFromPoint;
+  function pointCoordinate(value) {
+    var number = +value;
+    if (number !== number || number === Infinity || number === -Infinity) throw new TypeError('Point coordinates must be finite');
+    return number;
+  }
+  function documentPointHits(doc, x, y, argc, all) {
+    var ref = privateGet(formRefs, doc);
+    if (!ref || +formNodeType(ref) !== 9) throw new TypeError('Illegal invocation');
+    if (argc < 2) throw new TypeError('Two point coordinates are required');
+    x = pointCoordinate(x);
+    y = pointCoordinate(y);
+    if (!all) return wrapNode(nativeElementFromPoint(ref, x, y));
+    var hits = [];
+    nativeElementsFromPoint(ref, x, y, function(nodeRef) {
+      hits.push(wrapNode(nodeRef));
+    });
+    return hits;
+  }
+  Document.prototype.elementFromPoint = function(x, y) {
+    return documentPointHits(this, x, y, arguments.length, false);
+  };
+  Document.prototype.elementsFromPoint = function(x, y) {
+    return documentPointHits(this, x, y, arguments.length, true);
+  };
   Document.prototype.getElementById = function(id) { return wrapNode(__getElementById(this.__ref, String(id))); };
   Document.prototype.getElementsByTagName = getElementsByTagName;
   Document.prototype.getElementsByTagNameNS = makeGetElementsByTagNameNS(9);

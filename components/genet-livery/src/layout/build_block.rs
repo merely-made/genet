@@ -1273,7 +1273,8 @@ where
                         containing_size,
                     );
                 }
-                let computed = inherited
+                let pseudo_style = positioned_pseudo_style(&self.boxes[box_id], self.styles);
+                let computed = pseudo_style.or(inherited)
                     .cloned()
                     .unwrap_or_else(|| self.styles.initial_style());
                 let children = self.boxes[box_id]
@@ -1284,12 +1285,18 @@ where
                             .transpose()
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                let block_style = anonymous_block_style(self.boxes, box_id);
+                let (block_style, taffy_style) = generated_box_styles(
+                    self.boxes,
+                    self.styles,
+                    box_id,
+                    pseudo_style,
+                    parent_font_size,
+                );
                 let kind = algorithm_kind(&self.boxes[box_id], children.is_empty());
                 let node = self.tree.new_with_children_and_block_style(
                     kind,
                     block_style,
-                    anonymous_taffy_style(&self.boxes[box_id]),
+                    taffy_style,
                     &children,
                     Some(box_id),
                 );

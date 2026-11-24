@@ -103,6 +103,32 @@ where
             .any(|(_, css_box)| css_box.positioning == PositioningScheme::Sticky)
     }
 
+    /// The principal border box and style of an out-of-flow generated pseudo.
+    /// Inline text with the same origin is not a separate stacking candidate.
+    pub(crate) fn positioned_pseudo<'a>(
+        &'a self,
+        styles: &'a StylePlane<Id>,
+        owner: Id,
+        pseudo: buckram::PseudoElement,
+    ) -> Option<(&'a ComputedValues, &'a TreeFragment)> {
+        let style = styles.generated_style(owner, pseudo)?;
+        if !matches!(style.position, CssPosition::Absolute | CssPosition::Fixed)
+            || style.visibility != livery::values::Visibility::Visible
+        {
+            return None;
+        }
+        let boxes = self.boxes();
+        let id = boxes.boxes_for_node(owner).iter().copied().find(|id| {
+            boxes[*id].origin == (BoxOrigin::Pseudo { owner, pseudo })
+                && matches!(
+                    boxes[*id].positioning,
+                    PositioningScheme::Absolute | PositioningScheme::Fixed
+                )
+        })?;
+        let tree = self.fragments();
+        Some((style, tree.get(*tree.fragment_ids_for_box(id).first()?)?))
+    }
+
     pub fn fragments(&self) -> &FragmentTree {
         self.buckram.fragments()
     }
@@ -646,7 +672,10 @@ where
             .boxes()
             .boxes_for_node(node)
             .iter()
-            .filter(|box_id| self.buckram.boxes()[**box_id].origin.node() == Some(node))
+            .filter(|box_id| {
+                let origin = self.buckram.boxes()[**box_id].origin;
+                origin.node() == Some(node) && !matches!(origin, BoxOrigin::Pseudo { .. })
+            })
             .filter_map(|box_id| {
                 positioned_placement_for_box(
                     self.buckram.fragments(),

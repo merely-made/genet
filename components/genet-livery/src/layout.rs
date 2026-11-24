@@ -127,7 +127,7 @@ pub(crate) use taffy_style::{
 };
 // Crate and public surface the seams carried out with them: paint reads the
 // table paint model and stacking order, and lib.rs re-exports both hit tests.
-pub use hit_testing::{hit_test, hit_test_with_scroll};
+pub use hit_testing::{hit_test, hit_test_all_with_scroll, hit_test_with_scroll};
 pub(crate) use hit_testing::{order_modified_children, z_index_stacking_level};
 pub(crate) use tables::TablePaintModel;
 
@@ -1471,6 +1471,47 @@ where
         .parent()
         .map_or(flow, |parent| boxes[parent].flow);
     BlockStyle::anonymous(flow, containing_flow)
+}
+
+/// Styles for a generated principal box; its text child shares the origin
+/// but is formatted as inline content.
+fn positioned_pseudo_style<'a, Id: Copy + Eq + Hash>(
+    css_box: &buckram::CssBox<Id>,
+    styles: &'a StylePlane<Id>,
+) -> Option<&'a ComputedValues> {
+    if let BoxOrigin::Pseudo { owner, pseudo } = css_box.origin
+        && matches!(
+            css_box.positioning,
+            PositioningScheme::Absolute | PositioningScheme::Fixed
+        )
+    {
+        return styles.generated_style(owner, pseudo);
+    }
+    None
+}
+
+/// Generated boxes without specified style use anonymous sizing. A
+/// positioned pseudo instead contributes its own CSS sizes and insets on
+/// both the block and the inline formatting routes.
+fn generated_box_styles<Id: Copy + Eq + Hash>(
+    boxes: &GeneratedBoxTree<Id>,
+    styles: &StylePlane<Id>,
+    id: BoxId,
+    computed: Option<&ComputedValues>,
+    parent_font_size: f32,
+) -> (BlockStyle, Style) {
+    if let Some(style) = computed {
+        let font_size = font_size_px(&style.font_size, parent_font_size);
+        (
+            to_block_style(boxes, styles, id, style, font_size),
+            to_taffy_style(style, font_size),
+        )
+    } else {
+        (
+            anonymous_block_style(boxes, id),
+            anonymous_taffy_style(&boxes[id]),
+        )
+    }
 }
 
 fn to_block_style<Id>(

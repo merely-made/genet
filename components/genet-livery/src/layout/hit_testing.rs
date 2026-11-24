@@ -105,26 +105,69 @@ where
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
-    if !x.is_finite() || !y.is_finite() {
-        return None;
+    let mut winner = None;
+    visit_hits(dom, styles, fragments, scroll_offsets, x, y, &mut |id| {
+        winner = Some(id)
+    });
+    winner
+}
+
+/// All pointer-enabled elements at a document-space point in front-to-back
+/// paint order. Adjacent boxes for one element contribute one entry. A
+/// different element can be painted between an element and its pseudo box.
+pub fn hit_test_all_with_scroll<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
+    x: f32,
+    y: f32,
+) -> Vec<D::NodeId>
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let mut hits = Vec::new();
+    visit_hits(dom, styles, fragments, scroll_offsets, x, y, &mut |id| {
+        if hits.last() != Some(&id) {
+            hits.push(id);
+        }
+    });
+    hits.reverse();
+    hits
+}
+
+fn visit_hits<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    fragments: &LiveryLayout<D::NodeId>,
+    scroll_offsets: &HashMap<D::NodeId, (f32, f32)>,
+    x: f32,
+    y: f32,
+    record: &mut dyn FnMut(D::NodeId),
+) where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    if x.is_finite() && y.is_finite() {
+        HitTestState {
+            dom,
+            styles,
+            fragments,
+            scroll_offsets,
+            x,
+            y,
+            record,
+        }
+        .visit(dom.document(), &PlacementState::default(), None);
     }
-    let mut state = HitTestState {
-        dom,
-        styles,
-        fragments,
-        scroll_offsets,
-        x,
-        y,
-        winner: None,
-    };
-    state.visit(dom.document(), &PlacementState::default(), None);
-    state.winner
 }
 
 struct StackingEntry<Id> {
     id: Id,
     order: StackingOrder,
     placement: PlacementState,
+    pseudo: bool,
 }
 
 struct HitTestState<'a, D: LayoutDom>
@@ -137,7 +180,7 @@ where
     scroll_offsets: &'a HashMap<D::NodeId, (f32, f32)>,
     x: f32,
     y: f32,
-    winner: Option<D::NodeId>,
+    record: &'a mut dyn FnMut(D::NodeId),
 }
 
 impl<D: LayoutDom> HitTestState<'_, D>
@@ -167,7 +210,7 @@ where
                 .geometry
                 .is_some_and(|geometry| geometry.hits_border(self.x, self.y))
         {
-            self.winner = Some(id);
+            (self.record)(id);
         }
         if let Some(roots) = roots {
             self.visit_in_flow_children(id, &entered.children, roots);
@@ -180,14 +223,30 @@ where
         let mut items = Vec::new();
         self.collect_stacking(id, &entered.children, &mut items);
         items.sort_by_key(|item| item.order.level());
-        let roots = items.iter().map(|item| item.id).collect::<HashSet<_>>();
+        let roots = items
+            .iter()
+            .filter(|item| !item.pseudo)
+            .map(|item| item.id)
+            .collect::<HashSet<_>>();
         for item in items.iter().filter(|item| item.order.level() < 0) {
-            self.visit(item.id, &item.placement, None);
+            self.visit_entry(item, None);
         }
         self.visit_in_flow_children(id, &entered.children, &roots);
         for item in items.iter().filter(|item| item.order.level() >= 0) {
             let excluded = (item.order == StackingOrder::Positioned).then_some(&roots);
-            self.visit(item.id, &item.placement, excluded);
+            self.visit_entry(item, excluded);
+        }
+    }
+
+    fn visit_entry(
+        &mut self,
+        entry: &StackingEntry<D::NodeId>,
+        roots: Option<&HashSet<D::NodeId>>,
+    ) {
+        if entry.pseudo {
+            (self.record)(entry.id);
+        } else {
+            self.visit(entry.id, &entry.placement, roots);
         }
     }
 
@@ -210,6 +269,7 @@ where
         placement: &PlacementState,
         items: &mut Vec<StackingEntry<D::NodeId>>,
     ) {
+        self.collect_pseudo(parent, buckram::PseudoElement::Before, placement, items);
         for child in order_modified_children(self.dom, self.styles, parent) {
             if let Some(order) = stacking_order(
                 self.dom,
@@ -219,6 +279,7 @@ where
             ) {
                 items.push(StackingEntry {
                     id: child,
+                    pseudo: false,
                     order,
                     placement: placement.clone(),
                 });
@@ -235,6 +296,30 @@ where
             ) {
                 self.collect_stacking(child, &entered.children, items);
             }
+        }
+        self.collect_pseudo(parent, buckram::PseudoElement::After, placement, items);
+    }
+
+    fn collect_pseudo(
+        &self,
+        owner: D::NodeId,
+        pseudo: buckram::PseudoElement,
+        placement: &PlacementState,
+        items: &mut Vec<StackingEntry<D::NodeId>>,
+    ) {
+        let Some((style, fragment)) = self.fragments.positioned_pseudo(self.styles, owner, pseudo)
+        else {
+            return;
+        };
+        if style.pointer_events == livery::values::PointerEvents::Auto
+            && placement.hits_pseudo(style, fragment, self.x, self.y)
+        {
+            items.push(StackingEntry {
+                id: owner,
+                order: crate::paint::positioned_pseudo_order(style),
+                placement: placement.clone(),
+                pseudo: true,
+            });
         }
     }
 }

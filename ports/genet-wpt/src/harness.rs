@@ -1832,6 +1832,21 @@ const TESTDRIVER_VENDOR_JS: &str = r#"
       globalThis.__tdQueue.push({ actions: fixed, resolve: resolve, reject: reject });
     });
   };
+  window.test_driver_internal.click = function(element, coords) {
+    // This queue drives this document's viewport. A child document has its
+    // own coordinate space, even when its elements are reachable by script.
+    if (element.ownerDocument !== document) {
+      return Promise.reject(new Error('click target belongs to a different document'));
+    }
+    return window.test_driver_internal.action_sequence([{
+      type: 'pointer', id: 'click', parameters: { pointerType: 'mouse' },
+      actions: [
+        { type: 'pointerMove', origin: 'viewport', x: coords.x, y: coords.y },
+        { type: 'pointerDown', button: 0 },
+        { type: 'pointerUp', button: 0 }
+      ]
+    }]);
+  };
   // Label requests carry a sequence number so concurrent promise_tests each
   // settle their own promise; the host answers a whole batch per drive turn.
   globalThis.__tdLabelSeq = 0;
@@ -2329,6 +2344,32 @@ async_test(function(t) {
             results[0].passed(),
             "the synthesized click should complete the async_test: {results:?}"
         );
+    }
+
+    #[test]
+    fn test_driver_bless_clicks_the_inserted_button() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/wpt/tests");
+        let harness = fs::read_to_string(root.join("resources/testharness.js")).expect("harness");
+        let loader = DiskLoader::new(&root, &root);
+        let html = r#"<!doctype html><body>
+<script src="/resources/testdriver.js"></script>
+<script src="/resources/testdriver-vendor.js"></script>
+<script>
+promise_test(async function() {
+  assert_equals(await test_driver.bless('click a new button', function() { return 17; }), 17);
+}, 'clicking the freshly appended button runs the callback');
+</script>"#;
+        let results = unwrap_ran(run_test(
+            &harness,
+            html,
+            &loader,
+            None,
+            None,
+            None,
+            Engine::Boa,
+        ));
+        assert_eq!(results.len(), 1, "{results:?}");
+        assert!(results[0].passed(), "{results:?}");
     }
 
     /// `test_driver.get_computed_label` reads the element's name from the

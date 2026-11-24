@@ -5604,6 +5604,10 @@ where
 {
     fn collect(&mut self, box_id: BoxId, inherited: &ComputedValues) {
         let css_box = &self.boxes[box_id];
+        if matches!(css_box.origin, BoxOrigin::Pseudo { .. }) && !css_box.positioning.is_in_flow() {
+            // Its generated text belongs to the positioned fragment's paint slot.
+            return;
+        }
         match css_box.origin {
             BoxOrigin::Text(node) => {
                 let start = self.text.len();

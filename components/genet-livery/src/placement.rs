@@ -197,6 +197,39 @@ pub(crate) struct EnteredPlacement {
 }
 
 impl PlacementState {
+    /// Test a positioned generated box in the same inherited scroll, clip
+    /// and transform space as the element's other painted descendants.
+    pub(crate) fn hits_pseudo(
+        &self,
+        style: &livery::ComputedValues,
+        fragment: &crate::layout::Fragment,
+        x: f32,
+        y: f32,
+    ) -> bool {
+        if !self.clips.iter().all(|clip| clip.contains(x, y)) {
+            return false;
+        }
+        let context = crate::transform_context::TransformContextFacts::for_box(style, false, false);
+        let matrix = paint::transform_spec(style, fragment, None, context)
+            .map_or(self.matrix, |transform| {
+                self.matrix.multiply(spec_matrix(&transform))
+            });
+        let inverse = inverse(matrix);
+        if let Some(clip) = paint::polygon_clip(style, fragment)
+            && !(GeometryClip { inverse, clip }).contains(x, y)
+        {
+            return false;
+        }
+        inverse
+            .and_then(|inverse| map_point(inverse, x, y))
+            .is_some_and(|point| {
+                contains(
+                    (fragment.x, fragment.y, fragment.width, fragment.height),
+                    point,
+                )
+            })
+    }
+
     pub(crate) fn enter<D>(
         &self,
         dom: &D,

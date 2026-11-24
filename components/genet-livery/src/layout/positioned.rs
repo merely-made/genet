@@ -612,8 +612,8 @@ where
         width: static_in_source.width,
         height: static_in_source.height,
     };
-    let computed = styles
-        .get(node)
+    let pseudo = positioned_pseudo_style(&boxes[box_id], styles);
+    let computed = pseudo.or_else(|| styles.get(node))
         .expect("a generated positioned box keeps its computed style");
     let computed = if boxes[box_id].display.internal_table == Some(InternalTableRole::Wrapper) {
         wrapper_style(computed)
@@ -979,7 +979,8 @@ pub(in crate::layout) fn apply_absolute_and_fixed_positioning<D>(
             y: placement.containing_rect.y + target.y - placement.current.y,
         };
         fragments.translate_subtree(placement.root, offset);
-        if let Some(node) = boxes[placement.box_id].origin.node()
+        if !matches!(boxes[placement.box_id].origin, BoxOrigin::Pseudo { .. })
+            && let Some(node) = boxes[placement.box_id].origin.node()
             && let Some(text) = text_frame.as_deref_mut()
         {
             text.translate_subtree(dom, node, (offset.x, offset.y));

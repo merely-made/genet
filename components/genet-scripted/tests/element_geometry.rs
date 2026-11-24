@@ -78,6 +78,45 @@ fn geometry_follows_script_mutation_without_a_frame<E: ScriptEngine>() {
     assert_eq!(out[0], "160,160");
 }
 
+fn document_point_queries_follow_script_mutation_without_a_frame<E: ScriptEngine>() {
+    let (mut runtime, _cssom) = setup::<E>();
+    let out = run(&mut runtime, r#"
+        var button = document.createElement('button');
+        button.style.cssText = 'position:absolute;left:10px;top:20px;width:80px;height:30px';
+        document.body.appendChild(button);
+        console.log(document.elementFromPoint(50, 35) === button);
+        button.style.left = '110px';
+        var hits = document.elementsFromPoint(150, 35);
+        console.log([hits[0] === button, hits[hits.length-1] === document.documentElement,
+                     document.elementFromPoint(50, 35) !== button].join());
+        button.remove();
+        console.log(document.elementsFromPoint(150, 35).indexOf(button));
+        console.log([document.elementFromPoint(-1, 35) === null,
+                     document.elementsFromPoint(401, 35).length].join());
+    "#);
+    assert_eq!(out, ["true", "true,true,true", "-1", "true,0"]);
+}
+
+fn document_point_queries_use_the_receivers_viewport<E: ScriptEngine>() {
+    let (mut runtime, _cssom) = setup::<E>();
+    let out = run(&mut runtime, r#"
+        var frame = document.createElement('iframe');
+        frame.style.cssText = 'position:absolute;left:180px;top:0;width:120px;height:80px';
+        document.body.appendChild(frame);
+        var child = frame.contentDocument;
+        var inside = child.createElement('div');
+        inside.style.cssText = 'position:absolute;left:0;top:0;width:100px;height:60px';
+        child.body.appendChild(inside);
+        var parentTarget = document.getElementById('box');
+        console.log(Document.prototype.elementFromPoint.call(child, 40, 30) === inside);
+        console.log(frame.contentWindow.Document.prototype.elementsFromPoint.call(document, 40, 30)[0] === parentTarget);
+        var detached = document.implementation.createHTMLDocument('');
+        console.log([detached.elementFromPoint(40, 30) === null,
+                     detached.elementsFromPoint(40, 30).length].join());
+    "#);
+    assert_eq!(out, ["true", "true", "true,0"]);
+}
+
 fn input_image_dimensions_follow_content_box<E: ScriptEngine>() {
     let (mut runtime, _cssom) = setup::<E>();
     let out = run(&mut runtime, r#"
@@ -208,6 +247,8 @@ macro_rules! both_engines {
 
 both_engines!(boxes_answer_from_the_retained_frame);
 both_engines!(geometry_follows_script_mutation_without_a_frame);
+both_engines!(document_point_queries_follow_script_mutation_without_a_frame);
+both_engines!(document_point_queries_use_the_receivers_viewport);
 both_engines!(scroll_containers_report_client_and_scroll_boxes);
 both_engines!(element_scroll_clamps_moves_boxes_and_reads_back);
 both_engines!(scrolled_container_reaches_paint_and_hit_test);

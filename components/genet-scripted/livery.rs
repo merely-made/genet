@@ -2297,6 +2297,52 @@ fn offset_parent(
 }
 
 impl GeometryHandler for LiveryGeometry {
+    fn elements_from_point(&self, x: f32, y: f32) -> Vec<u64> {
+        self.with_layout(|host, state| {
+            let Some(frame) = &state.frame else {
+                return Vec::new();
+            };
+            if !(0.0..=frame.viewport.0 as f32).contains(&x)
+                || !(0.0..=frame.viewport.1 as f32).contains(&y)
+            {
+                return Vec::new();
+            }
+            let dom = &host.dom;
+            let hits = genet_livery::hit_test_all_with_scroll(
+                dom,
+                &frame.styles,
+                &frame.fragments,
+                &state.element_scroll,
+                x + state.scroll.0,
+                y + state.scroll.1,
+            );
+            let mut elements = Vec::with_capacity(hits.len());
+            for hit in hits {
+                let Some(mut element) = pointer_event_target(dom, hit) else {
+                    continue;
+                };
+                // A document query sees the host of a shadow tree. Slotted
+                // light-DOM elements keep their own tree scope.
+                while let Some(host) = dom
+                    .containing_shadow_root(element)
+                    .and_then(|root| dom.shadow_host(root))
+                {
+                    element = host;
+                }
+                if elements.last() != Some(&element.raw()) {
+                    elements.push(element.raw());
+                }
+            }
+            if let (Some(root), _) = root_and_body(dom)
+                && elements.last() != Some(&root.raw())
+            {
+                elements.push(root.raw());
+            }
+            elements
+        })
+        .unwrap_or_default()
+    }
+
     fn content_box_size(&self, node: u64) -> Option<(f32, f32)> {
         let node = NodeId::from_raw(node);
         self.with_layout(|_, state| {
@@ -2362,7 +2408,16 @@ impl GeometryHandler for LiveryGeometry {
                     .map(|b| [b[0] - sx - hx, b[1] - sy - hy, b[2], b[3]])
                     .collect();
             }
-            let parts: Vec<_> = frame.fragments.fragments_for_node(node).collect();
+            // Pseudo boxes share a DOM owner for hit testing, but their border
+            // boxes are not part of that element's getClientRects() result.
+            let boxes = frame.fragments.boxes();
+            let parts: Vec<_> = frame
+                .fragments
+                .fragments_for_node(node)
+                .filter(|part| {
+                    !matches!(boxes[part.box_id()].origin, genet_livery::BoxOrigin::Pseudo { .. })
+                })
+                .collect();
             if parts.len() > 1 {
                 return parts
                     .iter()

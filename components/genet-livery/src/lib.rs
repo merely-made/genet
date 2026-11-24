@@ -108,8 +108,8 @@ pub use intersection::{Intersection, IntersectionFrame, MarginValue, Margins, ZE
 pub use invalidation::{AttributeSnapshot, ElementSnapshot, IncrementalStyle, RestyleStats};
 pub use layout::{
     BlockAlgorithmCounts, FragmentEdges, LayoutError, LiveryLayout, content_box_size,
-    estimated_used_value_context, fragment_edges, hit_test, hit_test_with_scroll, layout,
-    layout_with_text_system, resolve_container_query_styles,
+    estimated_used_value_context, fragment_edges, hit_test, hit_test_all_with_scroll,
+    hit_test_with_scroll, layout, layout_with_text_system, resolve_container_query_styles,
     resolve_container_query_styles_with_images, resolve_container_relative_styles,
     used_value_context_with_text_system,
 };

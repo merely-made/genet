@@ -1033,16 +1033,7 @@ fn emit_node<D>(
     let filters = styles
         .get(id)
         .filter(|style| style.display != Display::None && style.visibility == Visibility::Visible)
-        .map(|style| match &style.filter {
-            Filter::None => Vec::new(),
-            Filter::Functions(functions) => functions
-                .iter()
-                .map(|function| match function {
-                    FilterFunction::Invert(value) => FilterOp::Invert(*value),
-                    FilterFunction::Blur(value) => FilterOp::Blur(*value),
-                })
-                .collect(),
-        })
+        .map(paint_filters)
         .unwrap_or_default();
     // The element's clip-path clips the filtered result, while overflow and
     // descendant clips remain in the filter input. Opacity composites last.
@@ -2842,6 +2833,7 @@ fn has_visible_box_decoration(style: &ComputedValues) -> bool {
 
 struct StackingItem<Id> {
     id: Id,
+    pseudo: Option<buckram::PseudoElement>,
     level: i32,
     // A positioned box with z-index: auto paints its own in-flow content
     // here. These descendants have their own entries in the enclosing phase.
@@ -2988,7 +2980,11 @@ fn emit_children_in_stacking_order<D>(
     );
     items.sort_by_key(|item| item.level);
     sort_preserve_3d_runs(dom, styles, fragments, &mut items);
-    let roots = items.iter().map(|item| item.id).collect::<HashSet<_>>();
+    let roots = items
+        .iter()
+        .filter(|item| item.pseudo.is_none())
+        .map(|item| item.id)
+        .collect::<HashSet<_>>();
 
     if !items.is_empty()
         && let Some(deferred) = deferred_collapsed.as_deref_mut()
@@ -3055,6 +3051,20 @@ fn collect_stacking_items<D>(
     D: LayoutDom,
     D::NodeId: Copy + Eq + Hash,
 {
+    let add_pseudo =
+        |items: &mut Vec<StackingItem<D::NodeId>>, pseudo, scopes: &[StackingScope]| {
+            if let Some((style, _)) = fragments.positioned_pseudo(styles, parent, pseudo) {
+                items.push(StackingItem {
+                    id: parent,
+                    pseudo: Some(pseudo),
+                    level: positioned_pseudo_order(style).level(),
+                    positioned_descendants: None,
+                    covered_inline: false,
+                    ancestor_scopes: scopes.to_vec(),
+                });
+            }
+        };
+    add_pseudo(items, buckram::PseudoElement::Before, ancestor_scopes);
     let children = order_modified_children(dom, styles, parent);
     for (index, child) in children.iter().copied().enumerate() {
         let mut positioned_parent = positioned_ancestor;
@@ -3072,6 +3082,7 @@ fn collect_stacking_items<D>(
             let item_index = items.len();
             items.push(StackingItem {
                 id: child,
+                pseudo: None,
                 level: order.level(),
                 positioned_descendants: positioned.then(HashSet::new),
                 covered_inline: positioned
@@ -3126,6 +3137,7 @@ fn collect_stacking_items<D>(
         );
         ancestor_scopes.truncate(previous_len);
     }
+    add_pseudo(items, buckram::PseudoElement::After, ancestor_scopes);
 }
 
 /// Emit one z-order phase of flattened stacking items, holding each run of
@@ -3171,7 +3183,17 @@ fn emit_stacking_items<'items, D>(
             }
             open = Some(&item.ancestor_scopes);
         }
-        if let Some(descendants) = &item.positioned_descendants {
+        if let Some(pseudo) = item.pseudo {
+            if let Some((style, fragment)) = fragments.positioned_pseudo(styles, item.id, pseudo) {
+                emit_positioned_pseudo(
+                    style,
+                    fragment,
+                    styles.generated_text(item.id, pseudo).unwrap_or_default(),
+                    text,
+                    list,
+                );
+            }
+        } else if let Some(descendants) = &item.positioned_descendants {
             emit_normal_node(
                 dom,
                 styles,
@@ -3208,6 +3230,80 @@ fn emit_stacking_items<'items, D>(
         for scope in current.iter().rev() {
             list.commands.push(scope.pop());
         }
+    }
+}
+
+fn paint_filters(style: &ComputedValues) -> Vec<FilterOp> {
+    match &style.filter {
+        Filter::None => Vec::new(),
+        Filter::Functions(functions) => functions
+            .iter()
+            .map(|function| match function {
+                FilterFunction::Invert(value) => FilterOp::Invert(*value),
+                FilterFunction::Blur(value) => FilterOp::Blur(*value),
+            })
+            .collect(),
+    }
+}
+
+pub(crate) fn positioned_pseudo_order(style: &ComputedValues) -> StackingOrder {
+    match style.z_index {
+        livery::values::ZIndex::Integer(level) => StackingOrder::Context(level),
+        _ => StackingOrder::Positioned,
+    }
+}
+
+fn emit_positioned_pseudo<Id: Copy + Eq + Hash>(
+    style: &ComputedValues,
+    fragment: &buckram::Fragment,
+    content: &str,
+    text: &mut PaintText<'_, Id>,
+    list: &mut PaintBuilder<'_>,
+) {
+    let context = TransformContextFacts::for_box(style, false, false);
+    let transform = transform_spec(style, fragment, None, context);
+    if let Some(transform) = &transform {
+        list.commands
+            .push(PaintCmd::PushTransform(transform.clone()));
+    }
+    let clip = polygon_clip(style, fragment);
+    if let Some(clip) = &clip {
+        list.commands.push(PaintCmd::PushClip(clip.clone()));
+    }
+    let opacity = style.opacity.value();
+    let filters = paint_filters(style);
+    let layer = opacity < 1.0 || !filters.is_empty();
+    if layer {
+        list.commands.push(PaintCmd::PushLayer(LayerSpec {
+            opacity,
+            filters,
+            ..LayerSpec::default()
+        }));
+    }
+    emit_shadow(list, style, fragment);
+    emit_background(list, style, fragment);
+    emit_border(list, style, fragment);
+    let (x, y, width, height) = crate::layout::content_box_rect(style, fragment);
+    text.system.emit_single(
+        text.frame,
+        content,
+        style,
+        &Fragment {
+            x,
+            y,
+            width,
+            height,
+        },
+        &mut list.commands,
+    );
+    if layer {
+        list.commands.push(PaintCmd::PopLayer);
+    }
+    if clip.is_some() {
+        list.commands.push(PaintCmd::PopClip);
+    }
+    if transform.is_some() {
+        list.commands.push(PaintCmd::PopTransform);
     }
 }
 

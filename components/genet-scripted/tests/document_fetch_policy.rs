@@ -62,7 +62,8 @@ impl ResourceFetcher for Host {
     ) -> DocumentFetchResult {
         self.documents.lock().unwrap().push((kind, request.clone()));
         if (kind == DocumentFetchKind::TopLevel && self.fail_top)
-            || (kind == DocumentFetchKind::Iframe && self.fail_iframe)
+            || (kind == DocumentFetchKind::Iframe
+                && (self.fail_iframe || request.url.ends_with("/blocked")))
         {
             return DocumentFetchResult::Failed;
         }
@@ -128,6 +129,151 @@ fn product_document_policy_boa() {
 #[test]
 fn product_document_policy_vano() {
     product_document_policy::<script_engine_nova::NovaEngine>();
+}
+
+fn post_insertion_iframe_policy<E: ScriptEngine>() {
+    let host = Host::default();
+    let mut doc =
+        LiveryScriptedDocument::<E>::load(host.clone(), "https://site.test/start#focus").unwrap();
+    doc.pump(0.0);
+    host.documents.lock().unwrap().clear();
+    doc.evaluate(
+        r#"var later = document.createElement('iframe');
+        document.body.appendChild(later);
+        var previousWindow = later.contentWindow;
+        later.setAttribute('referrerpolicy', 'origin');
+        later.setAttribute('src', 'superseded');
+        later.setAttribute('src', 'later');"#,
+    )
+    .unwrap();
+    for n in 1..5 {
+        doc.pump(n as f64 * 16.0);
+    }
+
+    let requests = host.documents.lock().unwrap();
+    assert_eq!(
+        requests.len(),
+        1,
+        "the final src uses exactly one typed fetch"
+    );
+    let (kind, request) = &requests[0];
+    assert_eq!(*kind, DocumentFetchKind::Iframe);
+    assert_eq!(request.url, "https://site.test/dir/later");
+    assert_eq!(request.mode, "navigate");
+    assert_eq!(request.credentials, "include");
+    assert_eq!(request.referrer, "https://site.test/dir/page#focus");
+    assert_eq!(request.referrer_policy, "origin");
+    assert!(request.upgrade_insecure_requests && request.block_all_mixed_content);
+    drop(requests);
+
+    doc.evaluate(
+        "console.log((previousWindow === later.contentWindow) + ' ' + later.contentWindow.location.href)",
+    )
+    .unwrap();
+    assert!(
+        doc.console()
+            .iter()
+            .any(|line| line == "true https://site.test/dir/later?final"),
+        "{:?}",
+        doc.console()
+    );
+    assert!(host.legacy.lock().unwrap().is_empty());
+}
+
+#[test]
+fn post_insertion_iframe_policy_boa() {
+    post_insertion_iframe_policy::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(feature = "scripted-nova")]
+#[test]
+fn post_insertion_iframe_policy_vano() {
+    post_insertion_iframe_policy::<script_engine_nova::NovaEngine>();
+}
+
+#[test]
+fn post_insertion_iframe_drops_older_src_when_latest_fails() {
+    let host = Host::default();
+    let mut doc = LiveryScriptedDocument::<script_engine_boa::BoaEngine>::load(
+        host.clone(),
+        "https://site.test/start",
+    )
+    .unwrap();
+    doc.pump(0.0);
+    host.documents.lock().unwrap().clear();
+    doc.evaluate(
+        r#"var later = document.createElement('iframe');
+        document.body.appendChild(later);
+        later.src = 'older';
+        later.src = 'blocked';"#,
+    )
+    .unwrap();
+    for n in 1..4 {
+        doc.pump(n as f64 * 16.0);
+    }
+
+    let requests = host.documents.lock().unwrap();
+    assert_eq!(requests.len(), 1, "the older src cannot resume after failure");
+    assert_eq!(requests[0].0, DocumentFetchKind::Iframe);
+    assert_eq!(requests[0].1.url, "https://site.test/dir/blocked");
+    drop(requests);
+    assert!(host.legacy.lock().unwrap().is_empty());
+    doc.evaluate("console.log(later.contentWindow.location.href)")
+        .unwrap();
+    assert!(doc.console().iter().any(|line| line == "about:blank"));
+}
+
+#[test]
+fn post_insertion_iframe_respects_empty_srcdoc() {
+    let host = Host::default();
+    let mut doc = LiveryScriptedDocument::<script_engine_boa::BoaEngine>::load(
+        host.clone(),
+        "https://site.test/start",
+    )
+    .unwrap();
+    doc.evaluate(
+        r#"var inlineFrame = document.createElement('iframe');
+        inlineFrame.setAttribute('srcdoc', '');
+        document.body.appendChild(inlineFrame);
+        inlineFrame.setAttribute('src', 'ignored');"#,
+    )
+    .unwrap();
+    for n in 0..4 {
+        doc.pump(n as f64 * 16.0);
+    }
+    doc.evaluate("console.log(inlineFrame.contentWindow.location.href)")
+        .unwrap();
+    assert!(doc.console().iter().any(|line| line == "about:srcdoc"));
+    assert_eq!(host.documents.lock().unwrap().len(), 3);
+    assert!(host.legacy.lock().unwrap().is_empty());
+}
+
+#[test]
+fn post_insertion_iframe_preserves_opaque_sandbox_origin() {
+    let host = Host::default();
+    let mut doc = LiveryScriptedDocument::<script_engine_boa::BoaEngine>::load(
+        host.clone(),
+        "https://site.test/start",
+    )
+    .unwrap();
+    doc.pump(0.0);
+    host.documents.lock().unwrap().clear();
+    doc.evaluate(
+        r#"var sandboxed = document.createElement('iframe');
+        sandboxed.setAttribute('sandbox', 'allow-scripts');
+        document.body.appendChild(sandboxed);
+        sandboxed.src = 'sandboxed';"#,
+    )
+    .unwrap();
+    for n in 1..4 {
+        doc.pump(n as f64 * 16.0);
+    }
+    doc.evaluate("console.log(sandboxed.contentDocument === null)")
+        .unwrap();
+    assert!(doc.console().iter().any(|line| line == "true"));
+    let requests = host.documents.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].1.url, "https://site.test/dir/sandboxed");
 }
 
 #[test]

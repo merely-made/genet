@@ -4405,8 +4405,9 @@
   function frameSourceChanged(el, name, oldValue, newValue) {
     if (name !== 'src' || oldValue === newValue) return;
     if (el.localName !== 'iframe' || !el.isConnected) return;
+    if (__getAttributeNS(el.__ref, '', 'srcdoc') !== null) return;
     if (typeof __navigateFrame !== 'function') return;
-    __navigateFrame(el.__ref, newValue === null ? 'about:blank' : String(newValue));
+    __navigateFrame(el.__ref, newValue === null || newValue === '' ? 'about:blank' : String(newValue));
   }
 
   function syncFrameSubtree(node) {

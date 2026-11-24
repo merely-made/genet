@@ -205,6 +205,59 @@ fn named_child_and_destroyed_target<E: ScriptEngine>() {
         "dead target is discarded before fetch"
     );
 }
+
+#[test]
+fn iframe_src_uses_current_owner_handler_and_installs_child_policy() {
+    struct FrameCapture(Capture);
+    impl FetchHandler for FrameCapture {
+        fn fetch(&self, request: FetchRequest) -> FetchOutcome {
+            self.0.fetch(request)
+        }
+
+        fn fetch_iframe(&self, request: FetchRequest) -> Option<FetchOutcome> {
+            let mut outcome = self.0.fetch(request);
+            outcome
+                .headers
+                .push(("Referrer-Policy".into(), "no-referrer".into()));
+            Some(outcome)
+        }
+    }
+
+    let (mut runtime, stale, loader) = setup::<script_engine_boa::BoaEngine>();
+    runtime
+        .eval("var frame = document.createElement('iframe'); document.body.appendChild(frame);")
+        .unwrap();
+    runtime.run_event_loop(100).unwrap();
+    let current = Capture::default();
+    runtime.set_fetch_handler(Box::new(FrameCapture(current.clone())));
+    runtime
+        .eval("frame.setAttribute('src', 'late.html#focus')")
+        .unwrap();
+    runtime.run_event_loop(100).unwrap();
+
+    let requests = current.0.borrow();
+    assert_eq!(
+        requests.len(),
+        1,
+        "use the handler installed after insertion"
+    );
+    assert_eq!(requests[0].url, "https://nav.test/late.html#focus");
+    assert!(stale.0.borrow().is_empty());
+    assert!(loader.0.borrow().is_empty());
+    assert_eq!(
+        read(&mut runtime, "frame.contentWindow.location.href"),
+        "https://nav.test/final.html#focus"
+    );
+
+    let agent = runtime.host().borrow().agent.upgrade().unwrap();
+    let a = agent.borrow();
+    let child = a.frames.records.keys().next().unwrap();
+    assert_eq!(
+        crate::policy::document_policy(&a.hosts[child].borrow()).referrer_policy,
+        "no-referrer"
+    );
+}
+
 macro_rules! backend {
     ($name:ident,$engine:ty) => {
         mod $name {

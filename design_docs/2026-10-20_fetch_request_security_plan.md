@@ -601,5 +601,24 @@ records the setter and getter coverage that preceded this work.
   On Genet base `72ef547e7e2`, the prefetched-document regression reproduced
   the wrong child URL on Boa and Vano before the handoff. Both passed after it,
   along with all six URL-loader controls. Inker's page-load gate passed all 14
-  tests with the same local session API. Logs are in
+  tests with the published session API. The handoff reached Genet `6a91c93f556`,
+  Inker `6bd98cb3`, Graphshell `decd362c`, and Turnstone `529fdc7e`. Logs are in
   `Code/testing/genet/host-response-20261124/`.
+- **2026-11-24** The `src` property and `setAttribute` use the insertion HTTP
+  navigation fetch for an existing eager iframe owned by the top document.
+  The request uses the owner's current fetch handler and document policy.
+  The child applies its response headers before parsing and retains its
+  WindowProxy across replacement.
+  The newest queued `src` assignment governs the attempt. An existing `srcdoc`
+  takes precedence, and a sandboxed child retains an opaque origin.
+
+  Above Genet `6a91c93f556`, all seven navigation tests and 11 scripted
+  document fetch tests passed. The failing controls and matching results are
+  in `Code/testing/genet/iframe-src-20261124/`.
+
+  The generated Fetch Metadata iframe file had identical results on the
+  matched pre-change and candidate runners. Boa and Vano each passed one of
+  18 assertions, timed out on the same-site HTTP assertion, and left 16
+  assertions unrun. Both files reached the harness deadline. The match used
+  the same corpus, lock, `netfetch` runner options, and isolated WPT server.
+  Nested and lazy iframe acquisition and generated WPT completion remain open.

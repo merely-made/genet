@@ -71,6 +71,8 @@ pub type HostFunction = Arc<dyn Fn(&[ScriptValue]) -> Result<ScriptValue, String
 pub enum ValueError {
     /// The [`Budget`] ran out before the script finished.
     Budget,
+    /// The script's state grew past the engine's memory ceiling, in bytes.
+    Heap { max_bytes: usize },
     /// The script failed to parse or raised an error, in the engine's words.
     Script(String),
     /// A host function refused, in its own words.
@@ -83,6 +85,9 @@ impl fmt::Display for ValueError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Budget => f.write_str("the script ran past its budget"),
+            Self::Heap { max_bytes } => {
+                write!(f, "the script used more than {max_bytes} bytes of memory")
+            },
             Self::Script(message) => write!(f, "script error: {message}"),
             Self::Host(message) => write!(f, "host function refused: {message}"),
             Self::Value(message) => write!(f, "value not carried: {message}"),

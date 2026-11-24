@@ -40,7 +40,7 @@ use gc_arena::lock::RefLock;
 use gc_arena::{Collect, Gc, GcWeak, Rootable};
 use piccolo::userdata::UserDataInner;
 use piccolo::{
-    Callback, CallbackReturn, Closure, Context, Error, Executor, Fuel, IntoValue, Lua, Singleton,
+    drive, Callback, CallbackReturn, Closure, Context, DriveError, DriveLimits, Error, Executor, IntoValue, Lua, Singleton,
     StashedExecutor, StashedValue, UserData, Value, Variadic,
 };
 use script_engine_api::{
@@ -130,6 +130,21 @@ fn value_to_lua_string<'gc>(ctx: Context<'gc>, value: Value<'gc>) -> String {
 pub struct PiccoloEngine {
     lua: Lua,
     slot: Rc<HostSlot>,
+    /// Heap ceiling for `eval_bounded`, in bytes; `usize::MAX` is no limit.
+    max_heap_bytes: usize,
+}
+
+/// Fuel per budget step: `Steps(n)` is `n` slices of this much fuel.
+const FUEL_PER_STEP: u64 = 4096;
+
+impl PiccoloEngine {
+    /// Refuse a bounded eval whose state grows past `bytes`. Off by default
+    /// (`usize::MAX`): a long-lived state grows with the page.
+    #[must_use]
+    pub fn with_heap_ceiling(mut self, bytes: usize) -> Self {
+        self.max_heap_bytes = bytes;
+        self
+    }
 }
 
 /// The call context handed to a native callback. Piccolo's callback gives
@@ -321,6 +336,7 @@ impl ScriptEngine for PiccoloEngine {
         let mut engine = Self {
             lua: Lua::full(),
             slot: Rc::new(HostSlot::new()),
+            max_heap_bytes: usize::MAX,
         };
         let slot = engine.slot.clone();
         engine.lua.enter(|ctx| install_await(ctx, slot));
@@ -353,35 +369,26 @@ impl ScriptEngine for PiccoloEngine {
             })
             .map_err(|e| BoundedEvalError::Engine(e.to_string()))?;
 
-        // Step the executor with metered fuel, the bounded mirror of
-        // `Lua::finish`. A `Steps(n)` budget caps the number of fuel
-        // intervals, so a runaway script returns an error instead of looping
-        // forever.
-        const FUEL_PER_STEP: i32 = 4096;
-        let max_steps = match budget {
+        // `drive` steps 4,096-fuel slices, so `Steps(n)` is n x 4,096 fuel:
+        // the work a budget meant before. The heap ceiling rides along.
+        let max_ops = match budget {
             Budget::Unbounded => None,
-            Budget::Steps(n) => Some(n),
+            Budget::Steps(n) => Some(n.saturating_mul(FUEL_PER_STEP)),
         };
-        let mut steps: u64 = 0;
-        loop {
-            let mut fuel = Fuel::with(FUEL_PER_STEP);
-            let done = self
-                .lua
-                .enter(|ctx| ctx.fetch(&executor).step(ctx, &mut fuel))
-                .map_err(|e| BoundedEvalError::Engine(format!("{e:?}")))?;
-            if done {
-                break;
-            }
-            steps += 1;
-            if let Some(max) = max_steps {
-                if steps >= max {
-                    return Err(BoundedEvalError::Engine(format!(
-                        "script budget exhausted after {steps} steps (~{} fuel)",
-                        steps as i64 * FUEL_PER_STEP as i64
-                    )));
-                }
-            }
-        }
+        let limits = DriveLimits { max_ops, max_heap_bytes: self.max_heap_bytes };
+        drive(&mut self.lua, &executor, limits).map_err(|e| {
+            BoundedEvalError::Engine(match e {
+                // Out of fuel means all n slices were spent, so n is honest.
+                DriveError::OutOfFuel { max_ops } => format!(
+                    "script budget exhausted after {} steps (~{max_ops} fuel)",
+                    max_ops / FUEL_PER_STEP
+                ),
+                DriveError::OverHeap { max_heap_bytes } => {
+                    format!("script heap ceiling of {max_heap_bytes} bytes exceeded")
+                },
+                DriveError::Runtime(message) => message,
+            })
+        })?;
         self.take_first(&executor).map_err(BoundedEvalError::Engine)
     }
 
@@ -597,6 +604,28 @@ mod tests {
             .eval_bounded("return 1 + 1", Budget::Steps(100))
             .unwrap();
         assert_eq!(engine.value_to_string(&v).unwrap(), "2");
+    }
+
+    #[test]
+    fn heap_ceiling_refuses_a_growing_table() {
+        let grow = "local t = {} local i = 0 while true do i = i + 1 t[i] = {} end";
+        let mut engine = PiccoloEngine::new().unwrap().with_heap_ceiling(1 << 20);
+        let err = engine.eval_bounded(grow, Budget::Steps(100_000)).unwrap_err();
+        assert!(
+            matches!(&err, BoundedEvalError::Engine(m) if m.contains("heap ceiling of 1048576 bytes")),
+            "got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn default_engine_has_no_heap_ceiling() {
+        let grow = "local t = {} local i = 0 while true do i = i + 1 t[i] = {} end";
+        let mut engine = PiccoloEngine::new().unwrap();
+        let err = engine.eval_bounded(grow, Budget::Steps(300)).unwrap_err();
+        assert!(
+            matches!(&err, BoundedEvalError::Engine(m) if m.contains("budget exhausted after 300 steps")),
+            "fuel, not heap, must stop it: {err:?}"
+        );
     }
 
     #[test]

@@ -19,5 +19,5 @@ pub(crate) fn script_to_fontique(
 
 pub(crate) fn script_to_harfrust(script: fontique::Script) -> harfrust::Script {
     harfrust::Script::from_iso15924_tag(harfrust::Tag::new(&script.to_bytes()))
-        .unwrap_or(harfrust::script::UNKNOWN)
+        .unwrap_or(harfrust::Script::UNKNOWN)
 }

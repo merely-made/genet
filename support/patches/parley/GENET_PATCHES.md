@@ -122,11 +122,24 @@ complex-scripts --example export_segmenter_dictionaries -- <dir>` writes
 the baked dictionaries do. `icu_provider`'s `sync` feature keeps
 `LayoutContext` `Send`.
 
-## One font stack with netrender and vello
+## One font stack with netrender
 
-Parley's shaping moved from harfrust 0.8 to harfrust 0.12 and skrifa 0.42 to
-0.44, and fontique from read-fonts 0.39 to 0.41, matching the skrifa 0.44 /
-read-fonts 0.41 that netrender and vello use. A page linking both used to
-carry two read-fonts and two skrifa; it now carries one of each. No source
-change was needed, and genet-livery's 704 layout and paint tests pass
-unchanged.
+Parley shapes with harfrust 0.15 and skrifa 0.49, and fontique reads with
+read-fonts 0.46, matching the skrifa 0.49 / read-fonts 0.46 netrender uses,
+so a consumer linking both (Knot, through genet-livery and Graphshell)
+carries one skrifa and one read-fonts. The requirements stay caret rows: an
+open `>=` would resolve skrifa 0.50 and harfrust 0.16, which take read-fonts
+0.47 and split the stack again.
+
+harfrust 0.13 replaced `ShaperData`, `ShaperInstance`, `UnicodeBuffer` and
+`GlyphBuffer` with read-fonts' `Font` (built per variation instance through
+`instance_builder`), one reusable `Buffer` and a free `shape` function. The
+port in `shape/mod.rs` follows upstream `parley_engine` 0.13 for the calls
+only: it keeps the default cluster level and buffer flags and sets no
+pre/post context, so shaping input is what harfrust 0.12 received. A glyph
+dump of 25 cases (Latin kerning and ligatures, Arabic, Hebrew, Devanagari,
+Thai, CJK, Hangul, emoji ZWJ sequences, join controls, variable axes,
+synthetic bold and italic, OpenType features, letter spacing, locale and
+narrow wrapping) is byte-identical before and after, as are livery's paint
+corpus captures, its tests and the per-test results of the CSS text, inline,
+line-box, float and bidi reftest subsets.

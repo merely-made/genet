@@ -394,7 +394,7 @@ impl<B: Brush> LayoutData<B> {
         font_size: f32,
         font_attrs: fontique::Attributes,
         synthesis: fontique::Synthesis,
-        glyph_buffer: &harfrust::GlyphBuffer,
+        glyph_buffer: &harfrust::Buffer,
         bidi_level: u8,
         style_index: u16,
         word_spacing: f32,
@@ -402,7 +402,7 @@ impl<B: Brush> LayoutData<B> {
         source_text: &str,
         char_infos: &[(CharInfo, u16)], // From text analysis
         text_range: Range<usize>,       // The text range this run covers
-        coords: &[harfrust::NormalizedCoord],
+        coords: &[harfrust::font::NormalizedCoord],
     ) {
         let coords_start = self.coords.len();
         self.coords.extend(coords.iter().map(|c| c.to_bits()));

@@ -53,6 +53,96 @@ impl ResourceFetcher for NoFetch {
         None
     }
 }
+
+#[cfg(feature = "scripted")]
+fn prefetched_http_document_policy<E: script_engine_api::ScriptEngine + 'static>() {
+    use document_session_api::HttpDocumentResponse;
+    use genet_host_api::{
+        DocumentFetchKind, DocumentFetchResult, ResourceFetchResponse, ResourceRequest,
+    };
+
+    #[derive(Clone, Default)]
+    struct Host(Arc<Mutex<Vec<ResourceRequest>>>);
+
+    impl ResourceFetcher for Host {
+        fn fetch(&self, url: &str) -> Option<Vec<u8>> {
+            panic!("unexpected byte fetch for {url}");
+        }
+
+        fn fetch_request(&self, request: &ResourceRequest) -> Option<ResourceFetchResponse> {
+            panic!("unexpected generic fetch for {}", request.url);
+        }
+
+        fn fetch_document(
+            &self,
+            request: &ResourceRequest,
+            kind: DocumentFetchKind,
+        ) -> DocumentFetchResult {
+            assert_eq!(
+                kind,
+                DocumentFetchKind::Iframe,
+                "the host already owns the parent body"
+            );
+            self.0.lock().unwrap().push(request.clone());
+            DocumentFetchResult::Response(ResourceFetchResponse::from_local_plain_get(
+                ResourceResponse::new(&request.url, b"<p>child</p>".to_vec()),
+            ))
+        }
+    }
+
+    let host = Host::default();
+    let engine = ScriptedSessionEngine::<E, _>::new("prefetched-policy-test", host.clone());
+    let response = HttpDocumentResponse::new(
+        "https://prefetch.test/final/page",
+        [
+            ("Referrer-Policy".into(), "unsafe-url".into()),
+            ("Set-Cookie".into(), "fixture=value".into()),
+            (
+                "Content-Security-Policy".into(),
+                "upgrade-insecure-requests".into(),
+            ),
+            ("REFERRER-POLICY".into(), "no-referrer".into()),
+            (
+                "Content-Security-Policy-Report-Only".into(),
+                "block-all-mixed-content".into(),
+            ),
+        ],
+    );
+    assert_eq!(response.policy_headers().len(), 3);
+    let request = SessionSpawnRequest::new("https://prefetch.test/start#anchor")
+        .with_viewport(320, 240)
+        .with_body("<iframe src=child></iframe>")
+        .with_http_response(Some(response));
+    assert!(request.clone().with_body("replacement").http_response.is_none());
+    let mut session = engine.spawn(&request).unwrap();
+    session.frame(320, 240);
+    let requests = host.0.lock().unwrap();
+    let [child] = requests.as_slice() else {
+        panic!("expected one iframe acquisition, got {requests:?}");
+    };
+    assert_eq!(child.url, "https://prefetch.test/final/child");
+    assert_eq!(
+        session.current_address().as_deref(),
+        Some("https://prefetch.test/final/page#anchor"),
+    );
+    assert_eq!(child.referrer, "https://prefetch.test/final/page#anchor");
+    assert_eq!(child.referrer_policy, "no-referrer");
+    assert!(child.upgrade_insecure_requests);
+    assert!(!child.block_all_mixed_content);
+}
+
+#[cfg(feature = "scripted")]
+#[test]
+fn prefetched_http_document_policy_boa() {
+    prefetched_http_document_policy::<script_engine_boa::BoaEngine>();
+}
+
+#[cfg(feature = "scripted-nova")]
+#[test]
+fn prefetched_http_document_policy_vano() {
+    prefetched_http_document_policy::<script_engine_nova::NovaEngine>();
+}
+
 #[cfg(feature = "livery")]
 struct ImageFetch {
     bytes: Vec<u8>,

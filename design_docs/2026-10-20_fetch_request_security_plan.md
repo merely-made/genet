@@ -585,3 +585,21 @@ records the setter and getter coverage that preceded this work.
   The two generated iframe referrer-policy files stayed at 0/12 each on
   both engines. All three files reached the harness deadline on both runners.
   Reports and exact assertions are in `Code/testing/genet/priorities-20261118/wpt/`.
+- **2026-11-24** The host-fetched HTTP path in Pelt and Turnstone carries
+  the terminal response's final URL and ordered `Referrer-Policy` and
+  `Content-Security-Policy` headers with the acquired body. The scripted
+  session uses the final URL as the document base, inherits the requested
+  fragment when the final URL supplies none, and installs the policy before
+  parsing. The host history entry retains the requested URL. Response metadata
+  stays with the in-process body handoff and is cleared on body replacement.
+
+  The HTTP completion observer can emit a progress record just before the
+  terminal response. Hosts continue to account for those bytes and wait for
+  terminal admission before opening the HTTP document. Smolweb can still
+  present streamed prefixes.
+
+  On Genet base `72ef547e7e2`, the prefetched-document regression reproduced
+  the wrong child URL on Boa and Vano before the handoff. Both passed after it,
+  along with all six URL-loader controls. Inker's page-load gate passed all 14
+  tests with the same local session API. Logs are in
+  `Code/testing/genet/host-response-20261124/`.

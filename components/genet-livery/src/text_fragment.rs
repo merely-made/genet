@@ -38,6 +38,16 @@ pub struct NavigationFragment {
 }
 
 impl NavigationFragment {
+    /// Carry the requested fragment through a response URL without one.
+    pub fn response_address(request_url: &str, response_url: &str) -> String {
+        if !response_url.contains('#')
+            && let Some((_, fragment)) = request_url.split_once('#')
+        {
+            return format!("{response_url}#{fragment}");
+        }
+        response_url.to_owned()
+    }
+
     /// Separate an initial navigation URL into fetch, script, and retained
     /// directive state. The first `:~:` in the fragment is the delimiter, as
     /// required by the WICG extraction algorithm.

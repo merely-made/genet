@@ -111,8 +111,23 @@ where
             },
             None => genet_scripted::ScriptedDocumentOptions::default(),
         };
-        let doc = match &request.body {
-            Some(body) => {
+        let doc = match (&request.body, &request.http_response) {
+            (Some(body), Some(response)) => {
+                let final_address = genet_livery::NavigationFragment::response_address(
+                    &request.address,
+                    response.final_url(),
+                );
+                genet_scripted::LiveryScriptedDocument::<E>::from_body_with_response_headers(
+                    body,
+                    self.fetcher.clone(),
+                    &final_address,
+                    self.wake.clone(),
+                    generation,
+                    options,
+                    response.policy_headers().to_vec(),
+                )
+            },
+            (Some(body), None) => {
                 genet_scripted::LiveryScriptedDocument::<E>::from_body_with_options_and_wake_generation(
                     body,
                     self.fetcher.clone(),
@@ -122,7 +137,7 @@ where
                     options,
                 )
             },
-            None => genet_scripted::LiveryScriptedDocument::<E>::load_with_options_and_wake_generation(
+            (None, _) => genet_scripted::LiveryScriptedDocument::<E>::load_with_options_and_wake_generation(
                 self.fetcher.clone(),
                 &request.address,
                 self.wake.clone(),

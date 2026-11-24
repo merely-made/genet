@@ -58,6 +58,40 @@ impl std::error::Error for SessionError {}
 
 // ── Spawn request ──────────────────────────────────────────────────────────
 
+/// The final address and document policy of an HTTP response owned by the host.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HttpDocumentResponse {
+    final_url: String,
+    policy_headers: Vec<(String, String)>,
+}
+
+impl HttpDocumentResponse {
+    /// Keep document policy headers in their original order.
+    pub fn new(
+        final_url: impl Into<String>,
+        headers: impl IntoIterator<Item = (String, String)>,
+    ) -> Self {
+        Self {
+            final_url: final_url.into(),
+            policy_headers: headers
+                .into_iter()
+                .filter(|(name, _)| {
+                    name.eq_ignore_ascii_case("referrer-policy")
+                        || name.eq_ignore_ascii_case("content-security-policy")
+                })
+                .collect(),
+        }
+    }
+
+    pub fn final_url(&self) -> &str {
+        &self.final_url
+    }
+
+    pub fn policy_headers(&self) -> &[(String, String)] {
+        &self.policy_headers
+    }
+}
+
 /// Plain-data request to open a document session. The body is already
 /// fetched when the host has it (mirroring `EngineInput`); a session
 /// engine whose lane fetches for itself (subresources, redirects) uses the
@@ -69,6 +103,9 @@ pub struct SessionSpawnRequest {
     /// load via its own fetcher seam.
     pub body: Option<String>,
     pub content_type: Option<String>,
+    /// In-process response metadata accompanying a body acquired by the host.
+    #[serde(skip)]
+    pub http_response: Option<HttpDocumentResponse>,
     /// Initial viewport, so the first `frame` call needs no resize dance.
     pub viewport: (u32, u32),
     /// Spawn hidden (a background tile): the session may defer work the
@@ -82,6 +119,7 @@ impl SessionSpawnRequest {
             address: address.into(),
             body: None,
             content_type: None,
+            http_response: None,
             viewport: (0, 0),
             hidden: false,
         }
@@ -89,11 +127,18 @@ impl SessionSpawnRequest {
 
     pub fn with_body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into());
+        self.http_response = None;
         self
     }
 
     pub fn with_content_type(mut self, content_type: impl Into<String>) -> Self {
         self.content_type = Some(content_type.into());
+        self
+    }
+
+    /// Attach metadata after setting the body acquired with that response.
+    pub fn with_http_response(mut self, response: Option<HttpDocumentResponse>) -> Self {
+        self.http_response = response;
         self
     }
 
@@ -1665,7 +1710,7 @@ mod tests {
     fn phase_c_t5_api_legacy_spawn_unicode_body() {
         let request = SessionSpawnRequest { address: "https://forms.test/".into(),
             body: Some("café".into()), content_type: Some("text/html".into()),
-            viewport: (320, 240), hidden: false };
+            http_response: None, viewport: (320, 240), hidden: false };
         assert_eq!(request.body.as_deref(), Some("café"));
         assert_eq!(SessionSpawnRequest::new("a").with_body("café").body, request.body);
     }

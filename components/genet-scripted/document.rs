@@ -963,13 +963,7 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
             response.content_type.as_deref(),
             decode_options,
         );
-        let final_address = if response.final_url.contains('#') {
-            response.final_url.clone()
-        } else if let Some((_, fragment)) = url.split_once('#') {
-            format!("{}#{fragment}", response.final_url)
-        } else {
-            response.final_url.clone()
-        };
+        let final_address = NavigationFragment::response_address(url, &response.final_url);
         let navigation = NavigationFragment::parse(&final_address);
         let mut document = Self::build_encoded(
             &decoded.source,
@@ -1062,12 +1056,39 @@ impl<E: ScriptEngine> LiveryScriptedDocument<E> {
     where
         Fetch: ResourceFetcher + Send + Sync + 'static,
     {
+        Self::from_body_with_response_headers(
+            html,
+            fetcher,
+            base_url,
+            wake,
+            generation,
+            options,
+            Vec::new(),
+        )
+    }
+
+    /// Install the policy of an already acquired response before parsing its body.
+    pub fn from_body_with_response_headers<Fetch>(
+        html: &str,
+        fetcher: Fetch,
+        base_url: &str,
+        wake: ScriptWake,
+        generation: u64,
+        options: ScriptedDocumentOptions,
+        response_headers: Vec<(String, String)>,
+    ) -> Result<Self, String>
+    where
+        Fetch: ResourceFetcher + Send + Sync + 'static,
+    {
         let navigation = NavigationFragment::parse(base_url);
-        let mut document = Self::build(
+        let mut document = Self::build_encoded(
             html,
             ScriptResourceBridge::new_with_generation(fetcher, wake, generation),
             &navigation.script_visible_url,
             options,
+            Default::default(),
+            Default::default(),
+            response_headers,
         )?;
         document.pending_fragment = (!navigation.text_directives.is_empty()
             || navigation.element_fragment.is_some())

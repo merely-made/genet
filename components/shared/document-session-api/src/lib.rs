@@ -61,7 +61,7 @@ pub use session_engine::{
     ContentLineage, ContentReport, DocumentClip, DocumentClipArtifact, DocumentClipArtifactRole,
     DocumentFindDirection, DocumentFindMatch, DocumentFindQuery, DocumentFindReveal,
     DocumentFindState, DocumentSession, DocumentZoomState, EngineKindIndex, EngineKinds,
-    OutlineEntry, SessionButtonState, SessionClick, SessionCursor, SessionDocumentRequest,
+    HttpDocumentResponse, OutlineEntry, SessionButtonState, SessionClick, SessionCursor, SessionDocumentRequest,
     SessionEffect, SessionEncodedFormSubmission, SessionEngine, SessionError,
     SessionExternalTextureDraw, SessionFocusDirection, SessionFormMethod, SessionFormSubmission,
     SessionIme, SessionInput, SessionInputResult, SessionKey, SessionLink, SessionModifiers,

@@ -5602,7 +5602,13 @@ impl<D: LayoutDom> TapeCollector<'_, D>
 where
     D::NodeId: Copy + Eq + Hash,
 {
+    /// Nested inline boxes recurse here below `build_box`'s guard, so a deep inline
+    /// run can outgrow its red zone between two checks; each level checks again.
     fn collect(&mut self, box_id: BoxId, inherited: &ComputedValues) {
+        crate::with_recursion_stack(|| self.collect_level(box_id, inherited));
+    }
+
+    fn collect_level(&mut self, box_id: BoxId, inherited: &ComputedValues) {
         let css_box = &self.boxes[box_id];
         if matches!(css_box.origin, BoxOrigin::Pseudo { .. }) && !css_box.positioning.is_in_flow() {
             // Its generated text belongs to the positioned fragment's paint slot.

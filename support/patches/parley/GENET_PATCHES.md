@@ -124,12 +124,14 @@ the baked dictionaries do. `icu_provider`'s `sync` feature keeps
 
 ## One font stack with netrender
 
-Parley shapes with harfrust 0.15 and skrifa 0.49, and fontique reads with
-read-fonts 0.46, matching the skrifa 0.49 / read-fonts 0.46 netrender uses,
-so a consumer linking both (Knot, through genet-livery and Graphshell)
-carries one skrifa and one read-fonts. The requirements stay caret rows: an
-open `>=` would resolve skrifa 0.50 and harfrust 0.16, which take read-fonts
-0.47 and split the stack again.
+The requirements are lower bounds, as everywhere in the family: harfrust
+0.15, skrifa 0.49 and read-fonts 0.46 at least. A fresh resolve on
+2026-11-24 takes harfrust 0.16.1, skrifa 0.50.0 and read-fonts 0.47.0, and
+netrender's rows are lower bounds too, so its skrifa follows. The published
+Vello fork crates (`netrender-vello`, `netrender-vello-encoding`,
+`netrender-glifo`) still require skrifa ^0.49, so a consumer linking both
+(Knot, through genet-livery, and Graphshell) carries skrifa 0.49 /
+read-fonts 0.46 beside 0.50 / 0.47 until those rows are lower bounds as well.
 
 harfrust 0.13 replaced `ShaperData`, `ShaperInstance`, `UnicodeBuffer` and
 `GlyphBuffer` with read-fonts' `Font` (built per variation instance through
@@ -143,3 +145,7 @@ synthetic bold and italic, OpenType features, letter spacing, locale and
 narrow wrapping) is byte-identical before and after, as are livery's paint
 corpus captures, its tests and the per-test results of the CSS text, inline,
 line-box, float and bidi reftest subsets.
+
+harfrust 0.16, skrifa 0.50 and read-fonts 0.47 needed no source change. The
+same comparisons against main hold for them, with a positive control: setting
+`PRESERVE_DEFAULT_IGNORABLES` changes the join-control glyphs in the dump.

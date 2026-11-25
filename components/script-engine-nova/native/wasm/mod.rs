@@ -7,6 +7,7 @@
 //! the host calls [`NovaEngine::install_webassembly`].
 
 mod host;
+mod memory;
 mod natives;
 mod sections;
 
@@ -25,13 +26,17 @@ pub(crate) type WasmSlot = RefCell<Option<Rc<WasmHost>>>;
 
 const BOOTSTRAP: &str = include_str!("bootstrap.js");
 
-const NATIVES: [(&str, RegularFn, u32); 6] = [
+const NATIVES: [(&str, RegularFn, u32); 10] = [
     ("__genetWasmCompile", natives::compile, 1),
     ("__genetWasmDescribe", natives::describe, 1),
     ("__genetWasmInstantiate", natives::instantiate, 1),
     ("__genetWasmExportFunc", natives::export_func, 2),
     ("__genetWasmSignature", natives::signature, 1),
     ("__genetWasmCall", natives::call, 1),
+    ("__genetWasmMemoryNew", natives::memory_new, 2),
+    ("__genetWasmMemoryGrow", natives::memory_grow, 2),
+    ("__genetWasmMemoryBuffer", natives::memory_buffer, 1),
+    ("__genetWasmExportMemory", natives::export_memory, 2),
 ];
 
 impl NovaEngine {

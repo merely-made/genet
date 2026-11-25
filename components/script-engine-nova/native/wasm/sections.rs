@@ -3,8 +3,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! What the bridge needs from a module's sections before wasmi sees it: the
-//! function index behind each exported function (an exported function's `name`
-//! is that index), and the start function moved out of instantiation.
+//! index behind each export (an exported function's `name` is its index, and
+//! an exported memory below the imported count is an import passed through),
+//! and the start function moved out of instantiation.
 //!
 //! wasmi runs a start function inside `Instance::new` with a plain call, so an
 //! import called there cannot suspend for script. The rewrite drops the start
@@ -18,14 +19,15 @@ pub(super) const START_EXPORT: &str = "\0genet-start";
 
 const EXPORT_SECTION: u8 = 7;
 const START_SECTION: u8 = 8;
-const FUNC_KIND: u8 = 0;
+pub(super) const FUNC_KIND: u8 = 0;
+pub(super) const MEMORY_KIND: u8 = 2;
 
 /// The parts of a module the bridge uses, and the bytes to compile.
 pub(super) struct Prepared {
     pub(super) bytes: Vec<u8>,
     pub(super) has_start: bool,
-    /// `(export name, function index)` for every exported function.
-    pub(super) func_exports: Vec<(String, u32)>,
+    /// `(name, kind, index)` for every export, in order.
+    pub(super) exports: Vec<(String, u8, u32)>,
 }
 
 struct Section {
@@ -118,7 +120,7 @@ pub(super) fn prepare(bytes: Vec<u8>) -> Prepared {
     let untouched = |bytes| Prepared {
         bytes,
         has_start: false,
-        func_exports: Vec::new(),
+        exports: Vec::new(),
     };
     let Some(list) = sections(&bytes) else {
         return untouched(bytes);
@@ -131,16 +133,12 @@ pub(super) fn prepare(bytes: Vec<u8>) -> Prepared {
         },
         None => Vec::new(),
     };
-    let func_exports = entries
-        .iter()
-        .filter(|(_, kind, _)| *kind == FUNC_KIND)
-        .map(|(name, _, index)| (name.clone(), *index))
-        .collect();
+    let exports = entries.clone();
     let Some(start) = list.iter().find(|s| s.id == START_SECTION) else {
         return Prepared {
             bytes,
             has_start: false,
-            func_exports,
+            exports,
         };
     };
     let mut at = start.payload.start;
@@ -166,6 +164,6 @@ pub(super) fn prepare(bytes: Vec<u8>) -> Prepared {
     Prepared {
         bytes: out,
         has_start: true,
-        func_exports,
+        exports,
     }
 }

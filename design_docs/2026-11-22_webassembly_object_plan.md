@@ -1,8 +1,9 @@
 # WebAssembly object plan: a `WebAssembly` global for scripts, probed on Vano
 
-**Status:** 2026-11-25. W0 and W1 are met. W0's assessment is Findings 10 to 24 and its forks are
-ruled (D4 to D7). W1 runs a module from script on Vano with script called back from it, behind
-`genet-vano`'s `wasm` feature, with no change to Vano or `script-engine-api` (Findings 25 to 31).
+**Status:** 2026-11-25. W0 to W2 are met; W3, the readout, is open. W0's assessment is Findings
+10 to 24 and its forks are ruled (D4 to D7). W1 runs a module from script on Vano with script called
+back from it, behind `genet-vano`'s `wasm` feature (Findings 25 to 31). W2 makes `Memory.buffer` the
+module's linear memory through Vano `c2c0eaa4`, the fork change D6 named (Findings 32 to 37).
 
 **For:** pages that use WebAssembly. Neither of Genet's JavaScript engines runs it: Vano says of
 itself "The engine does not support WebAssembly execution" and Bole has no `WebAssembly` object. Mark
@@ -346,9 +347,60 @@ W1, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `a4eff25b`. The code is
     import itself. The tree's tests make exactly that start function (`jsapi/functions/helper.js`),
     so the rewrite and the root-frame path between them cover both shapes.
 
+W2, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `c2c0eaa4`. The code is
+`components/script-engine-nova/native/wasm/memory.rs`, with the transitions in `natives.rs`.
+
+32. The fork change D6 named, Vano `c2c0eaa4`, is three parts:
+    - a `DataBlock` can be foreign: it never frees its pointer, it asserts rather than reallocate,
+      and a clone of it is an ordinary owned copy;
+    - `ArrayBuffer::new_over_foreign(ptr, len, key)` makes a fixed-length buffer over such a block.
+      It sets the detach key and refuses a pointer that is not aligned to 8, except at length zero,
+      where no pointer is used. wasmi's empty memory has a pointer aligned to 1.
+    - `DetachKey` is public. It was reachable through `set_detach_key` but could not be named.
+
+    Vano's library tests pass (70). Its test262 suite was not run. The change leaves alone the
+    host-hook and builtin-name contracts that `genet-vano`'s manifest names.
+33. In Genet: `WebAssembly.Memory` with its constructor, `grow` and `buffer`; memory imports and
+    exports; and one script object per memory. Bad limits throw `RangeError`, a non-number page
+    count throws `TypeError`, and a non-`Memory` import throws `LinkError`.
+34. The seven new tests pass. The crate's suites pass with the feature on and off, against the
+    pushed Vano. Each of W2's done-conditions is covered:
+    - A byte wasm writes is read through a `Uint8Array` with no call between, and a byte script
+      writes is read by wasm. A `Float64Array` works over the buffer, the buffer is the same object
+      each time, and `transfer()` throws `TypeError`.
+    - After a grow from wasm the old buffer is detached and the new one has the new length and the
+      old bytes. A failed grow returns -1.
+    - After a grow from script the same holds, including for zero pages. A failed grow throws
+      `RangeError` and leaves the buffer as it was.
+    - A memory script creates and imports is the module's re-export of it, aliases both ways, and
+      detaches when wasm grows it.
+35. A buffer is kept beside the pointer and length it was made over. The bridge detaches any buffer
+    whose memory no longer matches at four points: an import's entry; the end of every call, return
+    or trap or thrown exception; a grow from script, which always detaches; and the `buffer`
+    getter. Two cases show this is needed and holds:
+    - Wasm grew memory and then called script. Inside the import, a buffer taken before the call
+      was already detached.
+    - Script grew memory inside an import while wasm was suspended. When wasm resumed, it wrote and
+      read past the old end, and script read the byte through the new buffer, so a resumed frame
+      sees the moved bytes.
+36. An exported memory's identity comes from its index in the export section (Findings 22's
+    scanner now keeps every export). An index below the imported count is the import, so it keeps
+    the import's object. A defined memory exported twice gets one handle per instance and index.
+37. Not covered yet:
+    - a grow by zero pages from wasm, which leaves the old buffer attached (D7);
+    - shared memory and 64-bit memory;
+    - `toResizableBuffer` and `toFixedLengthBuffer` (Findings 18);
+    - one instance's exported memory imported by another, which should work through the same
+      handle but has no test;
+    - freeing: memories and the latest buffer of each live as long as the engine.
+
+    The alignment refusal never fired on this Mac, because its allocator returned 8-aligned memory
+    every time.
+
 ## Progress
 
 - 2026-11-22: plan written from Mark's rulings D1 to D3 and a read of the three sources.
 - 2026-11-25: W0 met. The assessment is Findings 10 to 24; D4 to D7 ruled; open questions 1 and 2
   answered.
 - 2026-11-25: W1 met (Findings 25 to 31).
+- 2026-11-25: W2 met (Findings 32 to 37); Vano `c2c0eaa4` carries D6's change.

@@ -5,7 +5,8 @@
 // The `WebAssembly` namespace over the natives in natives.rs (W1 of Genet's
 // WebAssembly object plan). Values cross already converted: the closures here
 // apply ToInt32, ToBigInt64 and ToNumber, and turn the natives' error strings
-// into the namespace's error classes. Only function imports and exports cross.
+// into the namespace's error classes. Functions and memories cross; a memory's
+// buffer is its linear memory, not a copy.
 (() => {
   'use strict';
   const g = globalThis;
@@ -20,6 +21,10 @@
   const exportFunc = take('__genetWasmExportFunc');
   const signature = take('__genetWasmSignature');
   const call = take('__genetWasmCall');
+  const memoryNew = take('__genetWasmMemoryNew');
+  const memoryGrow = take('__genetWasmMemoryGrow');
+  const memoryBuffer = take('__genetWasmMemoryBuffer');
+  const exportMemory = take('__genetWasmExportMemory');
   const { create, defineProperty, freeze } = Object;
   const parse = JSON.parse;
 
@@ -44,7 +49,18 @@
   });
   const isObject = (v) => (typeof v === 'object' && v !== null) || typeof v === 'function';
 
+  // [EnforceRange] unsigned long, as the JS API reads page counts.
+  const pages = (value, what) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) throw new TypeError(`${what} must be a finite number`);
+    const t = Math.trunc(n);
+    if (t < 0 || t > 0xffffffff) throw new TypeError(`${what} is out of range`);
+    return t;
+  };
+
   const modules = new WeakMap();
+  const memoryHandles = new WeakMap();
+  const memoryObjects = new Map();
   const instanceExports = new WeakMap();
   const exportedFunctions = new Map();
 
@@ -89,6 +105,47 @@
     };
   };
 
+  class Memory {
+    constructor(descriptor) {
+      if (!isObject(descriptor)) throw new TypeError('the memory descriptor must be an object');
+      if (descriptor.shared) throw new TypeError('shared memory is not supported yet');
+      if (descriptor.initial === undefined) throw new TypeError('initial is required');
+      const initial = pages(descriptor.initial, 'initial');
+      const maximum = descriptor.maximum === undefined ? undefined : pages(descriptor.maximum, 'maximum');
+      if (initial > 65536 || (maximum !== undefined && (maximum > 65536 || maximum < initial))) {
+        throw new RangeError('invalid memory limits');
+      }
+      const handle = memoryNew(initial, maximum);
+      if (typeof handle === 'string') throw new RangeError(handle);
+      memoryHandles.set(this, handle);
+      memoryObjects.set(handle, this);
+    }
+    grow(delta) {
+      const handle = memoryHandle(this);
+      const old = memoryGrow(handle, pages(delta, 'delta'));
+      if (typeof old === 'string') throw new RangeError(old);
+      return old;
+    }
+    get buffer() {
+      return memoryBuffer(memoryHandle(this));
+    }
+  }
+  const memoryHandle = (memory) => {
+    const handle = memoryHandles.get(memory);
+    if (handle === undefined) throw new TypeError('expected a WebAssembly.Memory');
+    return handle;
+  };
+  // One script object per memory, so an imported memory exported again is the
+  // object that was imported.
+  const memoryObject = (handle) => {
+    let memory = memoryObjects.get(handle);
+    if (memory) return memory;
+    memory = create(Memory.prototype);
+    memoryHandles.set(memory, handle);
+    memoryObjects.set(handle, memory);
+    return memory;
+  };
+
   class Module {
     constructor(bytes) {
       const handle = compile(bufferBytes(bytes));
@@ -118,6 +175,11 @@
         const namespace = importObject[imp.module];
         if (!isObject(namespace)) throw new TypeError(`import module "${imp.module}" must be an object`);
         const value = namespace[imp.name];
+        if (imp.kind === 'memory') {
+          const handle = memoryHandles.get(value);
+          if (handle === undefined) throw new LinkError(`${imp.module}.${imp.name} must be a WebAssembly.Memory`);
+          return handle;
+        }
         if (imp.kind !== 'function') {
           throw new LinkError(`${imp.module}.${imp.name}: ${imp.kind} imports are not supported yet`);
         }
@@ -134,6 +196,7 @@
       const object = create(null);
       for (const { name, kind } of exports) {
         if (kind === 'function') object[name] = exportedFunction(exportFunc(instance, name));
+        if (kind === 'memory') object[name] = memoryObject(exportMemory(instance, name));
       }
       instanceExports.set(this, freeze(object));
     }
@@ -148,6 +211,7 @@
     defineProperty(target, Symbol.toStringTag, { value, configurable: true });
   tag(Module.prototype, 'WebAssembly.Module');
   tag(Instance.prototype, 'WebAssembly.Instance');
+  tag(Memory.prototype, 'WebAssembly.Memory');
 
   const namespace = {
     validate(bytes) {
@@ -167,7 +231,7 @@
       });
     },
   };
-  for (const [name, value] of Object.entries({ Module, Instance, CompileError, LinkError, RuntimeError })) {
+  for (const [name, value] of Object.entries({ Module, Instance, Memory, CompileError, LinkError, RuntimeError })) {
     defineProperty(namespace, name, { value, writable: true, configurable: true });
   }
   tag(namespace, 'WebAssembly');

@@ -4,9 +4,10 @@
 
 //! The wasmi side of the bridge: one store per engine and the handle tables
 //! script reaches it through. Nothing here touches the JavaScript heap except
-//! the rooted import wrappers it holds.
+//! the rooted import wrappers and memory buffers it holds.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 
 use wasmi::{
@@ -15,7 +16,8 @@ use wasmi::{
 };
 
 use super::super::NovaValue;
-use super::sections::{self, START_EXPORT};
+use super::memory::MemoryEntry;
+use super::sections::{self, FUNC_KIND, START_EXPORT};
 
 /// Raised by every imported function. The call suspends at it and the bridge
 /// runs the script function for `slot`, then resumes with its result.
@@ -33,15 +35,24 @@ impl fmt::Display for ImportCall {
 
 impl HostError for ImportCall {}
 
-struct ModuleEntry {
-    module: Module,
-    has_start: bool,
-    func_exports: Vec<(String, u32)>,
+/// What script supplies for one import, in the module's import order.
+pub(super) enum ImportValue {
+    Func(NovaValue),
+    Memory(usize),
 }
 
-struct InstanceEntry {
-    instance: Instance,
-    module: usize,
+pub(super) struct ModuleEntry {
+    module: Module,
+    has_start: bool,
+    /// `(name, kind, index)` for every export.
+    pub(super) exports: Vec<(String, u8, u32)>,
+}
+
+pub(super) struct InstanceEntry {
+    pub(super) instance: Instance,
+    pub(super) module: usize,
+    /// Handles of the memories it imported, by memory index.
+    pub(super) imported_memories: Vec<usize>,
 }
 
 struct FuncEntry {
@@ -57,11 +68,14 @@ const UNBOUNDED_FUEL: u64 = u64::MAX;
 pub(crate) struct WasmHost {
     engine: Engine,
     pub(super) store: RefCell<Store<()>>,
-    modules: RefCell<Vec<ModuleEntry>>,
-    instances: RefCell<Vec<InstanceEntry>>,
+    pub(super) modules: RefCell<Vec<ModuleEntry>>,
+    pub(super) instances: RefCell<Vec<InstanceEntry>>,
     funcs: RefCell<Vec<FuncEntry>>,
     /// Script wrappers for imported functions, by import slot.
     pub(super) imports: RefCell<Vec<NovaValue>>,
+    pub(super) memories: RefCell<Vec<MemoryEntry>>,
+    /// Handles of memories an instance defines, by `(instance, memory index)`.
+    pub(super) defined_memories: RefCell<HashMap<(usize, u32), usize>>,
 }
 
 pub(super) fn val_type_name(ty: ValType) -> &'static str {
@@ -130,12 +144,14 @@ impl WasmHost {
             instances: RefCell::new(Vec::new()),
             funcs: RefCell::new(Vec::new()),
             imports: RefCell::new(Vec::new()),
+            memories: RefCell::new(Vec::new()),
+            defined_memories: RefCell::new(HashMap::new()),
         }
     }
 
     /// Whether script holds anything that lives in this store.
     pub(crate) fn is_live(&self) -> bool {
-        !self.modules.borrow().is_empty()
+        !self.modules.borrow().is_empty() || !self.memories.borrow().is_empty()
     }
 
     /// Set the fuel every wasm call on this engine draws from. `None` is
@@ -155,7 +171,7 @@ impl WasmHost {
         modules.push(ModuleEntry {
             module,
             has_start: prepared.has_start,
-            func_exports: prepared.func_exports,
+            exports: prepared.exports,
         });
         Ok(modules.len() - 1)
     }
@@ -197,37 +213,47 @@ impl WasmHost {
         Some(out)
     }
 
-    /// Link a module against script wrappers, one per function import in
+    /// Link a module against what script supplied, one value per import in
     /// order. Returns the instance and the start function still to be run.
     /// Errors are prefixed `link:` or `trap:` for the bootstrap.
     pub(super) fn instantiate(
         &self,
         module: usize,
-        wrappers: Vec<NovaValue>,
+        values: Vec<ImportValue>,
     ) -> Result<(usize, Option<Func>), String> {
         let modules = self.modules.borrow();
         let entry = modules.get(module).ok_or("link:not a module")?;
         let mut store = self.store.borrow_mut();
-        let mut wrappers = wrappers.into_iter();
+        let mut values = values.into_iter();
         let mut externs = Vec::new();
+        let mut imported_memories = Vec::new();
         for import in entry.module.imports() {
-            let ExternType::Func(ty) = import.ty() else {
-                return Err(format!(
-                    "link:{} imports are not supported yet",
-                    kind_name(import.ty())
-                ));
-            };
-            let wrapper = wrappers.next().ok_or("link:too few imports")?;
-            let mut imports = self.imports.borrow_mut();
-            let slot = imports.len();
-            imports.push(wrapper);
-            let func = Func::new(&mut *store, ty.clone(), move |_, params, _| {
-                Err(Error::host(ImportCall {
-                    slot,
-                    params: params.to_vec(),
-                }))
-            });
-            externs.push(Extern::Func(func));
+            let value = values.next().ok_or("link:too few imports")?;
+            match (import.ty(), value) {
+                (ExternType::Func(ty), ImportValue::Func(wrapper)) => {
+                    let mut imports = self.imports.borrow_mut();
+                    let slot = imports.len();
+                    imports.push(wrapper);
+                    let func = Func::new(&mut *store, ty.clone(), move |_, params, _| {
+                        Err(Error::host(ImportCall {
+                            slot,
+                            params: params.to_vec(),
+                        }))
+                    });
+                    externs.push(Extern::Func(func));
+                },
+                (ExternType::Memory(_), ImportValue::Memory(handle)) => {
+                    let memory = self.memory(handle).ok_or("link:not a memory")?;
+                    imported_memories.push(handle);
+                    externs.push(Extern::Memory(memory));
+                },
+                (ty, _) => {
+                    return Err(format!(
+                        "link:{} imports are not supported yet",
+                        kind_name(ty)
+                    ));
+                },
+            }
         }
         let instance = Instance::new(&mut *store, &entry.module, &externs).map_err(|e| {
             let prefix = if e.as_trap_code().is_some() {
@@ -242,7 +268,11 @@ impl WasmHost {
             .then(|| instance.get_func(&*store, START_EXPORT))
             .flatten();
         let mut instances = self.instances.borrow_mut();
-        instances.push(InstanceEntry { instance, module });
+        instances.push(InstanceEntry {
+            instance,
+            module,
+            imported_memories,
+        });
         Ok((instances.len() - 1, start))
     }
 
@@ -254,14 +284,18 @@ impl WasmHost {
         let instances = self.instances.borrow();
         let entry = instances.get(instance)?;
         let func = entry.instance.get_func(&*self.store.borrow(), name)?;
-        let index = self.modules.borrow()[entry.module]
-            .func_exports
-            .iter()
-            .find(|(export, _)| export == name)
-            .map(|(_, index)| *index);
+        let index = self.export_index(entry.module, name, FUNC_KIND);
         let mut funcs = self.funcs.borrow_mut();
         funcs.push(FuncEntry { func, index });
         Some(funcs.len() - 1)
+    }
+
+    pub(super) fn export_index(&self, module: usize, name: &str, kind: u8) -> Option<u32> {
+        self.modules.borrow()[module]
+            .exports
+            .iter()
+            .find(|(export, k, _)| export == name && *k == kind)
+            .map(|(_, _, index)| *index)
     }
 
     pub(super) fn func(&self, handle: usize) -> Option<Func> {

@@ -4,8 +4,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-//! W1 of `design_docs/2026-11-22_webassembly_object_plan.md`: a module called
-//! from script on Vano, with script called back from the module.
+//! W1 and W2 of `design_docs/2026-11-22_webassembly_object_plan.md`: a module called
+//! from script on Vano, with script called back from the module, and memory the
+//! two share.
 #![cfg(all(target_pointer_width = "64", feature = "wasm"))]
 
 use script_engine_api::ScriptEngine;
@@ -242,4 +243,156 @@ fn a_snapshot_clone_is_refused_while_wasm_objects_live() {
         .err()
         .expect("a live module refuses the clone");
     assert!(refusal.contains("WebAssembly"), "{refusal}");
+}
+
+const MEMORY: &str = r#"(module
+  (memory (export "mem") 1 4)
+  (func (export "store") (param i32 i32) local.get 0 local.get 1 i32.store8)
+  (func (export "load") (param i32) (result i32) local.get 0 i32.load8_u)
+  (func (export "grow") (param i32) (result i32) local.get 0 memory.grow))"#;
+
+#[test]
+fn an_exported_memory_buffer_is_the_linear_memory() {
+    let mut engine = engine_with(MEMORY);
+    let out = run(
+        &mut engine,
+        "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
+         const m = exports.mem;
+         const view = new Uint8Array(m.buffer);
+         exports.store(5, 77);
+         const wasmToScript = view[5];
+         view[6] = 99;
+         const scriptToWasm = exports.load(6);
+         new Float64Array(m.buffer)[1] = 1.5;
+         let transfer;
+         try { m.buffer.transfer(); } catch (e) { transfer = e.name; }
+         return [wasmToScript, scriptToWasm, exports.load(15), m.buffer === m.buffer,
+                 m.buffer.byteLength, m instanceof WebAssembly.Memory, exports.mem === m,
+                 transfer].join('|');",
+    );
+    assert_eq!(out, "77|99|63|true|65536|true|true|TypeError");
+}
+
+#[test]
+fn growth_from_wasm_detaches_the_old_buffer() {
+    let mut engine = engine_with(MEMORY);
+    let out = run(
+        &mut engine,
+        "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
+         const m = exports.mem;
+         exports.store(5, 77);
+         const old = m.buffer;
+         const before = exports.grow(1);
+         const now = m.buffer;
+         return [before, old.byteLength, now.byteLength, now !== old,
+                 new Uint8Array(now)[5], exports.grow(9)].join('|');",
+    );
+    assert_eq!(out, "1|0|131072|true|77|-1");
+}
+
+#[test]
+fn growth_from_script_detaches_even_by_zero_pages() {
+    let mut engine = engine_with(MEMORY);
+    let out = run(
+        &mut engine,
+        "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
+         const m = exports.mem;
+         const first = m.buffer;
+         const grew = m.grow(1);
+         const second = m.buffer;
+         const secondLength = second.byteLength;
+         const zero = m.grow(0);
+         const third = m.buffer;
+         let failed;
+         try { m.grow(5); } catch (e) { failed = e.name; }
+         return [grew, first.byteLength, secondLength, second.byteLength, zero,
+                 third.byteLength, third !== second, failed, m.buffer === third,
+                 exports.load(131071)].join('|');",
+    );
+    assert_eq!(out, "1|0|131072|0|2|131072|true|RangeError|true|0");
+}
+
+#[test]
+fn a_memory_made_by_script_is_imported_and_exported_as_itself() {
+    let mut engine = engine_with(
+        r#"(module
+          (import "env" "mem" (memory 1))
+          (export "mem" (memory 0))
+          (func (export "store") (param i32 i32) local.get 0 local.get 1 i32.store8)
+          (func (export "grow") (param i32) (result i32) local.get 0 memory.grow))"#,
+    );
+    let out = run(
+        &mut engine,
+        "const mem = new WebAssembly.Memory({ initial: 1, maximum: 3 });
+         const view = new Uint8Array(mem.buffer);
+         const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes), { env: { mem } });
+         exports.store(100, 42);
+         const throughView = view[100];
+         const old = mem.buffer;
+         exports.grow(1);
+         let notMemory;
+         try { new WebAssembly.Instance(new WebAssembly.Module(bytes), { env: { mem: {} } }); }
+         catch (e) { notMemory = e.name; }
+         return [exports.mem === mem, throughView, old.byteLength, mem.buffer.byteLength,
+                 new Uint8Array(mem.buffer)[100], notMemory].join('|');",
+    );
+    assert_eq!(out, "true|42|0|131072|42|LinkError");
+}
+
+#[test]
+fn memory_moved_under_a_suspended_call_is_seen_by_both_sides() {
+    let mut engine = engine_with(
+        r#"(module
+          (import "env" "growFromScript" (func $grow))
+          (import "env" "check" (func $check))
+          (memory (export "mem") 1 4)
+          (func (export "growThenWrite") (result i32)
+            call $grow
+            i32.const 70000 i32.const 5 i32.store8
+            i32.const 70000 i32.load8_u)
+          (func (export "growThenCall")
+            i32.const 1 memory.grow drop
+            call $check))"#,
+    );
+    let out = run(
+        &mut engine,
+        "let inst, held, seenInImport;
+         const env = {
+           growFromScript: () => { inst.exports.mem.grow(1); },
+           check: () => { seenInImport = [held.byteLength, inst.exports.mem.buffer.byteLength]; },
+         };
+         inst = new WebAssembly.Instance(new WebAssembly.Module(bytes), { env });
+         const written = inst.exports.growThenWrite();
+         const read = new Uint8Array(inst.exports.mem.buffer)[70000];
+         held = inst.exports.mem.buffer;
+         inst.exports.growThenCall();
+         return [written, read, seenInImport.join('/')].join('|');",
+    );
+    assert_eq!(out, "5|5|0/196608");
+}
+
+#[test]
+fn an_empty_memory_has_an_empty_buffer_until_it_grows() {
+    let mut engine = engine_with(r#"(module)"#);
+    let out = run(
+        &mut engine,
+        "const m = new WebAssembly.Memory({ initial: 0 });
+         const empty = m.buffer.byteLength;
+         m.grow(1);
+         const limits = [];
+         for (const d of [{ initial: 2, maximum: 1 }, { initial: 70000 }]) {
+           try { new WebAssembly.Memory(d); } catch (e) { limits.push(e.name); }
+         }
+         return [empty, m.buffer.byteLength, limits.join()].join('|');",
+    );
+    assert_eq!(out, "0|65536|RangeError,RangeError");
+}
+
+#[test]
+fn a_live_memory_refuses_a_snapshot_clone() {
+    let mut engine = engine_with(r#"(module)"#);
+    engine
+        .eval("globalThis.m = new WebAssembly.Memory({ initial: 1 });")
+        .unwrap();
+    assert!(engine.snapshot_clone().is_err());
 }

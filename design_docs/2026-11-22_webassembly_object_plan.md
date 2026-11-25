@@ -485,7 +485,10 @@ W3, run 2026-11-25 on this Mac. The runner is `components/script-engine-nova/exa
 41. A Vano bug the run found: `unescape("yee%F0%90%90%B7eey")` panics in `wtf8` (`begin <= end`,
     from `GlobalObject::unescape` at `global_object.rs:1479`). `wasm-module-builder.js` reaches it
     when it encodes a custom section's name, so `module/customSections.any.js` counts none of its
-    subtests. Shorter strings with the same escapes do not panic.
+    subtests. Shorter strings with the same escapes do not panic. Fixed the same day in Vano
+    `cac4b22d`: the loop placed every `%` after the first at the wrong index, so other strings
+    decoded wrongly without panicking. Run again on that revision, the file passes 2 of 9 and the
+    total is 362 of 786. The table above is the first run.
 42. What Bole would need, from Findings 6 and its source at `932470b6`:
     - The bootstrap carries over unchanged. The natives would be rewritten against Boa's API.
     - Its native functions carry traced captures (`from_copy_closure_with_captures`), so an export

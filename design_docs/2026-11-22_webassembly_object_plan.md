@@ -1,6 +1,6 @@
 # WebAssembly object plan: a `WebAssembly` global for scripts, probed on Vano
 
-**Status:** 2026-11-25. W0 to W3 are met; W4 and W5 wait on the open lanes (D10). The probe
+**Status:** 2026-11-25. W0 to W3 are met; W4 is in progress (D11). The probe
 runs modules from script on Vano behind `genet-vano`'s `wasm` feature (Findings 25 to 31), with
 `Memory.buffer` as the module's linear memory through Vano `c2c0eaa4` (Findings 32 to 37). It
 passes 360 of 777 subtests of the tree's JS API tests (Findings 40). D8 and D9 grow it to what
@@ -69,7 +69,7 @@ implement the object in full, on which engines, and in what order against Genet'
 
 ### W4. The reachable set on Vano (D8, D10)
 
-Starts once the scripting and layout lanes already open have landed (D10).
+Starts now (D11), not after the open lanes as D10 had it.
 
 **Done-conditions:** behind the same feature, on Vano:
 - `WebAssembly.Global` and `WebAssembly.Table`;
@@ -92,7 +92,7 @@ shares Bole's script budget is put to Mark; the runner's count on Bole is record
 ## Decisions
 
 Each decision keeps its evidence, what was offered, the answer in Mark's words, what follows, and its
-outcome. D1 to D10 are in answer order.
+outcome. D1 to D11 are in answer order.
 
 - **D1. Vano first (Mark, 2026-11-22):** Evidence: Bole's native functions can carry captured state,
   it is the default engine in Genet's builds and tools, and it builds for wasm32; Vano's native
@@ -194,6 +194,12 @@ outcome. D1 to D10 are in answer order.
   answers open question 4.
 
   Links: area Scripting · plans webassembly-object W4 · summary The rest of the WebAssembly object waits until Genet's scripting and layout lanes already in flight have landed.
+
+- **D11. W4 and W5 now (Mark, 2026-11-25):** Evidence: W3 met, and the finished lanes of this
+  plan were retired. Mark's instruction, unprompted: "proceed to the remainder!" What follows: W4
+  starts now rather than after the open lanes, then W5. Outcome: supersedes D10's timing.
+
+  Links: area Scripting · plans webassembly-object W4, webassembly-object W5 · summary W4 and W5 of the WebAssembly object plan start at once rather than after Genet's open lanes.
 
 ## Open questions
 

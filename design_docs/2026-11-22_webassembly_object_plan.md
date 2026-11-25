@@ -2,7 +2,7 @@
 
 **Status:** 2026-11-25. Complete: W0 to W5 are met. Both Genet JavaScript engines have the
 `WebAssembly` object behind a `wasm` feature that is off by default. The engine-free half is shared
-in `genet-wasm` (D12). The tree's JS API tests read 684 of 804 on Vano and 946 of 1066 on Bole.
+in `genet-wasm` (D12). The tree's JS API tests read 946 of 1066 on both since Vano's destructuring fix (Findings 47).
 Every directory within wasmi's reach passes in full on both except shared memory, which wasmi
 lacks (Findings 45, 52).
 
@@ -593,7 +593,12 @@ W4, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `20e1db2d`. The code is
     declaration 'a' before initialization", as do the `let`, `for-of` and object forms.
     `bad-imports.js` uses that form at its line 34, so `constructor-bad-imports` and
     `instantiate-bad-imports` register only the subtests before it. Vano's test262 expectations
-    name no such failure.
+    name no such failure. Fixed in Vano `a739d12d`, 2026-11-25. The compiler took any reference to
+    a stack variable inside its own declarator as a self-reference, so `var x = x` threw too. Now
+    such a reference is in the TDZ only if it is in the initializer, comes before the binding, or
+    is in the binding's own default. 21,074 test262 tests under statements, expressions, block
+    scope, function code and arguments objects show no change, so test262 does not cover these
+    forms. Run again on that revision, Vano reads 946 of 1066, the same as Bole (Findings 52).
 48. Not in W4, as D8 ruled: exception handling, GC types, promise integration, ES module
     integration, and the string builtins compile option. That option could be supplied by the host
     without wasmi, but D8 did not take it up.
@@ -632,7 +637,8 @@ W5, run 2026-11-25 on this Mac with wasmi 2.0.3, Vano `20e1db2d` and Bole `85dd7
     | the rest | 16 of 125 | 16 of 125 | as Findings 45 |
 
     Bole counts 262 more subtests than Vano, and they are exactly the bad-imports subtests that
-    Vano's destructuring bug keeps from registering (Findings 47). All of them pass on Bole.
+    Vano's destructuring bug keeps from registering (Findings 47). All of them pass on Bole. With
+    that bug fixed, Vano also reads 946 of 1066.
 53. `genet-bole` builds Boa without its `annex-b` feature, so Bole in Genet has no `unescape`,
     where Vano does. `wasm-module-builder.js` encodes every name with it, so without help Bole
     read 531 of 1034, with 406 failures from that alone. The runner now defines `unescape` when an
@@ -657,3 +663,4 @@ W5, run 2026-11-25 on this Mac with wasmi 2.0.3, Vano `20e1db2d` and Bole `85dd7
 - 2026-11-25: W4 met: resizable buffers through Vano `0891093c`; 684 of 804 (Findings 43 to 48).
 - 2026-11-25: W5 met: `genet-wasm` shared (D12), Bole `85dd7391`, the object on Bole; 946 of
   1066 there (Findings 49 to 54). The plan is complete.
+- 2026-11-25: Vano `a739d12d` fixes the destructuring bug of Findings 47; Vano reads 946 of 1066.

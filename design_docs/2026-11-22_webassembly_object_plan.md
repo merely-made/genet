@@ -514,3 +514,6 @@ W3, run 2026-11-25 on this Mac. The runner is `components/script-engine-nova/exa
 - 2026-11-25: W2 met (Findings 32 to 37); Vano `c2c0eaa4` carries D6's change.
 - 2026-11-25: W3 met. 360 of 777 subtests pass (Findings 38 to 42); D8 to D10 ruled and W4 and W5
   added.
+- 2026-11-25: W4 in progress: `Global`, `Table`, every import and export kind, linked wasm
+  functions, multi-value, reference values, one script function per wasm function, custom
+  sections and type reflection landed; the runner reads 675 of 804. Resizable buffers remain.

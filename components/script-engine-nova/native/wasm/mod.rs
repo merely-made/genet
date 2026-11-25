@@ -6,7 +6,11 @@
 //! WebAssembly object plan, D2 and D4). Off unless the `wasm` feature is on and
 //! the host calls [`NovaEngine::install_webassembly`].
 
+mod bridge;
+mod entities;
+mod entities_natives;
 mod host;
+mod json;
 mod memory;
 mod natives;
 mod sections;
@@ -26,17 +30,36 @@ pub(crate) type WasmSlot = RefCell<Option<Rc<WasmHost>>>;
 
 const BOOTSTRAP: &str = include_str!("bootstrap.js");
 
-const NATIVES: [(&str, RegularFn, u32); 10] = [
+const NATIVES: [(&str, RegularFn, u32); 25] = [
     ("__genetWasmCompile", natives::compile, 1),
     ("__genetWasmDescribe", natives::describe, 1),
-    ("__genetWasmInstantiate", natives::instantiate, 1),
-    ("__genetWasmExportFunc", natives::export_func, 2),
+    ("__genetWasmInstantiate", natives::instantiate, 2),
+    ("__genetWasmExportOf", natives::export_of, 3),
     ("__genetWasmSignature", natives::signature, 1),
-    ("__genetWasmCall", natives::call, 1),
-    ("__genetWasmMemoryNew", natives::memory_new, 2),
-    ("__genetWasmMemoryGrow", natives::memory_grow, 2),
-    ("__genetWasmMemoryBuffer", natives::memory_buffer, 1),
-    ("__genetWasmExportMemory", natives::export_memory, 2),
+    ("__genetWasmCall", natives::call, 2),
+    ("__genetWasmTrapMessage", natives::trap_message, 0),
+    ("__genetWasmResultAt", natives::result_at, 1),
+    ("__genetWasmStage", natives::stage, 0),
+    ("__genetWasmFuncNew", natives::func_new, 3),
+    ("__genetWasmCustomSection", natives::custom_section, 3),
+    ("__genetWasmMemoryNew", entities_natives::memory_new, 2),
+    ("__genetWasmMemoryGrow", entities_natives::memory_grow, 2),
+    (
+        "__genetWasmMemoryBuffer",
+        entities_natives::memory_buffer,
+        1,
+    ),
+    ("__genetWasmMemoryType", entities_natives::memory_type, 1),
+    ("__genetWasmGlobalNew", entities_natives::global_new, 3),
+    ("__genetWasmGlobalGet", entities_natives::global_get, 1),
+    ("__genetWasmGlobalSet", entities_natives::global_set, 2),
+    ("__genetWasmGlobalType", entities_natives::global_type, 1),
+    ("__genetWasmTableNew", entities_natives::table_new, 4),
+    ("__genetWasmTableGet", entities_natives::table_get, 2),
+    ("__genetWasmTableSet", entities_natives::table_set, 3),
+    ("__genetWasmTableGrow", entities_natives::table_grow, 3),
+    ("__genetWasmTableLength", entities_natives::table_length, 1),
+    ("__genetWasmTableType", entities_natives::table_type, 1),
 ];
 
 impl NovaEngine {

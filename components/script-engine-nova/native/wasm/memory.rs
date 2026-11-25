@@ -15,7 +15,6 @@ use wasmi::{Memory, MemoryType};
 
 use super::super::NovaValue;
 use super::host::WasmHost;
-use super::sections::MEMORY_KIND;
 
 /// A buffer script holds, and the bytes it was made over.
 struct BufferView {
@@ -30,7 +29,7 @@ pub(super) struct MemoryEntry {
 }
 
 impl WasmHost {
-    fn push_memory(&self, memory: Memory) -> usize {
+    pub(super) fn push_memory(&self, memory: Memory) -> usize {
         let mut memories = self.memories.borrow_mut();
         memories.push(MemoryEntry {
             memory,
@@ -60,24 +59,8 @@ impl WasmHost {
             .map_err(|e| e.to_string())
     }
 
-    /// The handle for a memory an instance exports. A memory below the
-    /// imported count is the import itself, so it keeps the import's handle.
-    pub(super) fn export_memory(&self, instance: usize, name: &str) -> Option<usize> {
-        let instances = self.instances.borrow();
-        let entry = instances.get(instance)?;
-        let index = self.export_index(entry.module, name, MEMORY_KIND)?;
-        if let Some(handle) = entry.imported_memories.get(index as usize) {
-            return Some(*handle);
-        }
-        if let Some(handle) = self.defined_memories.borrow().get(&(instance, index)) {
-            return Some(*handle);
-        }
-        let memory = entry.instance.get_memory(&*self.store.borrow(), name)?;
-        let handle = self.push_memory(memory);
-        self.defined_memories
-            .borrow_mut()
-            .insert((instance, index), handle);
-        Some(handle)
+    pub(super) fn memory_type(&self, handle: usize) -> Option<MemoryType> {
+        Some(self.memory(handle)?.ty(&*self.store.borrow()))
     }
 
     /// The memory's bytes as they are now.

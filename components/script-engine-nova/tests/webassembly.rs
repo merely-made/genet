@@ -9,33 +9,10 @@
 //! two share.
 #![cfg(all(target_pointer_width = "64", feature = "wasm"))]
 
+mod common;
+
+use common::{engine_with, run};
 use script_engine_api::ScriptEngine;
-use script_engine_nova::NovaEngine;
-
-/// An engine with `WebAssembly` installed and `bytes` bound to the module.
-fn engine_with(wat: &str) -> NovaEngine {
-    let mut engine = NovaEngine::new().unwrap();
-    engine.install_webassembly().unwrap();
-    let bytes = wat::parse_str(wat).unwrap();
-    let list: Vec<String> = bytes.iter().map(u8::to_string).collect();
-    engine
-        .eval(&format!(
-            "globalThis.bytes = new Uint8Array([{}]);",
-            list.join(",")
-        ))
-        .unwrap();
-    engine
-}
-
-/// Evaluate `body` as a function body; what it returns, or what it threw.
-fn run(engine: &mut NovaEngine, body: &str) -> String {
-    let source = format!(
-        "(() => {{ try {{ return String((() => {{ {body} }})()); }} \
-         catch (e) {{ return 'threw ' + (e && e.name) + ': ' + (e && e.message); }} }})()"
-    );
-    let value = engine.eval(&source).unwrap();
-    engine.value_to_string(&value).unwrap()
-}
 
 const CALLS_BACK: &str = r#"(module
   (import "env" "add1" (func $add1 (param i32) (result i32)))

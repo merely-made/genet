@@ -1,7 +1,8 @@
 # WebAssembly object plan: a `WebAssembly` global for scripts, probed on Vano
 
-**Status:** 2026-11-25. Nothing built. D1 to D3 ruled 2026-11-22. W0 is met: the assessment is
-Findings 10 to 24 and its forks are ruled (D4 to D7).
+**Status:** 2026-11-25. W0 and W1 are met. W0's assessment is Findings 10 to 24 and its forks are
+ruled (D4 to D7). W1 runs a module from script on Vano with script called back from it, behind
+`genet-vano`'s `wasm` feature, with no change to Vano or `script-engine-api` (Findings 25 to 31).
 
 **For:** pages that use WebAssembly. Neither of Genet's JavaScript engines runs it: Vano says of
 itself "The engine does not support WebAssembly execution" and Bole has no `WebAssembly` object. Mark
@@ -293,8 +294,61 @@ for JavaScript, and Node 26.12 as the reference for the JS API. Nothing ran on V
     new one lazily. Dialog DB's WCMP puts a component layer over wasmi with the same resumable
     technique. It is prior art for the layer Graphshell closed (its D13), not a reason to reopen it.
 
+W1, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `a4eff25b`. The code is
+`components/script-engine-nova/native/wasm/` and the tests are
+`components/script-engine-nova/tests/webassembly.rs`.
+
+25. What landed. `genet-vano` has a `wasm` feature, off by default, that adds wasmi as its only
+    dependency. `NovaEngine::install_webassembly` gives the main realm a `WebAssembly` global with
+    `Module`, `Instance`, the three error classes, `validate`, `compile` and `instantiate`.
+    `set_wasm_fuel` sets the budget. The namespace is a bootstrap script over six natives that it
+    takes off the global object and deletes. Neither Vano nor `script-engine-api` changed.
+26. The ten tests pass, and the crate's other suites pass with the feature on and with it off. They
+    cover each done-condition:
+    - an export calls an imported script function with the right arguments and returns the right
+      number;
+    - `i64` crosses as a BigInt both ways, wrapping at 64 bits, and a Number passed for one throws
+      `TypeError`;
+    - bad bytes throw `CompileError`, a missing import throws `LinkError` and `unreachable` throws
+      `RuntimeError`;
+    - an endless loop ends with `RuntimeError: fuel exhausted`, and the engine goes on evaluating.
+
+    Four further cases test the bridge:
+    - script called from wasm calls the same instance again, five calls deep;
+    - an import's thrown object reaches the caller as the same object, and the instance works
+      afterwards;
+    - a start function calls script during `new WebAssembly.Instance` (Findings 22's rewrite);
+    - an import exported directly, and one tail-called from the root frame, return their result.
+
+    A snapshot clone is refused once a module exists and allowed before.
+27. The budget is wasm's own. Vano has no way to bound script: `eval_bounded` with a step count is
+    `Unsupported` there. So the fuel is a separate allotment the host sets, shared by every wasm
+    call on the engine. Running out throws, and fuel stays exhausted until the host sets it again.
+    Fuel stays on even when unbounded, at the cost Graphshell measured (its Findings 23).
+28. Errors cross as strings. Vano lets an embedder throw only errors it constructs itself:
+    `JsError::new` is crate-private and `throw_exception` takes a built-in error kind. So a native
+    returns a message, and the bootstrap throws `CompileError`, `LinkError` or `RuntimeError`. An
+    exception thrown by script passes through untouched, because the native returns the engine's
+    own `JsError`.
+29. Exports are arrow closures over one trampoline (D5). Each closure is cached per handle, so an
+    export keeps its identity, and its `name` is the module's function index. Arrow closures are not
+    constructors, as the spec requires. `toString` shows their source.
+30. Not covered yet:
+    - imports and exports of memories, tables and globals (W2 covers memory);
+    - reference types and `v128` values;
+    - multi-value results (they throw `TypeError`);
+    - a wasm function passed as another instance's import, which crosses as a script function, so a
+      type mismatch is not a `LinkError`;
+    - one function exported under two names, which gives two script functions;
+    - the promise forms, which resolve on the calling turn instead of a later task;
+    - freeing: modules and instances live as long as the engine.
+31. A start function's import has no wasm frame left to suspend when the start function is the
+    import itself. The tree's tests make exactly that start function (`jsapi/functions/helper.js`),
+    so the rewrite and the root-frame path between them cover both shapes.
+
 ## Progress
 
 - 2026-11-22: plan written from Mark's rulings D1 to D3 and a read of the three sources.
 - 2026-11-25: W0 met. The assessment is Findings 10 to 24; D4 to D7 ruled; open questions 1 and 2
   answered.
+- 2026-11-25: W1 met (Findings 25 to 31).

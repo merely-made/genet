@@ -12,6 +12,9 @@
 
 #[cfg(target_pointer_width = "64")]
 mod native {
+    #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+    mod wasm;
+
     use std::any::Any;
     use std::cell::{Cell, RefCell};
     use std::collections::{HashMap, VecDeque};
@@ -70,6 +73,9 @@ mod native {
         /// `None` means "whatever is current", which is what the realm-less
         /// `eval_module` wants.
         module_realm: Cell<Option<Realm<'static>>>,
+        /// The engine's WebAssembly state, once `install_webassembly` runs.
+        #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+        wasm: wasm::WasmSlot,
     }
 
     /// Owns one temporary resolver installation. Nova's host hooks are
@@ -156,8 +162,11 @@ mod native {
             self.jobs.borrow_mut().push_back(job);
         }
         fn get_host_data(&self) -> &dyn Any {
-            // Unused: genet reaches host state through the realm `[[HostDefined]]`
-            // slot, not this hook.
+            // Genet reaches DOM state through the realm `[[HostDefined]]` slot.
+            // This hook carries only the agent-wide WebAssembly store.
+            #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+            return &self.wasm;
+            #[cfg(not(all(feature = "wasm", not(target_family = "wasm"))))]
             &()
         }
 
@@ -272,6 +281,8 @@ mod native {
             resolver_panic: RefCell::new(None),
             module_cache: RefCell::new(HashMap::new()),
             module_realm: Cell::new(None),
+            #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+            wasm: RefCell::new(None),
         })
     }
 
@@ -1166,6 +1177,8 @@ mod native {
             if !self.jobs.borrow().is_empty() {
                 return Err("cannot snapshot clone NovaEngine with pending jobs".to_string());
             }
+            #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+            let wasm = self.wasm_clone_slot()?;
 
             let original_release = self.release.clone();
             self.agent.run_in_realm(&self.realm, |agent, _gc| {
@@ -1199,6 +1212,10 @@ mod native {
             let jobs: Rc<RefCell<VecDeque<Job>>> = Rc::new(RefCell::new(VecDeque::new()));
             let hook_owner = new_host_hooks(jobs.clone());
             *hook_owner.date_source.borrow_mut() = self.hook_owner.date_source.borrow().clone();
+            #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+            {
+                *hook_owner.wasm.borrow_mut() = wasm;
+            }
             let hooks = agent_hooks(&hook_owner);
             let release: ReleaseQueue = Rc::new(RefCell::new(Vec::new()));
             let mut agent = self.agent.snapshot_clone(hooks);

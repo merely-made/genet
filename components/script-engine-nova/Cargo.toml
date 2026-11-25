@@ -50,3 +50,7 @@ nova_vm = { version = "1", git = "https://github.com/merely-made/vano.git", bran
 
 [lints]
 workspace = true
+
+[[example]]
+name = "wasm_jsapi"
+required-features = ["wasm"]

@@ -1,9 +1,10 @@
 # WebAssembly object plan: a `WebAssembly` global for scripts, probed on Vano
 
-**Status:** 2026-11-25. W0 to W2 are met; W3, the readout, is open. W0's assessment is Findings
-10 to 24 and its forks are ruled (D4 to D7). W1 runs a module from script on Vano with script called
-back from it, behind `genet-vano`'s `wasm` feature (Findings 25 to 31). W2 makes `Memory.buffer` the
-module's linear memory through Vano `c2c0eaa4`, the fork change D6 named (Findings 32 to 37).
+**Status:** 2026-11-25. W0 to W3 are met; W4 and W5 wait on the open lanes (D10). The probe
+runs modules from script on Vano behind `genet-vano`'s `wasm` feature (Findings 25 to 31), with
+`Memory.buffer` as the module's linear memory through Vano `c2c0eaa4` (Findings 32 to 37). It
+passes 360 of 777 subtests of the tree's JS API tests (Findings 40). D8 and D9 grow it to what
+wasmi can reach, on Vano and then on Bole.
 
 **For:** pages that use WebAssembly. Neither of Genet's JavaScript engines runs it: Vano says of
 itself "The engine does not support WebAssembly execution" and Bole has no `WebAssembly` object. Mark
@@ -12,9 +13,9 @@ asked, during Graphshell's guest runtime plan
 D11), whether an embedded wasm runtime could give them one. This plan is a probe that finds out on the
 harder engine first, memory included.
 
-**Not here:** a complete `WebAssembly` implementation; Bole; Genet built for a browser, where the
-page's own `WebAssembly` is the backend (D2); streaming compilation, threads, exceptions, GC types,
-JSPI; passing any count of the web platform tests.
+**Not here:** Genet built for a browser, where the page's own `WebAssembly` is the backend (D2);
+streaming compilation, threads, exceptions, GC types, JSPI and ES module integration (D8); passing
+any count of the web platform tests. Bole came in with D9 (W5).
 
 ## Constraints
 
@@ -66,10 +67,32 @@ a copy-based stand-in gets wrong, and that is the result.
 and not a target; what Bole would need, from Findings 6; the questions put to Mark (whether to
 implement the object in full, on which engines, and in what order against Genet's other spec gaps).
 
+### W4. The reachable set on Vano (D8, D10)
+
+Starts once the scripting and layout lanes already open have landed (D10).
+
+**Done-conditions:** behind the same feature, on Vano:
+- `WebAssembly.Global` and `WebAssembly.Table`;
+- every import and export kind, including a wasm function imported from another instance, which
+  is linked directly and fails with `LinkError` on a type mismatch;
+- multi-value results in both directions, and `externref` and `funcref` values;
+- one script function per wasm function, however many names it is exported under;
+- `toResizableBuffer` and `toFixedLengthBuffer`, with the Vano change they need named here first;
+- type reflection (`type()` and `WebAssembly.Function`).
+
+The runner from W3 is run again and its count recorded, as a measure and not a target.
+Exceptions, GC types, promise integration and ES module integration are not in W4.
+
+### W5. The object on Bole (D9)
+
+**Done-conditions:** the W1, W2 and W4 tests pass on Bole as they do on Vano, through the same
+bootstrap; the Bole fork change of D6's shape is named here before it is made; whether wasm fuel
+shares Bole's script budget is put to Mark; the runner's count on Bole is recorded.
+
 ## Decisions
 
 Each decision keeps its evidence, what was offered, the answer in Mark's words, what follows, and its
-outcome. D1 to D7 are in answer order.
+outcome. D1 to D10 are in answer order.
 
 - **D1. Vano first (Mark, 2026-11-22):** Evidence: Bole's native functions can carry captured state,
   it is the default engine in Genet's builds and tools, and it builds for wasm32; Vano's native
@@ -145,6 +168,33 @@ outcome. D1 to D7 are in answer order.
 
   Links: area Scripting · plans webassembly-object W2, webassembly-object W3 · summary A wasm-side memory.grow of zero leaves the old buffer attached under wasmi; the probe records the gap rather than changing wasmi.
 
+- **D8. Grow the object to the reachable set (Mark, 2026-11-25):** Evidence: 360 of 777 subtests
+  pass on Vano. 652 are within today's design, and `Global` and `Table` are 206 of the 308 left.
+  125 wait on proposals wasmi does not implement or on ES module integration (Findings 40).
+  Offered: grow to the reachable set (recommended); stop at the probe; take the blocked proposals
+  on as well. Answer: "Grow to the reachable set (Recommended)". What follows: phase W4. Exception
+  handling, GC types, promise integration and ES module integration stay out. Outcome: new;
+  answers open question 4 in part.
+
+  Links: area Scripting · plans webassembly-object W4 · summary Genet's WebAssembly object grows to everything wasmi and today's design can reach: Global, Table, every import and export kind, multi-value, reference types, resizable buffers and type reflection.
+
+- **D9. Vano, then Bole (Mark, 2026-11-25):** Evidence: the object exists on Vano. Bole is the
+  default engine in Genet's builds, worker and test runner (Findings 9). It would need the natives
+  rewritten and an `ArrayBuffer` change of D6's shape, but its native functions already carry
+  state (Findings 42). Offered: Vano, then Bole (recommended); Vano only; Bole in parallel now.
+  Answer: "Vano, then Bole (Recommended)". What follows: W4 on Vano, then W5 on Bole. Outcome: new;
+  answers open question 4 in part.
+
+  Links: area Scripting · plans webassembly-object W4, webassembly-object W5 · summary The WebAssembly object is finished on Vano first and then ported to Bole, so default builds get it too.
+
+- **D10. After the open lanes (Mark, 2026-11-25):** Evidence: W0 to W3 are met, and the work left
+  is W4 and W5. Offered: after the scripting and layout lanes already open (recommended); next in
+  scripting; when a page needs it. Answer: "After the open lanes (Recommended)". What follows: W4
+  starts once the lanes already in flight have landed, and no lane is paused for it. Outcome: new;
+  answers open question 4.
+
+  Links: area Scripting · plans webassembly-object W4 · summary The rest of the WebAssembly object waits until Genet's scripting and layout lanes already in flight have landed.
+
 ## Open questions
 
 1. Answered by evidence 2026-11-25 (Findings 23): `snapshot_clone` refuses an engine that holds a
@@ -152,6 +202,8 @@ outcome. D1 to D7 are in answer order.
 2. Answered 2026-11-25 (D4): inside `genet-vano`, behind an off-by-default feature.
 3. Vano on wasm64 (its experimental browser lane) is a browser build, so D2 sends it to the page's
    object; whether that lane's worker can reach it is unchecked.
+4. Answered 2026-11-25 (D8 to D10): grow to the reachable set, on Vano and then Bole, after the open
+   lanes.
 
 ## Findings
 
@@ -397,6 +449,53 @@ W2, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `c2c0eaa4`. The code is
     The alignment refusal never fired on this Mac, because its allocator returned 8-aligned memory
     every time.
 
+W3, run 2026-11-25 on this Mac. The runner is `components/script-engine-nova/examples/wasm_jsapi.rs`.
+
+38. What changed outside `genet-vano`: Vano `c2c0eaa4` only (Findings 32). `script-engine-api`
+    did not change. `genet-vano` gained wasmi 2 as an optional dependency and `wat` for its tests.
+39. How the count was taken. Each `.any.js` file runs on a fresh Vano engine with `WebAssembly`
+    installed, in `testharness.js`'s shell environment: the tests' `jsshell` global, with no DOM,
+    no timers and no fetch. Each file runs in its own process with a 60-second limit. 78 of the 80
+    files declare that global; `idlharness.any.js` and one `esm-integration` file do not and were
+    not run. Genet's own WPT runner (`ports/genet-wpt`) was not used: it runs the window variant
+    and would have needed the feature plumbed through its runtime. Two runs gave the same count.
+40. 360 of 777 subtests pass, a measure of distance and not a target. By directory:
+
+    | Directory | Pass | Of | What fails |
+    | --- | --- | --- | --- |
+    | `constructor` | 137 | 163 | non-function imports; multi-value |
+    | `instance` | 52 | 64 | non-function imports and exports |
+    | `memory` | 48 | 72 | shared memory, resizable buffers, type reflection |
+    | `module` | 30 | 38 | `customSections` (Findings 41); import and export kinds |
+    | top level | 43 | 59 | the constructors below missing from the namespace |
+    | `global` | 13 | 145 | no `WebAssembly.Global` |
+    | `table` | 21 | 95 | no `WebAssembly.Table` |
+    | `exception`, `tag` | 6 | 33 | no `Tag` or `Exception`; wasmi has no exception handling |
+    | `function` | 0 | 16 | no `WebAssembly.Function` (type reflection, tentative) |
+    | `js-string` | 7 | 41 | string builtins; the polyfill needs GC arrays, which wasmi lacks |
+    | `jspi` | 3 | 21 | promise integration, which needs stack switching |
+    | `esm-integration` | 0 | 30 | wasm as an ES module, through Genet's module loader |
+    | `gc` | 0 | 0 | all three files fail to compile: wasmi has no GC types |
+
+    The most common failure message, 231 times, is `'undefined' is not a constructor`, which is
+    `Global`, `Table`, `Tag`, `Exception` and `Function` missing. Of the 777, 652 are in directories
+    the present design can reach, type reflection included. 344 of those pass, and `Global` and
+    `Table` account for 206 of the 308 left. The other 125 wait on proposals wasmi does not
+    implement (exception handling, GC arrays, stack switching) or on loading wasm as an ES module.
+41. A Vano bug the run found: `unescape("yee%F0%90%90%B7eey")` panics in `wtf8` (`begin <= end`,
+    from `GlobalObject::unescape` at `global_object.rs:1479`). `wasm-module-builder.js` reaches it
+    when it encodes a custom section's name, so `module/customSections.any.js` counts none of its
+    subtests. Shorter strings with the same escapes do not panic.
+42. What Bole would need, from Findings 6 and its source at `932470b6`:
+    - The bootstrap carries over unchanged. The natives would be rewritten against Boa's API.
+    - Its native functions carry traced captures (`from_copy_closure_with_captures`), so an export
+      needs no closure trick and D5's question does not arise there.
+    - Its `ArrayBuffer` owns an `AlignedVec<u8>` (`builtins/array_buffer/mod.rs:205`), the same gap
+      Vano had. It would need a fork change of D6's shape. Its detach key is already an arbitrary
+      `JsValue`.
+    - Bole can bound script (`eval_bounded`), so wasm fuel could share the page's budget there, as
+      this plan first intended (Constraints), where Vano could not (Findings 27).
+
 ## Progress
 
 - 2026-11-22: plan written from Mark's rulings D1 to D3 and a read of the three sources.
@@ -404,3 +503,5 @@ W2, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `c2c0eaa4`. The code is
   answered.
 - 2026-11-25: W1 met (Findings 25 to 31).
 - 2026-11-25: W2 met (Findings 32 to 37); Vano `c2c0eaa4` carries D6's change.
+- 2026-11-25: W3 met. 360 of 777 subtests pass (Findings 38 to 42); D8 to D10 ruled and W4 and W5
+  added.

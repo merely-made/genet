@@ -13,6 +13,24 @@
 use super::*;
 use crate::invalidation::{FormTrees, MutationDependency, for_each_mutation_dependency};
 
+/// Reduce candidate damage roots to those with no ancestor among the
+/// candidates, keeping first-occurrence order. Testing each candidate against
+/// every kept root makes a batch of N sibling formatting contexts quadratic;
+/// one parent walk per candidate against a set is linear in N times depth.
+pub(in crate::document) fn normalize_damage_roots<D>(dom: &D, roots: &mut Vec<D::NodeId>)
+where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    let candidates: HashSet<_> = roots.iter().copied().collect();
+    let mut seen = HashSet::with_capacity(candidates.len());
+    roots.retain(|root| {
+        seen.insert(*root)
+            && !std::iter::successors(dom.parent(*root), |node| dom.parent(*node))
+                .any(|ancestor| candidates.contains(&ancestor))
+    });
+}
+
 impl<D> LiveryDocument<D>
 where
     D: LayoutDom,
@@ -74,10 +92,11 @@ where
                     MutationDependency::Removed(_) => return,
                 };
                 if self.dom.is_live(node) {
-                    self.insert_damage_root(&mut roots, self.formatting_damage_root(node));
+                    roots.push(self.formatting_damage_root(node));
                 }
             });
         }
+        normalize_damage_roots(&self.dom, &mut roots);
         self.last_layout_damage = Some(LayoutDamage {
             kind: LayoutDamageKind::Dom,
             roots,
@@ -93,37 +112,6 @@ where
             return self.dom.document();
         };
         formatting_damage_root(&self.dom, &layout.fragments, node)
-    }
-
-    pub(in crate::document) fn insert_damage_root(
-        &self,
-        roots: &mut Vec<D::NodeId>,
-        candidate: D::NodeId,
-    ) {
-        if roots
-            .iter()
-            .copied()
-            .any(|root| self.is_dom_ancestor(root, candidate))
-        {
-            return;
-        }
-        roots.retain(|root| !self.is_dom_ancestor(candidate, *root));
-        roots.push(candidate);
-    }
-
-    pub(in crate::document) fn is_dom_ancestor(
-        &self,
-        ancestor: D::NodeId,
-        node: D::NodeId,
-    ) -> bool {
-        let mut current = Some(node);
-        while let Some(candidate) = current {
-            if candidate == ancestor {
-                return true;
-            }
-            current = self.dom.parent(candidate);
-        }
-        false
     }
 
     /// Discard visible derived output while retaining the immediately prior

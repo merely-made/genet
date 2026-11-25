@@ -39,6 +39,8 @@ use crate::{
 };
 
 mod animation;
+#[cfg(test)]
+mod damage_tests;
 mod frame;
 #[cfg(all(test, windows))]
 mod line_scroll_tests;

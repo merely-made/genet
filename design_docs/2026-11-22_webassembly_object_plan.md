@@ -1,6 +1,7 @@
 # WebAssembly object plan: a `WebAssembly` global for scripts, probed on Vano
 
-**Status:** 2026-11-22. Written; nothing built. D1 to D3 ruled the same day. W0 is next.
+**Status:** 2026-11-25. Nothing built. D1 to D3 ruled 2026-11-22. W0 is met: the assessment is
+Findings 10 to 24 and its forks are ruled (D4 to D7).
 
 **For:** pages that use WebAssembly. Neither of Genet's JavaScript engines runs it: Vano says of
 itself "The engine does not support WebAssembly execution" and Bole has no `WebAssembly` object. Mark
@@ -66,7 +67,7 @@ implement the object in full, on which engines, and in what order against Genet'
 ## Decisions
 
 Each decision keeps its evidence, what was offered, the answer in Mark's words, what follows, and its
-outcome. D1 to D3 are in answer order.
+outcome. D1 to D7 are in answer order.
 
 - **D1. Vano first (Mark, 2026-11-22):** Evidence: Bole's native functions can carry captured state,
   it is the default engine in Genet's builds and tools, and it builds for wasm32; Vano's native
@@ -100,13 +101,53 @@ outcome. D1 to D3 are in answer order.
 
   Links: area Scripting · plans webassembly-object W2, webassembly-object W3 · summary The probe makes Memory.buffer alias wasm linear memory in Vano, which means changing how the fork's ArrayBuffer holds its bytes.
 
+- **D4. The glue lives inside `genet-vano` (Mark, 2026-11-25):** Evidence: the trait's call context
+  cannot make a number, a BigInt, an object or an ArrayBuffer (Findings 2), so glue written once
+  over it means growing the trait for every backend; the bridge holds the Vano agent across a
+  suspended wasm call (Findings 21). Offered: inside `genet-vano` behind an off-by-default feature
+  (recommended); over the trait; engine-neutral wasmi handling in its own crate with the bridging
+  in `genet-vano`. Answer: "Inside genet-vano (Recommended)". What follows: the wasmi store and the
+  rooted callbacks live with the Vano agent behind a feature that is off by default;
+  `script-engine-api` does not change. Outcome: new; answers open question 2.
+
+  Links: area Scripting · plans webassembly-object W1, webassembly-object W2 · summary The WebAssembly glue and its wasmi store live inside genet-vano behind an off-by-default feature; the engine-neutral trait is unchanged.
+
+- **D5. Exports are bootstrap closures first; a Vano slot only if they fall short (Mark,
+  2026-11-25):** Evidence: Vano's builtins carry a bare `fn` and no data (Findings 11); a `u64` slot
+  is a small fork change (Findings 12); a closure over one trampoline needs none and differs from
+  the spec in `toString`, `name` and `length` (Findings 13). Offered: the bootstrap closure
+  (recommended); the `u64` slot; the closure first, the slot if needed. Answer: "Closure first, slot
+  if needed". What follows: W1 exposes exports as closures branded in a `WeakMap`; the slot is added
+  only if W1 or W3's test count shows the closure falls short, and is named here first. Outcome: new.
+
+  Links: area Scripting · plans webassembly-object W1, webassembly-object W3 · summary Wasm exports reach Vano scripts as bootstrap closures over one trampoline; a host slot on Vano builtins waits on evidence that closures fall short.
+
+- **D6. A non-owning `DataBlock` for `Memory.buffer` (Mark, 2026-11-25):** Evidence: Vano's
+  `DataBlock` owns and frees its bytes (Findings 14); wasmi's grow can move them, so a stale buffer
+  is a use after free (Findings 16); alignment is not promised (Findings 15). Offered: a non-owning
+  block through an `unsafe` constructor, alignment checked (recommended); a counted backing handle
+  in JavaScriptCore's shape; a copy at each boundary. Answer: "Non-owning DataBlock (Recommended)".
+  What follows: W2 adds a `DataBlock` that does not free on drop and
+  `ArrayBuffer::new_over_foreign(ptr, len, detach_key)`, which refuses a pointer not aligned to 8;
+  the bridge detaches the old buffer at every wasm-to-script transition after a grow. Outcome: new;
+  the fork change D3 foresaw.
+
+  Links: area Scripting · plans webassembly-object W2 · summary Vano gains a non-owning ArrayBuffer backing over wasm memory, detached by the bridge before script runs after any grow.
+
+- **D7. Growth by zero pages is accepted and recorded (Mark, 2026-11-25):** Evidence: wasmi reports
+  neither form of a zero grow, so its old buffer is not detached as the spec requires; no bytes
+  move, and no test in the tree sees it (Findings 19, 20). Offered: accept and record (recommended);
+  a pull request to wasmi; a wasmi fork in the org. Answer: "Accept and record (Recommended)". What
+  follows: the probe tracks grows that add pages, and a grow of zero from script detaches through
+  our own code; W3 records the wasm-side gap. Outcome: new.
+
+  Links: area Scripting · plans webassembly-object W2, webassembly-object W3 · summary A wasm-side memory.grow of zero leaves the old buffer attached under wasmi; the probe records the gap rather than changing wasmi.
+
 ## Open questions
 
-1. How a `WebAssembly.Module` or a live instance behaves under `ScriptEngineSnapshot::snapshot_clone`,
-   which clones an engine heap: cloned, or refused.
-2. Where the wasm-facing glue lives: beside `script-runtime-api`'s other host classes, written once
-   over the engine-neutral trait, or inside each backend. The trait has no way to make a number, a
-   BigInt, an object or an ArrayBuffer today (Findings 2), which decides much of this.
+1. Answered by evidence 2026-11-25 (Findings 23): `snapshot_clone` refuses an engine that holds a
+   live wasm object, since the store cannot be cloned beside the heap.
+2. Answered 2026-11-25 (D4): inside `genet-vano`, behind an off-by-default feature.
 3. Vano on wasm64 (its experimental browser lane) is a browser build, so D2 sends it to the page's
    object; whether that lane's worker can reach it is unchecked.
 
@@ -154,6 +195,106 @@ Read 2026-11-22 from the three repositories' sources; nothing was run.
    on 64-bit targets", while the `scripted` feature, the worker's default and the test runner's
    default are Bole.
 
+W0, read 2026-11-25 from Vano `a4eff25b`, Genet `b558fae3326` and wasmi 2.0.3. Two small probes
+ran outside the tree (`Code/output/genet-wasm-prior-art/`): wasmi on its own, with Rust standing in
+for JavaScript, and Node 26.12 as the reference for the JS API. Nothing ran on Vano.
+
+*Upstream.*
+
+10. Nova has not moved on any of the three gaps. Our merge of `591bf7ba` is upstream's tip. Its open
+    branches touch `builtin_function.rs` only for lifetimes and GC, not for data on a builtin.
+    `data_block.rs` stays as it is. Nova once had a wasm crate and removed it (`c9a4344b`, #222).
+    Its wasm interpreter issue (#48, 2023) has had no work since.
+
+*Functions (Findings 3).*
+
+11. The gap is as stated. A builtin's `Behaviour` is a bare `fn` (`builtin_function.rs:376`,
+    `:390`). `BuiltinFunctionArgs` takes a length, a name, a realm, a prototype and a prefix, and
+    nothing else (`:468`). GC tracing of the heap record names no other field (`:890`). The callee
+    reaches a native call only through `active_function_object`, which is `pub(crate)`
+    (`execution/agent.rs:1533`).
+12. The smallest additive Vano change: a `u64` host slot on `BuiltinFunctionHeapData`, set through a
+    new field of `BuiltinFunctionArgs`, and a public `Agent::active_builtin_host_data()`. A `u64`
+    needs no tracing and matches Genet's reflector data (Findings 1).
+13. A shape with no Vano change: a bootstrap closure over one native trampoline. It captures the
+    export's handle as a number and is branded in a `WeakMap` so `Table.set` can recognise it. This
+    is the text decoder's pattern (Findings 2). It costs an ECMAScript function where the spec has a
+    built-in one. `toString` shows source, and `name` and `length` have to be defined by hand.
+
+*Memory (Findings 4).*
+
+14. The gap is as stated, and its edges are sharper. `DataBlock` (`types/spec/data_block.rs:56`)
+    frees its pointer on drop at alignment 8 (`:73`). Clone copies into a fresh allocation (`:86`).
+    Only `new` makes one, zeroed (`:155`). `ArrayBuffer::new` is the public way in
+    (`builtins/array_buffer.rs:52`). `detach` and `set_detach_key` are public (`:115`, `:101`), so
+    the `[[ArrayBufferDetachKey]]` that keeps script from transferring a memory's buffer is already
+    reachable. `resize` is crate-private (`:127`).
+15. Vano's typed-array access panics when a buffer is not aligned for its element type
+    (`array_buffer.rs:182`, `:211`). wasmi allocates linear memory as `Layout::array::<u8>`, which
+    guarantees alignment 1 only (`wasmi_core` `memory/buffer.rs:91`). The system allocator gives
+    more in practice, but nothing promises it. A buffer over wasm memory must check its alignment
+    when it is made, or wasmi must allocate aligned.
+16. wasmi grows memory by `Vec::try_reserve` and `resize` (`buffer.rs:150`), so a successful grow
+    can move the bytes. A buffer still pointing at the old bytes is a use after free, not only a
+    spec fault. So the old buffer must be detached before any script runs after a growing call:
+    at an import's entry, at an export's return, and at a trap.
+17. The smallest additive Vano change: a non-owning `DataBlock` that does not free on drop. Clone
+    keeps copying into an owned block. It is made through an `unsafe` public
+    `ArrayBuffer::new_over_foreign(ptr, len, detach_key)` whose contract is that the owner detaches
+    it before the bytes move or are freed. The other shape is JavaScriptCore's: the block holds a
+    counted handle to the memory (Findings 22). That is safer about who frees the bytes, but since
+    the bytes still move on grow it does not remove the detach. It is also a larger change to a type
+    every buffer uses.
+18. Out of W2 as written: `Memory.prototype.toResizableBuffer` and `toFixedLengthBuffer` are in the
+    tree's tests (`tests/wpt/tests/wasm/jsapi/memory/`). A resizable buffer whose resize grows the
+    memory would also need `resize` opened.
+
+*Growth by zero pages (new).*
+
+19. Every successful grow detaches the old buffer, zero pages included. Node confirms it at the
+    first callback after a wasm `memory.grow 0`. wasmi translates a constant zero grow to
+    `memory.size` (`wasmi` `engine/translator/func/visit.rs:732`). For a dynamic zero it returns
+    before the resource limiter is consulted (`wasmi_core` `memory/mod.rs:184`, limiter at `:206`).
+    So no hook wasmi offers sees either form. A grow counter misses both.
+20. A zero grow moves no bytes, so this is spec conformance only, not safety (Findings 16). The JS
+    side's `memory.grow(0)` goes through our own code and can detach correctly. The tree's `jsapi`
+    tests grow only from script (`memory/grow.any.js`), so no test in the tree sees the gap. Closing
+    it needs a wasmi change: our own fork, or a hook and an untranslated zero grow upstream.
+
+*Calling script from wasm (new).*
+
+21. wasmi's resumable calls give the bridge its shape. An import returns a marker error. The call
+    suspends and the store borrow ends. The bridge calls the rooted JavaScript function with the
+    Vano agent it already holds, then resumes with the result. Run with fuel on: two nested
+    suspended calls on one store resumed in order, and dropping a suspended call left the store
+    usable. That covers script that calls back into the same instance.
+22. Two paths escape as plain errors. A root-frame tail call to an import is harmless: the export's
+    result is the import's, so the bridge calls the import and returns. A start function is the
+    real gap. wasmi runs it inside `instantiate` with a plain call (`module/instantiate/mod.rs:89`,
+    `:115`), so an import there cannot be resumed. The fix is to rewrite the module before it
+    compiles, the way Graphshell writes a memory maximum into a module (its plan's D5). Drop the
+    start section, export the start function under a private name, then call it resumably after
+    instantiation. The tree's tests set an imported JS function as the start function
+    (`jsapi/functions/helper.js`), which then escapes at the root and completes as in the tail
+    case.
+23. Snapshot: `NovaEngine::snapshot_clone` gives the clone fresh host hooks and release queues and
+    copies the heap whole (`components/script-engine-nova/lib.rs:1165`). A wasmi `Store` cannot be
+    cloned, so a cloned `Memory` or exported function would point into the donor's store. The probe
+    refuses the clone while the engine holds a live wasm object.
+
+*Prior art.*
+
+24. Other embedders have solved the same parts. OxiBrowser (Boa with wasmi) lends wasmi a raw
+    thread-local pointer to its JS context and refuses calls back into the same instance. Its
+    `Memory` exposes a snapshot of `byteLength`. txiki.js (QuickJS with WAMR) caches export wrappers
+    by function identity. It checks for stale buffers before every imported callback and after every
+    export, and rethrows an import's own JS value. JavaScriptCore keeps a handle to the memory's
+    backing in its `ArrayBuffer`. A grow notification detaches the old buffer and the getter makes a
+    new one lazily. Dialog DB's WCMP puts a component layer over wasmi with the same resumable
+    technique. It is prior art for the layer Graphshell closed (its D13), not a reason to reopen it.
+
 ## Progress
 
 - 2026-11-22: plan written from Mark's rulings D1 to D3 and a read of the three sources.
+- 2026-11-25: W0 met. The assessment is Findings 10 to 24; D4 to D7 ruled; open questions 1 and 2
+  answered.

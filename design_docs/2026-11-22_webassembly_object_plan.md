@@ -93,12 +93,20 @@ Exceptions, GC types, promise integration and ES module integration are not in W
 
 **Done-conditions:** the W1, W2 and W4 tests pass on Bole as they do on Vano, through the same
 bootstrap; the Bole fork change of D6's shape is named here before it is made; whether wasm fuel
-shares Bole's script budget is put to Mark; the runner's count on Bole is recorded.
+shares Bole's script budget is put to Mark (D13: it does not); the runner's count on Bole is
+recorded. The engine-free half is shared as D12 rules.
+
+The Bole change, named 2026-11-25. It has D6's shape and is additive:
+- an `ArrayBuffer` whose bytes an embedder owns, fixed-length or resizable, made over a pointer
+  and length and never freed or reallocated by Bole;
+- a way to repoint one at moved bytes without detaching it;
+- `HostResizeArrayBuffer`, which Bole's `resize` also left as a TODO, as a `HostHooks` method that
+  answers "not handled" by default.
 
 ## Decisions
 
 Each decision keeps its evidence, what was offered, the answer in Mark's words, what follows, and its
-outcome. D1 to D11 are in answer order.
+outcome. D1 to D13 are in answer order.
 
 - **D1. Vano first (Mark, 2026-11-22):** Evidence: Bole's native functions can carry captured state,
   it is the default engine in Genet's builds and tools, and it builds for wasm32; Vano's native
@@ -206,6 +214,27 @@ outcome. D1 to D11 are in answer order.
   starts now rather than after the open lanes, then W5. Outcome: supersedes D10's timing.
 
   Links: area Scripting · plans webassembly-object W4, webassembly-object W5 · summary W4 and W5 of the WebAssembly object plan start at once rather than after Genet's open lanes.
+
+- **D12. The engine-free half becomes a shared crate (Mark, 2026-11-25):** Evidence: about two
+  thirds of `genet-vano`'s wasm code does not touch the JavaScript engine. That covers the wasmi
+  store and handle tables, the section scanner, type JSON, buffer bookkeeping and the bootstrap,
+  and W5 needs all of it again on Bole. Offered: extract a shared crate (recommended); copy it
+  into `genet-bole`; include `genet-vano`'s files by path. Answer: "Extract a shared crate
+  (Recommended)". What follows: a crate, `genet-wasm`, holds the wasmi side and the bootstrap,
+  generic over each engine's rooted value. Each backend keeps its value conversions and natives.
+  `script-engine-api` does not change, so D4's reason stands. Outcome: new; refines D4 now that
+  two engines share the glue.
+
+  Links: area Scripting · plans webassembly-object W5 · summary The wasmi side of the WebAssembly object and its bootstrap move into a shared genet-wasm crate that genet-vano and genet-bole both use.
+
+- **D13. Bole draws on its own wasm fuel, as Vano does (Mark, 2026-11-25):** Evidence: neither
+  backend can bound script; `eval_bounded` is the Lua backend's (Findings 42, corrected). Boa's
+  loop limit counts a different unit. Offered: separate fuel as on Vano (recommended); tie fuel
+  to Boa's `RuntimeLimits`; give Bole a script budget first. Answer: "Separate fuel, as on Vano
+  (Recommended)". What follows: `set_wasm_fuel` behaves the same on both engines (Findings 27).
+  Outcome: new; answers W5's budget question.
+
+  Links: area Scripting · plans webassembly-object W5 · summary WebAssembly on Bole runs on a host-set fuel allotment of its own, as on Vano.
 
 ## Open questions
 
@@ -508,8 +537,9 @@ W3, run 2026-11-25 on this Mac. The runner is `components/script-engine-nova/exa
     - Its `ArrayBuffer` owns an `AlignedVec<u8>` (`builtins/array_buffer/mod.rs:205`), the same gap
       Vano had. It would need a fork change of D6's shape. Its detach key is already an arbitrary
       `JsValue`.
-    - Bole can bound script (`eval_bounded`), so wasm fuel could share the page's budget there, as
-      this plan first intended (Constraints), where Vano could not (Findings 27).
+    - Corrected 2026-11-25: Bole cannot bound script either. `eval_bounded` belongs to
+      `genet-didge`, the Lua backend, and `genet-bole` reports `bounded_eval_vm: false`. Boa's
+      `RuntimeLimits` loop limit exists but `genet-bole` leaves it unused. D13 follows from this.
 
 W4, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `20e1db2d`. The code is still
 `components/script-engine-nova/native/wasm/`; the new tests are

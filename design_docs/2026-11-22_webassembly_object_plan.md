@@ -1,9 +1,10 @@
 # WebAssembly object plan: a `WebAssembly` global for scripts, probed on Vano
 
-**Status:** 2026-11-25. W0 to W4 are met; W5, the object on Bole, is next (D9, D11). On Vano,
-behind `genet-vano`'s `wasm` feature, the object passes 684 of 804 subtests of the tree's JS API
-tests. Every directory within wasmi's reach passes in full except shared memory, which wasmi lacks
-(Findings 43 to 48).
+**Status:** 2026-11-25. Complete: W0 to W5 are met. Both Genet JavaScript engines have the
+`WebAssembly` object behind a `wasm` feature that is off by default. The engine-free half is shared
+in `genet-wasm` (D12). The tree's JS API tests read 684 of 804 on Vano and 946 of 1066 on Bole.
+Every directory within wasmi's reach passes in full on both except shared memory, which wasmi
+lacks (Findings 45, 52).
 
 **For:** pages that use WebAssembly. Neither of Genet's JavaScript engines runs it: Vano says of
 itself "The engine does not support WebAssembly execution" and Bole has no `WebAssembly` object. Mark
@@ -597,6 +598,50 @@ W4, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `20e1db2d`. The code is
     integration, and the string builtins compile option. That option could be supplied by the host
     without wasmi, but D8 did not take it up.
 
+W5, run 2026-11-25 on this Mac with wasmi 2.0.3, Vano `20e1db2d` and Bole `85dd7391`.
+
+49. The split D12 ruled:
+    - `components/genet-wasm` holds the wasmi store and handle tables, the section scanner, type
+      JSON, buffer bookkeeping, the bootstrap and the list of natives it expects. It is generic
+      over the engine's rooted value: `NovaValue` on Vano and `JsValue` on Bole.
+    - Its `conformance` directory holds the 25 shared tests, written against a small `Harness`
+      trait, and the suite runner. Each backend includes them by path in its test and its
+      `wasm_jsapi` example.
+    - Each backend keeps only its bridge and natives: about 1,080 lines on Vano and 900 on Bole.
+    - Only the snapshot tests stay Vano's, since Bole has no snapshot clone.
+50. The Bole change named for W5, in `85dd7391`:
+    - an `ArrayBuffer`'s bytes are its own or an embedder's, and Bole never frees, reallocates or
+      transfers foreign bytes;
+    - `from_foreign` makes a fixed-length or resizable buffer over them, `repoint_foreign`
+      follows them when they move, and `detach_foreign` detaches one;
+    - `HostHooks::resize_array_buffer` fills the `HostResizeArrayBuffer` TODO.
+
+    Bole's library tests pass (1154). `genet-bole` builds its context with hooks that answer the
+    resize for a memory's buffer only when the `wasm` feature is on; without it nothing changes.
+51. The 25 shared tests pass on both engines. The crates' other suites pass with the feature on and
+    off.
+52. The runner on both, a measure and not a target:
+
+    | Directory | Vano | Bole | What fails on both |
+    | --- | --- | --- | --- |
+    | top level, `function`, `global`, `table` | 333 of 333 | 333 of 333 | nothing |
+    | `constructor` | 163 of 163 | 347 of 347 | nothing |
+    | `instance` | 64 of 64 | 142 of 142 | nothing |
+    | `memory` | 64 of 72 | 64 of 72 | shared memory |
+    | `module` | 44 of 47 | 44 of 47 | `AbstractModuleSource` |
+    | the rest | 16 of 125 | 16 of 125 | as Findings 45 |
+
+    Bole counts 262 more subtests than Vano, and they are exactly the bad-imports subtests that
+    Vano's destructuring bug keeps from registering (Findings 47). All of them pass on Bole.
+53. `genet-bole` builds Boa without its `annex-b` feature, so Bole in Genet has no `unescape`,
+    where Vano does. `wasm-module-builder.js` encodes every name with it, so without help Bole
+    read 531 of 1034, with 406 failures from that alone. The runner now defines `unescape` when an
+    engine lacks it, and says why, so the count measures WebAssembly and not Annex B.
+54. On both engines, as Findings 37 and 48 list: a grow by zero pages from wasm leaves the old
+    buffer attached (D7); shared memory, exception handling, GC types, promise integration, ES
+    module integration and the string builtins are absent; and nothing is freed while the engine
+    lives.
+
 ## Progress
 
 - 2026-11-22: plan written from Mark's rulings D1 to D3 and a read of the three sources.
@@ -610,3 +655,5 @@ W4, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `20e1db2d`. The code is
   functions, multi-value, reference values, one script function per wasm function, custom
   sections and type reflection landed; the runner reads 675 of 804. Resizable buffers remain.
 - 2026-11-25: W4 met: resizable buffers through Vano `0891093c`; 684 of 804 (Findings 43 to 48).
+- 2026-11-25: W5 met: `genet-wasm` shared (D12), Bole `85dd7391`, the object on Bole; 946 of
+  1066 there (Findings 49 to 54). The plan is complete.

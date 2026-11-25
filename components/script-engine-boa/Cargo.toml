@@ -14,6 +14,10 @@ publish = false
 name = "script_engine_boa"
 path = "lib.rs"
 
+[features]
+# A `WebAssembly` global backed by wasmi (Genet's WebAssembly object plan, W5).
+wasm = ["dep:genet-wasm"]
+
 [dependencies]
 script-engine-api = { path = "../script-engine-api" }
 boa_engine = { version = "1.0.0-dev", git = "https://github.com/merely-made/bole.git", branch = "main", features = ["array-buffer-transfer"] }
@@ -25,9 +29,20 @@ boa_gc = { version = "1.0.0-dev", git = "https://github.com/merely-made/bole.git
 # The maintained fork retains its 1.0.0-dev identity while incorporating stable
 # v0.22. The prerelease version on Bole main defines the host contract.
 
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+# Browser builds use the page's own WebAssembly (D2).
+genet-wasm = { path = "../genet-wasm", optional = true }
+
+[dev-dependencies]
+wat = "1"
+
 [target.'cfg(all(target_family = "wasm", not(any(target_os = "emscripten", target_os = "wasi"))))'.dependencies]
 # Browser host glue provides randomness and time on wasm32-unknown-unknown.
 boa_engine = { version = "1.0.0-dev", git = "https://github.com/merely-made/bole.git", branch = "main", features = ["js"] }
 
 [lints]
 workspace = true
+
+[[example]]
+name = "wasm_jsapi"
+required-features = ["wasm"]

@@ -2,18 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! W4 of `design_docs/2026-11-22_webassembly_object_plan.md`: globals,
-//! tables, reference values, multi-value, linked functions and type
-//! reflection, on Vano.
-#![cfg(all(target_pointer_width = "64", feature = "wasm"))]
+//! W4: globals, tables, reference values, multi-value, linking, type
+//! reflection and resizable buffers.
 
-mod common;
+use super::Harness;
 
-use common::{engine_with, run};
-
-#[test]
-fn globals_cross_both_ways() {
-    let mut engine = engine_with(
+pub fn globals_cross_both_ways<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module
           (import "env" "g" (global $g i32))
           (import "env" "big" (global $big i64))
@@ -22,8 +17,7 @@ fn globals_cross_both_ways() {
           (func (export "bump") global.get $count i32.const 1 i32.add global.set $count)
           (func (export "big") (result i64) global.get $big))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const g = new WebAssembly.Global({ value: 'i32' }, 41);
          const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes),
            { env: { g, big: 7n } });
@@ -42,9 +36,8 @@ fn globals_cross_both_ways() {
     );
 }
 
-#[test]
-fn a_table_holds_functions_with_their_identity() {
-    let mut engine = engine_with(
+pub fn a_table_holds_functions_with_their_identity<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module
           (type $t (func (result i32)))
           (table (export "table") 2 funcref)
@@ -52,8 +45,7 @@ fn a_table_holds_functions_with_their_identity() {
           (elem (i32.const 0) $seven)
           (func (export "callAt") (param i32) (result i32) local.get 0 call_indirect (type $t)))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
          const t = exports.table;
          const nine = new WebAssembly.Function({ parameters: [], results: ['i32'] }, () => 9);
@@ -70,15 +62,13 @@ fn a_table_holds_functions_with_their_identity() {
     );
 }
 
-#[test]
-fn externref_keeps_the_script_value() {
-    let mut engine = engine_with(
+pub fn externref_keeps_the_script_value<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module
           (func (export "id") (param externref) (result externref) local.get 0)
           (table (export "refs") 1 externref))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
          const object = { marker: 1 };
          exports.refs.set(0, object);
@@ -88,17 +78,15 @@ fn externref_keeps_the_script_value() {
     assert_eq!(out, "true|||text|true");
 }
 
-#[test]
-fn multi_value_crosses_both_ways() {
-    let mut engine = engine_with(
+pub fn multi_value_crosses_both_ways<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module
           (import "env" "pair" (func $pair (result i32 i64)))
           (func (export "swap") (param i32 i64) (result i64 i32) local.get 1 local.get 0)
           (func (export "viaScript") (result i64 i32) (local $a i32) (local $b i64)
             call $pair local.set $b local.set $a local.get $b local.get $a))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const env = { pair: () => [5, 6n] };
          const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes), { env });
          const [a, b] = exports.swap(1, 2n);
@@ -108,16 +96,14 @@ fn multi_value_crosses_both_ways() {
     assert_eq!(out, "bigint|2|1|6|5");
 }
 
-#[test]
-fn a_wasm_function_imported_elsewhere_is_linked_and_checked() {
-    let mut engine = engine_with(
+pub fn a_wasm_function_imported_elsewhere_is_linked_and_checked<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module
           (import "env" "f" (func $f (param i32) (result i32)))
           (export "again" (func $f))
           (func (export "useIt") (result i32) i32.const 4 call $f))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const source = new WebAssembly.Instance(new WebAssembly.Module(bytes),
            { env: { f: (x) => x * 10 } });
          const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes),
@@ -131,13 +117,11 @@ fn a_wasm_function_imported_elsewhere_is_linked_and_checked() {
     assert_eq!(out, "40|true|LinkError");
 }
 
-#[test]
-fn one_function_exported_twice_is_one_script_function() {
-    let mut engine = engine_with(
+pub fn one_function_exported_twice_is_one_script_function<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module (func $f (result i32) i32.const 1) (export "a" (func $f)) (export "b" (func $f)))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
          return [exports.a === exports.b, exports.a instanceof WebAssembly.Function,
                  JSON.stringify(exports.a.type())].join('|');",
@@ -145,9 +129,8 @@ fn one_function_exported_twice_is_one_script_function() {
     assert_eq!(out, r#"true|true|{"parameters":[],"results":["i32"]}"#);
 }
 
-#[test]
-fn imports_and_exports_keep_the_module_order() {
-    let mut engine = engine_with(
+pub fn imports_and_exports_keep_the_module_order<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module
           (import "m" "g" (global i32))
           (import "m" "f" (func))
@@ -156,8 +139,7 @@ fn imports_and_exports_keep_the_module_order() {
           (global (export "glob") i32 (i32.const 0))
           (func (export "fn")))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const m = new WebAssembly.Module(bytes);
          const imports = WebAssembly.Module.imports(m).map((i) => i.kind).join();
          const exports = WebAssembly.Module.exports(m).map((e) => e.name).join();
@@ -166,11 +148,9 @@ fn imports_and_exports_keep_the_module_order() {
     assert_eq!(out, "global,function,table|mem,glob,fn");
 }
 
-#[test]
-fn instantiating_a_module_reads_imports_at_once() {
-    let mut engine = engine_with(r#"(module (import "m" "f" (func)))"#);
-    let out = run(
-        &mut engine,
+pub fn instantiating_a_module_reads_imports_at_once<H: Harness>() {
+    let mut engine = H::with_module(r#"(module (import "m" "f" (func)))"#);
+    let out = engine.run(
         "const order = [];
          const imports = { get m() { order.push('m'); return { f() {} }; } };
          WebAssembly.instantiate(new WebAssembly.Module(bytes), imports);
@@ -179,16 +159,14 @@ fn instantiating_a_module_reads_imports_at_once() {
     assert_eq!(out, "m");
 }
 
-#[test]
-fn a_resizable_buffer_follows_its_memory() {
-    let mut engine = engine_with(
+pub fn a_resizable_buffer_follows_its_memory<H: Harness>() {
+    let mut engine = H::with_module(
         r#"(module
           (memory (export "mem") 1 4)
           (func (export "grow") (param i32) (result i32) local.get 0 memory.grow)
           (func (export "load") (param i32) (result i32) local.get 0 i32.load8_u))"#,
     );
-    let out = run(
-        &mut engine,
+    let out = engine.run(
         "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
          const m = exports.mem;
          const fixed = m.buffer;
@@ -215,11 +193,9 @@ fn a_resizable_buffer_follows_its_memory() {
     );
 }
 
-#[test]
-fn a_memory_without_a_maximum_has_no_resizable_buffer() {
-    let mut engine = engine_with(r#"(module)"#);
-    let out = run(
-        &mut engine,
+pub fn a_memory_without_a_maximum_has_no_resizable_buffer<H: Harness>() {
+    let mut engine = H::with_module(r#"(module)"#);
+    let out = engine.run(
         "const m = new WebAssembly.Memory({ initial: 1 });
          try { m.toResizableBuffer(); return 'made'; } catch (e) { return e.name; }",
     );

@@ -28,6 +28,9 @@ use boa_engine::{
     realm::Realm,
 };
 use boa_gc::{Finalize, Gc, GcRefCell, Trace};
+#[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+mod wasm;
+
 use script_engine_api::{
     Budget, CallCx, ExecutionObservation, ExecutionPhase, HostData, MAIN_REALM, ModuleObservation,
     ObservedExecution,
@@ -860,11 +863,14 @@ impl ScriptEngine for BoaEngine {
         // Boa's default executor clears every queued job when one fails, so an
         // uncatchable error (a stack limit) in one job silently kills all the others.
         let executor = Rc::new(SimpleJobExecutor::new().with_continue_on_error(true));
-        let mut ctx = Context::builder()
+        let builder = Context::builder()
             .module_loader(loader.clone())
             .clock(date_clock.clone())
-            .job_executor(executor)
-            .build()?;
+            .job_executor(executor);
+        // With wasm, Bole's hooks answer HostResizeArrayBuffer for memories.
+        #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+        let builder = builder.host_hooks(Rc::new(wasm::WasmHooks));
+        let mut ctx = builder.build()?;
         ctx.register_global_class::<Reflector>()?;
         let registry = Gc::new(RealmRegistry {
             realms: GcRefCell::new(HashMap::new()),

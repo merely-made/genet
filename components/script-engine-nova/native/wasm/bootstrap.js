@@ -15,6 +15,7 @@
   for (const name of [
     'Compile', 'Describe', 'Instantiate', 'ExportOf', 'Signature', 'Call', 'TrapMessage',
     'ResultAt', 'Stage', 'FuncNew', 'CustomSection', 'MemoryNew', 'MemoryGrow', 'MemoryBuffer', 'MemoryType',
+    'MemoryToFixed', 'MemoryToResizable',
     'GlobalNew', 'GlobalGet', 'GlobalSet', 'GlobalType', 'TableNew', 'TableGet', 'TableSet',
     'TableGrow', 'TableLength', 'TableType',
   ]) {
@@ -178,6 +179,12 @@
     }
     get buffer() {
       return N.MemoryBuffer(memories.handle(this));
+    }
+    toFixedLengthBuffer() {
+      return N.MemoryToFixed(memories.handle(this));
+    }
+    toResizableBuffer() {
+      return N.MemoryToResizable(memories.handle(this));
     }
     type() {
       return parse(N.MemoryType(memories.handle(this)));

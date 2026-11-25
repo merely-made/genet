@@ -14,6 +14,7 @@
 //! function handle and the bootstrap gives it its script function; an
 //! `externref` crosses as the script value it holds.
 
+use std::ptr::NonNull;
 use std::rc::Rc;
 
 use nova_vm::ecmascript::{
@@ -82,17 +83,32 @@ pub(super) fn root(agent: &mut Agent, value: Value, gc: NoGcScope<'_, '_>) -> No
     NovaValue::new(Global::new(agent, value.unbind()), &release)
 }
 
-/// Detach the buffers over memory that moved, and `force`'s in any case.
+/// Bring every buffer over memory up to date before script runs: detach the
+/// fixed-length ones whose memory moved, and `force`'s in any case, and
+/// repoint the resizable ones at their memory's bytes.
 pub(super) fn detach_stale(
     agent: &mut Agent,
     host: &WasmHost,
     force: Option<usize>,
     gc: NoGcScope<'_, '_>,
 ) {
-    for value in host.stale_buffers(force) {
+    let refresh = host.refresh(force);
+    for value in refresh.detach {
         if let Ok(buffer) = ArrayBuffer::try_from(value.get(agent, gc)) {
             // The key is ours, so this detach cannot fail.
             let _ = buffer.detach(agent, Some(DetachKey {}), gc);
+        }
+    }
+    for (memory, ptr, len) in refresh.repoint {
+        let Some(value) = host.with_buffer(memory, |v| v.get(agent, gc)) else {
+            continue;
+        };
+        if let Ok(buffer) = ArrayBuffer::try_from(value) {
+            let ptr = NonNull::new(ptr).unwrap_or(NonNull::dangling());
+            // SAFETY: the store's bytes, which this function is called to
+            // follow every time they can move.
+            let repointed = unsafe { buffer.repoint_foreign(agent, ptr, len) };
+            debug_assert!(repointed, "a memory's resizable buffer is over its bytes");
         }
     }
 }

@@ -12,6 +12,7 @@ mod entities_natives;
 mod host;
 mod json;
 mod memory;
+mod memory_natives;
 mod natives;
 mod sections;
 
@@ -22,6 +23,7 @@ use nova_vm::ecmascript::{Behaviour, InternalMethods, PropertyDescriptor, Proper
 use nova_vm::engine::Bindable;
 
 pub(crate) use host::WasmHost;
+pub(crate) use memory_natives::resize_hook;
 
 use super::{NovaEngine, ScriptEngine, create_named_host_function};
 
@@ -30,7 +32,7 @@ pub(crate) type WasmSlot = RefCell<Option<Rc<WasmHost>>>;
 
 const BOOTSTRAP: &str = include_str!("bootstrap.js");
 
-const NATIVES: [(&str, RegularFn, u32); 25] = [
+const NATIVES: [(&str, RegularFn, u32); 27] = [
     ("__genetWasmCompile", natives::compile, 1),
     ("__genetWasmDescribe", natives::describe, 1),
     ("__genetWasmInstantiate", natives::instantiate, 2),
@@ -42,14 +44,20 @@ const NATIVES: [(&str, RegularFn, u32); 25] = [
     ("__genetWasmStage", natives::stage, 0),
     ("__genetWasmFuncNew", natives::func_new, 3),
     ("__genetWasmCustomSection", natives::custom_section, 3),
-    ("__genetWasmMemoryNew", entities_natives::memory_new, 2),
-    ("__genetWasmMemoryGrow", entities_natives::memory_grow, 2),
+    ("__genetWasmMemoryNew", memory_natives::memory_new, 2),
+    ("__genetWasmMemoryGrow", memory_natives::memory_grow, 2),
+    ("__genetWasmMemoryBuffer", memory_natives::memory_buffer, 1),
+    ("__genetWasmMemoryType", memory_natives::memory_type, 1),
     (
-        "__genetWasmMemoryBuffer",
-        entities_natives::memory_buffer,
+        "__genetWasmMemoryToFixed",
+        memory_natives::memory_to_fixed,
         1,
     ),
-    ("__genetWasmMemoryType", entities_natives::memory_type, 1),
+    (
+        "__genetWasmMemoryToResizable",
+        memory_natives::memory_to_resizable,
+        1,
+    ),
     ("__genetWasmGlobalNew", entities_natives::global_new, 3),
     ("__genetWasmGlobalGet", entities_natives::global_get, 1),
     ("__genetWasmGlobalSet", entities_natives::global_set, 2),

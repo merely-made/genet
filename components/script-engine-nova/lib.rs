@@ -170,6 +170,17 @@ mod native {
             &()
         }
 
+        #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+        fn resize_array_buffer<'gc>(
+            &self,
+            agent: &mut Agent,
+            buffer: nova_vm::ecmascript::ArrayBuffer,
+            new_byte_length: usize,
+            gc: NoGcScope<'gc, '_>,
+        ) -> nova_vm::ecmascript::JsResult<'gc, nova_vm::ecmascript::ResizeArrayBufferResult> {
+            wasm::resize_hook(agent, buffer, new_byte_length, gc)
+        }
+
         fn system_time_millis(&self) -> Option<i64> {
             self.date_source
                 .borrow()

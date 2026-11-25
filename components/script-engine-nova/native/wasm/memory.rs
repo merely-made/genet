@@ -9,7 +9,9 @@
 //! so each buffer is kept beside the pointer and length it was made over, and
 //! a buffer whose memory no longer matches is detached before script runs
 //! again. A grow that adds no pages from wasm moves nothing and goes unseen
-//! (D7); one from script always detaches.
+//! (D7); one from script always detaches. A resizable buffer
+//! (`toResizableBuffer`) is not detached: it is repointed at the moved bytes
+//! and their new length, and keeps its identity.
 
 use wasmi::{Memory, MemoryType};
 
@@ -21,6 +23,16 @@ struct BufferView {
     value: NovaValue,
     ptr: *mut u8,
     len: usize,
+    resizable: bool,
+}
+
+/// What the caller must do to the buffers after a memory may have moved.
+#[derive(Default)]
+pub(super) struct Refresh {
+    /// Fixed-length buffers to detach.
+    pub(super) detach: Vec<NovaValue>,
+    /// Memories whose resizable buffer must be repointed at these bytes.
+    pub(super) repoint: Vec<(usize, *mut u8, usize)>,
 }
 
 pub(super) struct MemoryEntry {
@@ -80,28 +92,77 @@ impl WasmHost {
         memories.get(handle)?.buffer.as_ref().map(|b| f(&b.value))
     }
 
-    pub(super) fn set_buffer(&self, handle: usize, value: NovaValue, ptr: *mut u8, len: usize) {
+    pub(super) fn set_buffer(
+        &self,
+        handle: usize,
+        value: NovaValue,
+        (ptr, len): (*mut u8, usize),
+        resizable: bool,
+    ) {
         if let Some(entry) = self.memories.borrow_mut().get_mut(handle) {
-            entry.buffer = Some(BufferView { value, ptr, len });
+            entry.buffer = Some(BufferView {
+                value,
+                ptr,
+                len,
+                resizable,
+            });
         }
     }
 
-    /// Take out every buffer whose memory has moved or changed length, and
-    /// `force`'s buffer in any case, for the caller to detach.
-    pub(super) fn stale_buffers(&self, force: Option<usize>) -> Vec<NovaValue> {
+    /// Whether the memory's current buffer is resizable; `None` if it has none.
+    pub(super) fn buffer_is_resizable(&self, handle: usize) -> Option<bool> {
+        let memories = self.memories.borrow();
+        memories.get(handle)?.buffer.as_ref().map(|b| b.resizable)
+    }
+
+    /// Take the memory's current buffer out, for the caller to detach.
+    pub(super) fn take_buffer(&self, handle: usize) -> Option<NovaValue> {
+        let mut memories = self.memories.borrow_mut();
+        memories
+            .get_mut(handle)?
+            .buffer
+            .take()
+            .map(|view| view.value)
+    }
+
+    /// Every buffer whose memory has moved or changed length, and `force`'s
+    /// fixed-length buffer in any case: fixed-length ones taken out to be
+    /// detached, resizable ones to be repointed.
+    pub(super) fn refresh(&self, force: Option<usize>) -> Refresh {
         let store = self.store.borrow();
         let mut memories = self.memories.borrow_mut();
-        let mut stale = Vec::new();
+        let mut refresh = Refresh::default();
         for (handle, entry) in memories.iter_mut().enumerate() {
-            let Some(view) = &entry.buffer else { continue };
+            let Some(view) = &mut entry.buffer else {
+                continue;
+            };
             let now = (
                 entry.memory.data_ptr(&*store),
                 entry.memory.data_size(&*store),
             );
-            if force == Some(handle) || now != (view.ptr, view.len) {
-                stale.extend(entry.buffer.take().map(|view| view.value));
+            let moved = now != (view.ptr, view.len);
+            if view.resizable {
+                if moved {
+                    (view.ptr, view.len) = now;
+                    refresh.repoint.push((handle, now.0, now.1));
+                }
+            } else if moved || force == Some(handle) {
+                refresh
+                    .detach
+                    .extend(entry.buffer.take().map(|view| view.value));
             }
         }
-        stale
+        refresh
+    }
+
+    /// The memory whose current buffer `is` picks out.
+    pub(super) fn memory_with_buffer(
+        &self,
+        mut is: impl FnMut(&NovaValue) -> bool,
+    ) -> Option<usize> {
+        let memories = self.memories.borrow();
+        memories
+            .iter()
+            .position(|e| e.buffer.as_ref().is_some_and(|b| is(&b.value)))
     }
 }

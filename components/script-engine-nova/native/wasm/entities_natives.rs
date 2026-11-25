@@ -2,136 +2,30 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! The natives for `Memory`, `Global` and `Table`. Values arrive converted by
+//! The natives for `Global` and `Table`. Values arrive converted by
 //! the bootstrap for the entity's type; a bad handle or a value of the wrong
 //! type throws `TypeError`, and a bound exceeded throws `RangeError`.
 
-use std::ptr::NonNull;
-
-use nova_vm::ecmascript::{
-    Agent, ArgumentsList, ArrayBuffer, DetachKey, ExceptionType, JsResult, Value,
-};
+use nova_vm::ecmascript::{Agent, ArgumentsList, ExceptionType, JsResult, Value};
 use nova_vm::engine::GcScope;
 use wasmi::{TableType, ValType};
 
 use super::bridge::{
-    detach_stale, error, handle_arg, number, require_host, root, string, string_arg, to_js, to_val,
-    type_error,
+    error, handle_arg, number, require_host, string, string_arg, to_js, to_val, type_error,
 };
 use super::entities::val_ref;
 use super::json;
 
-fn u32_arg(agent: &Agent, value: Value) -> Option<u32> {
+pub(super) fn u32_arg(agent: &Agent, value: Value) -> Option<u32> {
     handle_arg(agent, value).and_then(|n| u32::try_from(n).ok())
 }
 
 /// An optional maximum: undefined, or a page or element count.
-fn maximum_arg(agent: &Agent, value: Value) -> Result<Option<u32>, ()> {
+pub(super) fn maximum_arg(agent: &Agent, value: Value) -> Result<Option<u32>, ()> {
     match value {
         Value::Undefined => Ok(None),
         value => u32_arg(agent, value).map(Some).ok_or(()),
     }
-}
-
-/// `memoryNew(initial, maximum?)`: a memory handle; bad limits throw
-/// `RangeError`.
-pub(super) fn memory_new<'gc>(
-    agent: &mut Agent,
-    _this: Value,
-    args: ArgumentsList,
-    gc: GcScope<'gc, '_>,
-) -> JsResult<'gc, Value<'gc>> {
-    let gc = gc.into_nogc();
-    let host = require_host(agent, gc)?;
-    let initial = u32_arg(agent, args.get(0));
-    let maximum = maximum_arg(agent, args.get(1));
-    let (Some(initial), Ok(maximum)) = (initial, maximum) else {
-        return Err(type_error(agent, "expected page counts", gc));
-    };
-    match host.memory_new(initial, maximum) {
-        Ok(handle) => Ok(number(agent, handle as f64, gc)),
-        Err(message) => Err(error(agent, ExceptionType::RangeError, &message, gc)),
-    }
-}
-
-/// `memoryGrow(memory, delta)`: the old size in pages. A success detaches the
-/// buffer even when no page was added.
-pub(super) fn memory_grow<'gc>(
-    agent: &mut Agent,
-    _this: Value,
-    args: ArgumentsList,
-    gc: GcScope<'gc, '_>,
-) -> JsResult<'gc, Value<'gc>> {
-    let gc = gc.into_nogc();
-    let host = require_host(agent, gc)?;
-    let memory = handle_arg(agent, args.get(0));
-    let Some((memory, delta)) = memory.zip(u32_arg(agent, args.get(1))) else {
-        return Err(type_error(agent, "expected a memory and a page count", gc));
-    };
-    match host.memory_grow(memory, delta) {
-        Ok(old) => {
-            detach_stale(agent, &host, Some(memory), gc);
-            Ok(number(agent, old as f64, gc))
-        },
-        Err(message) => Err(error(agent, ExceptionType::RangeError, &message, gc)),
-    }
-}
-
-/// `memoryBuffer(memory)`: the buffer over the memory's bytes, the same one
-/// until the memory grows.
-pub(super) fn memory_buffer<'gc>(
-    agent: &mut Agent,
-    _this: Value,
-    args: ArgumentsList,
-    gc: GcScope<'gc, '_>,
-) -> JsResult<'gc, Value<'gc>> {
-    let gc = gc.into_nogc();
-    let host = require_host(agent, gc)?;
-    let Some(memory) = handle_arg(agent, args.get(0)) else {
-        return Err(type_error(agent, "not a memory handle", gc));
-    };
-    detach_stale(agent, &host, None, gc);
-    if let Some(value) = host.with_buffer(memory, |v| v.get(agent, gc)) {
-        return Ok(value);
-    }
-    let Some((ptr, len)) = host.memory_bytes(memory) else {
-        return Err(type_error(agent, "not a memory handle", gc));
-    };
-    let ptr = NonNull::new(ptr).unwrap_or(NonNull::dangling());
-    // SAFETY: the bytes are the store's for as long as the engine lives, and
-    // every path that can move them detaches this buffer before script runs.
-    let buffer = unsafe { ArrayBuffer::new_over_foreign(agent, ptr, len, DetachKey {}, gc) };
-    let Some(buffer) = buffer else {
-        return Err(type_error(
-            agent,
-            "memory is not aligned for typed arrays",
-            gc,
-        ));
-    };
-    let value: Value = buffer.into();
-    let rooted = root(agent, value, gc);
-    host.set_buffer(memory, rooted, ptr.as_ptr(), len);
-    Ok(value)
-}
-
-/// `memoryType(memory)`: its limits as JSON.
-pub(super) fn memory_type<'gc>(
-    agent: &mut Agent,
-    _this: Value,
-    args: ArgumentsList,
-    gc: GcScope<'gc, '_>,
-) -> JsResult<'gc, Value<'gc>> {
-    let gc = gc.into_nogc();
-    let host = require_host(agent, gc)?;
-    let handle = handle_arg(agent, args.get(0));
-    let Some((ty, (_, bytes))) = handle.and_then(|h| host.memory_type(h).zip(host.memory_bytes(h)))
-    else {
-        return Err(type_error(agent, "not a memory handle", gc));
-    };
-    let mut out = String::from("{");
-    json::memory(&mut out, &ty, (bytes / 65536) as u64);
-    out.push('}');
-    Ok(string(agent, out, gc))
 }
 
 /// `globalNew(type, mutable, value)`: a global handle.

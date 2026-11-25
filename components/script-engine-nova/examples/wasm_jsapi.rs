@@ -8,7 +8,8 @@
 //!
 //! The tests run in `testharness.js`'s shell environment (their `jsshell`
 //! global) on a bare engine: no DOM, no timers, no fetch. Each file runs in a
-//! child process with a time limit, since Vano cannot bound a runaway script.
+//! child process with a three-minute limit, since Vano cannot bound a runaway
+//! script; the slowest file takes about 45 seconds in a debug build.
 //!
 //! ```text
 //! cargo run -p genet-vano --features wasm --example wasm_jsapi -- <wpt tests dir>
@@ -22,7 +23,7 @@ use std::time::{Duration, Instant};
 use script_engine_api::ScriptEngine;
 use script_engine_nova::NovaEngine;
 
-const LIMIT: Duration = Duration::from_secs(60);
+const LIMIT: Duration = Duration::from_secs(180);
 
 const PRELUDE: &str = "globalThis.self = globalThis;
 globalThis.GLOBAL = { isWindow: () => false, isWorker: () => false, isShadowRealm: () => false };

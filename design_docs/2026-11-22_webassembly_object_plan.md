@@ -1,10 +1,9 @@
 # WebAssembly object plan: a `WebAssembly` global for scripts, probed on Vano
 
-**Status:** 2026-11-25. W0 to W3 are met; W4 is in progress (D11). The probe
-runs modules from script on Vano behind `genet-vano`'s `wasm` feature (Findings 25 to 31), with
-`Memory.buffer` as the module's linear memory through Vano `c2c0eaa4` (Findings 32 to 37). It
-passes 360 of 777 subtests of the tree's JS API tests (Findings 40). D8 and D9 grow it to what
-wasmi can reach, on Vano and then on Bole.
+**Status:** 2026-11-25. W0 to W4 are met; W5, the object on Bole, is next (D9, D11). On Vano,
+behind `genet-vano`'s `wasm` feature, the object passes 684 of 804 subtests of the tree's JS API
+tests. Every directory within wasmi's reach passes in full except shared memory, which wasmi lacks
+(Findings 43 to 48).
 
 **For:** pages that use WebAssembly. Neither of Genet's JavaScript engines runs it: Vano says of
 itself "The engine does not support WebAssembly execution" and Bole has no `WebAssembly` object. Mark
@@ -77,7 +76,14 @@ Starts now (D11), not after the open lanes as D10 had it.
   is linked directly and fails with `LinkError` on a type mismatch;
 - multi-value results in both directions, and `externref` and `funcref` values;
 - one script function per wasm function, however many names it is exported under;
-- `toResizableBuffer` and `toFixedLengthBuffer`, with the Vano change they need named here first;
+- `toResizableBuffer` and `toFixedLengthBuffer`, with the Vano change they need named here first.
+  Named 2026-11-25, additive like D6's:
+  - `HostResizeArrayBuffer`, the spec's hook, which Vano's `resize` left as a TODO, as a
+    `HostHooks` method that answers "not handled" by default;
+  - a resizable `ArrayBuffer` over embedder-owned bytes;
+  - a way to repoint such a buffer at moved or longer bytes without detaching it;
+  - a `TypeError` instead of a reallocation when an unhandled resize reaches embedder-owned
+    bytes;
 - type reflection (`type()` and `WebAssembly.Function`).
 
 The runner from W3 is run again and its count recorded, as a measure and not a target.
@@ -505,6 +511,62 @@ W3, run 2026-11-25 on this Mac. The runner is `components/script-engine-nova/exa
     - Bole can bound script (`eval_bounded`), so wasm fuel could share the page's budget there, as
       this plan first intended (Constraints), where Vano could not (Findings 27).
 
+W4, run 2026-11-25 on this Mac with wasmi 2.0.3 and Vano `20e1db2d`. The code is still
+`components/script-engine-nova/native/wasm/`; the new tests are
+`components/script-engine-nova/tests/webassembly_entities.rs`.
+
+43. What landed: `WebAssembly.Global`, `Table` and `Function`; imports and exports of every kind,
+    with a wasm function from another instance linked directly so wasmi checks its type and
+    refuses a mismatch with `LinkError`; multi-value results both ways; `externref` and `funcref`
+    values; `Module.customSections`; type reflection (`type()` on each entity and in
+    `Module.imports` and `exports`); `toResizableBuffer` and `toFixedLengthBuffer`; and the JS
+    API's ordering details. The ordering details are: imports read in the module's order;
+    `instantiate` reading a module's imports at once and instantiating later; descriptors read
+    once each in WebIDL's order; and enumerable members. Ten new tests pass beside the 17 of W1
+    and W2.
+44. The Vano change W4 named, in `0891093c` and `20e1db2d`:
+    - `HostHooks::resize_array_buffer`, the spec's `HostResizeArrayBuffer`, which `resize` had
+      left as a TODO;
+    - `ArrayBuffer::new_over_foreign_resizable` and `repoint_foreign`;
+    - a `TypeError` where an unhandled resize would have reallocated an embedder's bytes.
+
+    Its library tests pass (70) and test262 was not run. A resizable buffer is repointed when its
+    memory moves or grows, from either side, and keeps its identity. `resize` grows the memory by
+    whole pages and refuses to shrink it.
+45. 684 of 804 subtests pass, a measure and not a target:
+
+    | Directory | Pass | Of | What fails |
+    | --- | --- | --- | --- |
+    | top level, `constructor`, `function`, `global`, `instance`, `table` | 560 | 560 | nothing |
+    | `memory` | 64 | 72 | shared memory: wasmi has no threads |
+    | `module` | 44 | 47 | `AbstractModuleSource`, from source-phase imports |
+    | `exception`, `tag` | 6 | 33 | no exception handling in wasmi |
+    | `js-string` | 7 | 41 | string builtins, a compile option D8 left out |
+    | `jspi` | 3 | 21 | promise integration needs stack switching |
+    | `esm-integration` | 0 | 30 | wasm as an ES module |
+    | `gc` | 0 | 0 | wasmi has no GC types |
+
+    The total moved from W3's 777 because files that threw early now run all their subtests.
+46. How the harder parts work:
+    - A function's identity is its wasmi handle's debug form, which names the store and the index.
+      wasmi gives `Func` no equality, and this needs no `unsafe`.
+    - wasmi yields imports grouped by kind. The section scanner keeps the module's order, and the
+      host maps each import to wasmi's by module, name and kind.
+    - A trap returns a sentinel the bootstrap passes in, since any value can be a result now that
+      an `externref` can be a string.
+    - A multi-value result from script is staged by its wrapper just before it returns.
+    - Every `externref` and the latest buffer of each memory stay rooted as long as the engine
+      lives.
+47. A second Vano bug the run found: a destructuring default cannot read an earlier binding of
+    the same lexical declaration. `const [a, b = a] = [1]` throws "can't access lexical
+    declaration 'a' before initialization", as do the `let`, `for-of` and object forms.
+    `bad-imports.js` uses that form at its line 34, so `constructor-bad-imports` and
+    `instantiate-bad-imports` register only the subtests before it. Vano's test262 expectations
+    name no such failure.
+48. Not in W4, as D8 ruled: exception handling, GC types, promise integration, ES module
+    integration, and the string builtins compile option. That option could be supplied by the host
+    without wasmi, but D8 did not take it up.
+
 ## Progress
 
 - 2026-11-22: plan written from Mark's rulings D1 to D3 and a read of the three sources.
@@ -517,3 +579,4 @@ W3, run 2026-11-25 on this Mac. The runner is `components/script-engine-nova/exa
 - 2026-11-25: W4 in progress: `Global`, `Table`, every import and export kind, linked wasm
   functions, multi-value, reference values, one script function per wasm function, custom
   sections and type reflection landed; the runner reads 675 of 804. Resizable buffers remain.
+- 2026-11-25: W4 met: resizable buffers through Vano `0891093c`; 684 of 804 (Findings 43 to 48).

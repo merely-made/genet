@@ -178,3 +178,50 @@ fn instantiating_a_module_reads_imports_at_once() {
     );
     assert_eq!(out, "m");
 }
+
+#[test]
+fn a_resizable_buffer_follows_its_memory() {
+    let mut engine = engine_with(
+        r#"(module
+          (memory (export "mem") 1 4)
+          (func (export "grow") (param i32) (result i32) local.get 0 memory.grow)
+          (func (export "load") (param i32) (result i32) local.get 0 i32.load8_u))"#,
+    );
+    let out = run(
+        &mut engine,
+        "const { exports } = new WebAssembly.Instance(new WebAssembly.Module(bytes));
+         const m = exports.mem;
+         const fixed = m.buffer;
+         const rb = m.toResizableBuffer();
+         const same = m.toResizableBuffer() === rb && m.buffer === rb;
+         const lengths = [fixed.byteLength, rb.byteLength, rb.resizable, rb.maxByteLength];
+         new Uint8Array(rb)[70000 - 65536] = 3;
+         rb.resize(131072);
+         const view = new Uint8Array(rb);
+         view[70000] = 9;
+         exports.grow(1);
+         const afterWasm = [rb.byteLength, m.buffer === rb, exports.load(70000)];
+         let shrink, odd, detach;
+         try { rb.resize(65536); } catch (e) { shrink = e.name; }
+         try { rb.resize(200000); } catch (e) { odd = e.name; }
+         try { rb.transfer(); } catch (e) { detach = e.name; }
+         const back = m.toFixedLengthBuffer();
+         return [same, lengths.join('/'), afterWasm.join('/'), shrink, odd, detach,
+                 rb.byteLength, back.byteLength, back.resizable, m.buffer === back].join('|');",
+    );
+    assert_eq!(
+        out,
+        "true|0/65536/true/262144|196608/true/9|RangeError|RangeError|TypeError|0|196608|false|true"
+    );
+}
+
+#[test]
+fn a_memory_without_a_maximum_has_no_resizable_buffer() {
+    let mut engine = engine_with(r#"(module)"#);
+    let out = run(
+        &mut engine,
+        "const m = new WebAssembly.Memory({ initial: 1 });
+         try { m.toResizableBuffer(); return 'made'; } catch (e) { return e.name; }",
+    );
+    assert_eq!(out, "TypeError");
+}

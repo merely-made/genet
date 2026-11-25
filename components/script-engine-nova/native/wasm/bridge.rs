@@ -17,16 +17,19 @@
 use std::ptr::NonNull;
 use std::rc::Rc;
 
+use genet_wasm::wasmi::{
+    ExternRef, F32, F64, Func, Nullable, ResumableCall, TrapCode, Val, ValType,
+};
 use nova_vm::ecmascript::{
     Agent, ArgumentsList, ArrayBuffer, BigInt, DetachKey, ExceptionType, Function, JsError,
     JsResult, Number, String as JsString, Value,
 };
 use nova_vm::engine::{Bindable, GcScope, Global, NoGcScope};
-use wasmi::{ExternRef, F32, F64, Func, Nullable, ResumableCall, TrapCode, Val, ValType};
 
 use super::super::{NovaHostSlot, NovaValue, ReleaseQueue};
+use super::WasmHost;
 use super::WasmSlot;
-use super::host::{ImportCall, WasmHost};
+use genet_wasm::ImportCall;
 
 const FUEL_EXHAUSTED: &str = "fuel exhausted";
 

@@ -41,6 +41,7 @@ members = [
     # Livery under their compatible requirements. Engine/GC revisions and the
     # browser host feature live in components/script-engine-boa/Cargo.toml.
     # See design_docs/2026-10-08_boa_stable_upstream_refresh.md.
+    "components/genet-wasm",
     "components/script-engine-boa",
     "components/script-engine-nova",
     "components/script-engine-piccolo",

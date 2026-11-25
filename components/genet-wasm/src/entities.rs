@@ -6,10 +6,10 @@
 
 use wasmi::{Global, GlobalType, Mutability, Ref, Table, TableType, Val};
 
-use super::host::WasmHost;
+use crate::host::WasmHost;
 
 /// A table element as a value, or `None` for a value that is not a reference.
-pub(super) fn val_ref(value: Val) -> Option<Ref> {
+pub fn val_ref(value: Val) -> Option<Ref> {
     match value {
         Val::FuncRef(r) => Some(Ref::Func(r)),
         Val::ExternRef(r) => Some(Ref::Extern(r)),
@@ -17,8 +17,8 @@ pub(super) fn val_ref(value: Val) -> Option<Ref> {
     }
 }
 
-impl WasmHost {
-    pub(super) fn global_new(&self, value: Val, mutable: bool) -> usize {
+impl<V> WasmHost<V> {
+    pub fn global_new(&self, value: Val, mutable: bool) -> usize {
         let mutability = if mutable {
             Mutability::Var
         } else {
@@ -32,22 +32,32 @@ impl WasmHost {
         self.globals.borrow().get(handle).copied()
     }
 
-    pub(super) fn global_type(&self, handle: usize) -> Option<GlobalType> {
+    pub fn global_type(&self, handle: usize) -> Option<GlobalType> {
         Some(self.global(handle)?.ty(&*self.store.borrow()))
     }
 
-    pub(super) fn global_get(&self, handle: usize) -> Option<Val> {
+    pub fn global_get(&self, handle: usize) -> Option<Val> {
         Some(self.global(handle)?.get(&*self.store.borrow()))
     }
 
-    pub(super) fn global_set(&self, handle: usize, value: Val) -> Result<(), String> {
+    /// Set a global's value.
+    ///
+    /// # Errors
+    ///
+    /// wasmi's message, for the native to throw.
+    pub fn global_set(&self, handle: usize, value: Val) -> Result<(), String> {
         let global = self.global(handle).ok_or("not a global")?;
         global
             .set(&mut *self.store.borrow_mut(), value)
             .map_err(|e| e.to_string())
     }
 
-    pub(super) fn table_new(&self, ty: TableType, init: Ref) -> Result<usize, String> {
+    /// `new WebAssembly.Table`.
+    ///
+    /// # Errors
+    ///
+    /// wasmi's message, for the native to throw.
+    pub fn table_new(&self, ty: TableType, init: Ref) -> Result<usize, String> {
         let table =
             Table::new(&mut *self.store.borrow_mut(), ty, init).map_err(|e| e.to_string())?;
         Ok(self.push(&self.tables, table))
@@ -57,27 +67,37 @@ impl WasmHost {
         self.tables.borrow().get(handle).copied()
     }
 
-    pub(super) fn table_type(&self, handle: usize) -> Option<TableType> {
+    pub fn table_type(&self, handle: usize) -> Option<TableType> {
         Some(self.table(handle)?.ty(&*self.store.borrow()))
     }
 
-    pub(super) fn table_size(&self, handle: usize) -> Option<u64> {
+    pub fn table_size(&self, handle: usize) -> Option<u64> {
         Some(self.table(handle)?.size(&*self.store.borrow()))
     }
 
     /// `None` for a bad handle, `Some(None)` for an index out of bounds.
-    pub(super) fn table_get(&self, handle: usize, index: u64) -> Option<Option<Ref>> {
+    pub fn table_get(&self, handle: usize, index: u64) -> Option<Option<Ref>> {
         Some(self.table(handle)?.get(&*self.store.borrow(), index))
     }
 
-    pub(super) fn table_set(&self, handle: usize, index: u64, value: Ref) -> Result<(), String> {
+    /// Set an element.
+    ///
+    /// # Errors
+    ///
+    /// wasmi's message, for the native to throw.
+    pub fn table_set(&self, handle: usize, index: u64, value: Ref) -> Result<(), String> {
         let table = self.table(handle).ok_or("not a table")?;
         table
             .set(&mut *self.store.borrow_mut(), index, value)
             .map_err(|e| e.to_string())
     }
 
-    pub(super) fn table_grow(&self, handle: usize, delta: u64, init: Ref) -> Result<u64, String> {
+    /// Grow by `delta` elements and return the old length.
+    ///
+    /// # Errors
+    ///
+    /// wasmi's message, for the native to throw.
+    pub fn table_grow(&self, handle: usize, delta: u64, init: Ref) -> Result<u64, String> {
         let table = self.table(handle).ok_or("not a table")?;
         table
             .grow(&mut *self.store.borrow_mut(), delta, init)

@@ -15,25 +15,25 @@
 
 /// Private export name for a moved start function. A NUL is valid in an export
 /// name, so no module can collide with it by accident and still be shown it.
-pub(super) const START_EXPORT: &str = "\0genet-start";
+pub const START_EXPORT: &str = "\0genet-start";
 
 const IMPORT_SECTION: u8 = 2;
 const EXPORT_SECTION: u8 = 7;
 const START_SECTION: u8 = 8;
-pub(super) const FUNC_KIND: u8 = 0;
-pub(super) const TABLE_KIND: u8 = 1;
-pub(super) const MEMORY_KIND: u8 = 2;
-pub(super) const GLOBAL_KIND: u8 = 3;
+pub const FUNC_KIND: u8 = 0;
+pub const TABLE_KIND: u8 = 1;
+pub const MEMORY_KIND: u8 = 2;
+pub const GLOBAL_KIND: u8 = 3;
 
 /// The parts of a module the bridge uses, and the bytes to compile.
-pub(super) struct Prepared {
-    pub(super) bytes: Vec<u8>,
-    pub(super) has_start: bool,
+pub struct Prepared {
+    pub bytes: Vec<u8>,
+    pub has_start: bool,
     /// `(name, kind, index)` for every export, in order.
-    pub(super) exports: Vec<(String, u8, u32)>,
+    pub exports: Vec<(String, u8, u32)>,
     /// `(module, name, kind)` for every import, in the module's order, which
     /// wasmi does not keep. Empty if the section could not be read.
-    pub(super) imports: Vec<(String, String, u8)>,
+    pub imports: Vec<(String, String, u8)>,
 }
 
 struct Section {
@@ -194,7 +194,7 @@ fn export_section(entries: &[(String, u8, u32)]) -> Vec<u8> {
 }
 
 /// Read the exports and move the start function, or pass the bytes through.
-pub(super) fn prepare(bytes: Vec<u8>) -> Prepared {
+pub fn prepare(bytes: Vec<u8>) -> Prepared {
     let untouched = |bytes| Prepared {
         bytes,
         has_start: false,

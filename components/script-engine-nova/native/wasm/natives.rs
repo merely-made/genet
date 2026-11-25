@@ -10,16 +10,16 @@
 //! it makes itself. `TypeError` and `RangeError` are thrown here directly. A
 //! script exception raised inside wasm passes through unchanged.
 
+use genet_wasm::wasmi::FuncType;
 use nova_vm::ecmascript::{Agent, ArgumentsList, ArrayBuffer, JsResult, TypedArray, Value};
 use nova_vm::engine::{Bindable, GcScope};
-use wasmi::FuncType;
 
 use super::bridge::{
     Outcome, args_for, drive, handle_arg, host, number, require_host, root, string, string_arg,
     to_js, type_error,
 };
-use super::host::ImportValue;
-use super::json;
+use genet_wasm::ImportValue;
+use genet_wasm::json;
 
 fn bytes_arg(agent: &Agent, value: Value) -> Option<Vec<u8>> {
     let Value::Uint8Array(array) = value else {
@@ -265,7 +265,7 @@ pub(super) fn stage<'gc>(
     Ok(Value::Undefined)
 }
 
-fn type_list(list: &str) -> Option<Vec<wasmi::ValType>> {
+fn type_list(list: &str) -> Option<Vec<genet_wasm::wasmi::ValType>> {
     list.split(',')
         .filter(|t| !t.is_empty())
         .map(json::val_type)

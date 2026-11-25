@@ -6,15 +6,15 @@
 //! the bootstrap for the entity's type; a bad handle or a value of the wrong
 //! type throws `TypeError`, and a bound exceeded throws `RangeError`.
 
+use genet_wasm::wasmi::{TableType, ValType};
 use nova_vm::ecmascript::{Agent, ArgumentsList, ExceptionType, JsResult, Value};
 use nova_vm::engine::GcScope;
-use wasmi::{TableType, ValType};
 
 use super::bridge::{
     error, handle_arg, number, require_host, string, string_arg, to_js, to_val, type_error,
 };
-use super::entities::val_ref;
-use super::json;
+use genet_wasm::entities::val_ref;
+use genet_wasm::json;
 
 pub(super) fn u32_arg(agent: &Agent, value: Value) -> Option<u32> {
     handle_arg(agent, value).and_then(|n| u32::try_from(n).ok())
@@ -102,10 +102,10 @@ pub(super) fn global_type<'gc>(
     Ok(string(agent, out, gc))
 }
 
-fn table_element(host: &super::host::WasmHost, handle: usize) -> Option<ValType> {
+fn table_element(host: &super::WasmHost, handle: usize) -> Option<ValType> {
     Some(match host.table_type(handle)?.element() {
-        wasmi::RefType::Func => ValType::FuncRef,
-        wasmi::RefType::Extern => ValType::ExternRef,
+        genet_wasm::wasmi::RefType::Func => ValType::FuncRef,
+        genet_wasm::wasmi::RefType::Extern => ValType::ExternRef,
     })
 }
 
@@ -126,8 +126,8 @@ pub(super) fn table_new<'gc>(
     };
     let ty = TableType::new(element, initial, maximum);
     let value_ty = match element {
-        wasmi::RefType::Func => ValType::FuncRef,
-        wasmi::RefType::Extern => ValType::ExternRef,
+        genet_wasm::wasmi::RefType::Func => ValType::FuncRef,
+        genet_wasm::wasmi::RefType::Extern => ValType::ExternRef,
     };
     let Some(init) = to_val(agent, &host, args.get(3), value_ty, gc).and_then(val_ref) else {
         return Err(type_error(agent, "a value of the wrong type", gc));

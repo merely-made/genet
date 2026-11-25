@@ -15,33 +15,40 @@
 
 use wasmi::{Memory, MemoryType};
 
-use super::super::NovaValue;
-use super::host::WasmHost;
+use crate::host::WasmHost;
 
 /// A buffer script holds, and the bytes it was made over.
-struct BufferView {
-    value: NovaValue,
+struct BufferView<V> {
+    value: V,
     ptr: *mut u8,
     len: usize,
     resizable: bool,
 }
 
 /// What the caller must do to the buffers after a memory may have moved.
-#[derive(Default)]
-pub(super) struct Refresh {
+pub struct Refresh<V> {
     /// Fixed-length buffers to detach.
-    pub(super) detach: Vec<NovaValue>,
+    pub detach: Vec<V>,
     /// Memories whose resizable buffer must be repointed at these bytes.
-    pub(super) repoint: Vec<(usize, *mut u8, usize)>,
+    pub repoint: Vec<(usize, *mut u8, usize)>,
 }
 
-pub(super) struct MemoryEntry {
+impl<V> Default for Refresh<V> {
+    fn default() -> Self {
+        Self {
+            detach: Vec::new(),
+            repoint: Vec::new(),
+        }
+    }
+}
+
+pub struct MemoryEntry<V> {
     memory: Memory,
-    buffer: Option<BufferView>,
+    buffer: Option<BufferView<V>>,
 }
 
-impl WasmHost {
-    pub(super) fn push_memory(&self, memory: Memory) -> usize {
+impl<V> WasmHost<V> {
+    pub fn push_memory(&self, memory: Memory) -> usize {
         let mut memories = self.memories.borrow_mut();
         memories.push(MemoryEntry {
             memory,
@@ -50,12 +57,16 @@ impl WasmHost {
         memories.len() - 1
     }
 
-    pub(super) fn memory(&self, handle: usize) -> Option<Memory> {
+    pub fn memory(&self, handle: usize) -> Option<Memory> {
         self.memories.borrow().get(handle).map(|e| e.memory)
     }
 
     /// `new WebAssembly.Memory({ initial, maximum })`, in pages.
-    pub(super) fn memory_new(&self, initial: u32, maximum: Option<u32>) -> Result<usize, String> {
+    ///
+    /// # Errors
+    ///
+    /// wasmi's message, for the native to throw.
+    pub fn memory_new(&self, initial: u32, maximum: Option<u32>) -> Result<usize, String> {
         let ty = MemoryType::new(initial, maximum);
         let memory = Memory::new(&mut *self.store.borrow_mut(), ty).map_err(|e| e.to_string())?;
         Ok(self.push_memory(memory))
@@ -63,7 +74,11 @@ impl WasmHost {
 
     /// Grow by `delta` pages and return the old size. The caller detaches the
     /// buffer whether or not any page was added, as the spec requires.
-    pub(super) fn memory_grow(&self, handle: usize, delta: u32) -> Result<u64, String> {
+    ///
+    /// # Errors
+    ///
+    /// wasmi's message, for the native to throw.
+    pub fn memory_grow(&self, handle: usize, delta: u32) -> Result<u64, String> {
         let memory = self.memory(handle).ok_or("not a memory")?;
         let mut store = self.store.borrow_mut();
         memory
@@ -71,31 +86,27 @@ impl WasmHost {
             .map_err(|e| e.to_string())
     }
 
-    pub(super) fn memory_type(&self, handle: usize) -> Option<MemoryType> {
+    pub fn memory_type(&self, handle: usize) -> Option<MemoryType> {
         Some(self.memory(handle)?.ty(&*self.store.borrow()))
     }
 
     /// The memory's bytes as they are now.
-    pub(super) fn memory_bytes(&self, handle: usize) -> Option<(*mut u8, usize)> {
+    pub fn memory_bytes(&self, handle: usize) -> Option<(*mut u8, usize)> {
         let memory = self.memory(handle)?;
         let store = self.store.borrow();
         Some((memory.data_ptr(&*store), memory.data_size(&*store)))
     }
 
     /// Run `f` on the buffer script holds for `handle`, if it is current.
-    pub(super) fn with_buffer<R>(
-        &self,
-        handle: usize,
-        f: impl FnOnce(&NovaValue) -> R,
-    ) -> Option<R> {
+    pub fn with_buffer<R>(&self, handle: usize, f: impl FnOnce(&V) -> R) -> Option<R> {
         let memories = self.memories.borrow();
         memories.get(handle)?.buffer.as_ref().map(|b| f(&b.value))
     }
 
-    pub(super) fn set_buffer(
+    pub fn set_buffer(
         &self,
         handle: usize,
-        value: NovaValue,
+        value: V,
         (ptr, len): (*mut u8, usize),
         resizable: bool,
     ) {
@@ -110,13 +121,13 @@ impl WasmHost {
     }
 
     /// Whether the memory's current buffer is resizable; `None` if it has none.
-    pub(super) fn buffer_is_resizable(&self, handle: usize) -> Option<bool> {
+    pub fn buffer_is_resizable(&self, handle: usize) -> Option<bool> {
         let memories = self.memories.borrow();
         memories.get(handle)?.buffer.as_ref().map(|b| b.resizable)
     }
 
     /// Take the memory's current buffer out, for the caller to detach.
-    pub(super) fn take_buffer(&self, handle: usize) -> Option<NovaValue> {
+    pub fn take_buffer(&self, handle: usize) -> Option<V> {
         let mut memories = self.memories.borrow_mut();
         memories
             .get_mut(handle)?
@@ -128,7 +139,7 @@ impl WasmHost {
     /// Every buffer whose memory has moved or changed length, and `force`'s
     /// fixed-length buffer in any case: fixed-length ones taken out to be
     /// detached, resizable ones to be repointed.
-    pub(super) fn refresh(&self, force: Option<usize>) -> Refresh {
+    pub fn refresh(&self, force: Option<usize>) -> Refresh<V> {
         let store = self.store.borrow();
         let mut memories = self.memories.borrow_mut();
         let mut refresh = Refresh::default();
@@ -156,10 +167,7 @@ impl WasmHost {
     }
 
     /// The memory whose current buffer `is` picks out.
-    pub(super) fn memory_with_buffer(
-        &self,
-        mut is: impl FnMut(&NovaValue) -> bool,
-    ) -> Option<usize> {
+    pub fn memory_with_buffer(&self, mut is: impl FnMut(&V) -> bool) -> Option<usize> {
         let memories = self.memories.borrow();
         memories
             .iter()

@@ -14,14 +14,14 @@ use nova_vm::ecmascript::{
 };
 use nova_vm::engine::{Bindable, GcScope, NoGcScope};
 
+use super::WasmHost;
 use super::bridge::{
     detach_stale, error, handle_arg, host, number, require_host, root, string, type_error,
 };
 use super::entities_natives::{maximum_arg, u32_arg};
-use super::host::WasmHost;
-use super::json;
+use genet_wasm::json;
 
-const PAGE: u64 = 65536;
+use genet_wasm::PAGE;
 
 /// `memoryNew(initial, maximum?)`: a memory handle; bad limits throw
 /// `RangeError`.

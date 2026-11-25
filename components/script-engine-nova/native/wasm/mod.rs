@@ -7,14 +7,9 @@
 //! the host calls [`NovaEngine::install_webassembly`].
 
 mod bridge;
-mod entities;
 mod entities_natives;
-mod host;
-mod json;
-mod memory;
 mod memory_natives;
 mod natives;
-mod sections;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,53 +17,49 @@ use std::rc::Rc;
 use nova_vm::ecmascript::{Behaviour, InternalMethods, PropertyDescriptor, PropertyKey, RegularFn};
 use nova_vm::engine::Bindable;
 
-pub(crate) use host::WasmHost;
 pub(crate) use memory_natives::resize_hook;
 
-use super::{NovaEngine, ScriptEngine, create_named_host_function};
+use super::{NovaEngine, NovaValue, ScriptEngine, create_named_host_function};
+
+/// The engine's wasm state over Vano's rooted values.
+pub(crate) type WasmHost = genet_wasm::WasmHost<NovaValue>;
 
 /// What `GenetHostHooks::get_host_data` hands the natives.
 pub(crate) type WasmSlot = RefCell<Option<Rc<WasmHost>>>;
 
-const BOOTSTRAP: &str = include_str!("bootstrap.js");
-
-const NATIVES: [(&str, RegularFn, u32); 27] = [
-    ("__genetWasmCompile", natives::compile, 1),
-    ("__genetWasmDescribe", natives::describe, 1),
-    ("__genetWasmInstantiate", natives::instantiate, 2),
-    ("__genetWasmExportOf", natives::export_of, 3),
-    ("__genetWasmSignature", natives::signature, 1),
-    ("__genetWasmCall", natives::call, 2),
-    ("__genetWasmTrapMessage", natives::trap_message, 0),
-    ("__genetWasmResultAt", natives::result_at, 1),
-    ("__genetWasmStage", natives::stage, 0),
-    ("__genetWasmFuncNew", natives::func_new, 3),
-    ("__genetWasmCustomSection", natives::custom_section, 3),
-    ("__genetWasmMemoryNew", memory_natives::memory_new, 2),
-    ("__genetWasmMemoryGrow", memory_natives::memory_grow, 2),
-    ("__genetWasmMemoryBuffer", memory_natives::memory_buffer, 1),
-    ("__genetWasmMemoryType", memory_natives::memory_type, 1),
-    (
-        "__genetWasmMemoryToFixed",
-        memory_natives::memory_to_fixed,
-        1,
-    ),
-    (
-        "__genetWasmMemoryToResizable",
-        memory_natives::memory_to_resizable,
-        1,
-    ),
-    ("__genetWasmGlobalNew", entities_natives::global_new, 3),
-    ("__genetWasmGlobalGet", entities_natives::global_get, 1),
-    ("__genetWasmGlobalSet", entities_natives::global_set, 2),
-    ("__genetWasmGlobalType", entities_natives::global_type, 1),
-    ("__genetWasmTableNew", entities_natives::table_new, 4),
-    ("__genetWasmTableGet", entities_natives::table_get, 2),
-    ("__genetWasmTableSet", entities_natives::table_set, 3),
-    ("__genetWasmTableGrow", entities_natives::table_grow, 3),
-    ("__genetWasmTableLength", entities_natives::table_length, 1),
-    ("__genetWasmTableType", entities_natives::table_type, 1),
-];
+/// The native behind each name the bootstrap expects (`genet_wasm::NATIVES`).
+fn native(name: &str) -> RegularFn {
+    match name {
+        "Compile" => natives::compile,
+        "Describe" => natives::describe,
+        "Instantiate" => natives::instantiate,
+        "ExportOf" => natives::export_of,
+        "Signature" => natives::signature,
+        "Call" => natives::call,
+        "TrapMessage" => natives::trap_message,
+        "ResultAt" => natives::result_at,
+        "Stage" => natives::stage,
+        "FuncNew" => natives::func_new,
+        "CustomSection" => natives::custom_section,
+        "MemoryNew" => memory_natives::memory_new,
+        "MemoryGrow" => memory_natives::memory_grow,
+        "MemoryBuffer" => memory_natives::memory_buffer,
+        "MemoryType" => memory_natives::memory_type,
+        "MemoryToFixed" => memory_natives::memory_to_fixed,
+        "MemoryToResizable" => memory_natives::memory_to_resizable,
+        "GlobalNew" => entities_natives::global_new,
+        "GlobalGet" => entities_natives::global_get,
+        "GlobalSet" => entities_natives::global_set,
+        "GlobalType" => entities_natives::global_type,
+        "TableNew" => entities_natives::table_new,
+        "TableGet" => entities_natives::table_get,
+        "TableSet" => entities_natives::table_set,
+        "TableGrow" => entities_natives::table_grow,
+        "TableLength" => entities_natives::table_length,
+        "TableType" => entities_natives::table_type,
+        other => unreachable!("genet-wasm names a native genet-vano lacks: {other}"),
+    }
+}
 
 impl NovaEngine {
     /// Give the main realm a `WebAssembly` global. Wasm calls draw on the fuel
@@ -84,10 +75,11 @@ impl NovaEngine {
         let mut out = Ok(());
         self.agent.run_in_realm(&self.realm, |agent, mut gc| {
             let global = agent.current_realm(gc.nogc()).global_object(agent).unbind();
-            for (name, behaviour, length) in NATIVES {
+            for (short, length) in genet_wasm::NATIVES {
+                let name = &format!("__genetWasm{short}");
                 let func = create_named_host_function(
                     agent,
-                    Behaviour::Regular(behaviour),
+                    Behaviour::Regular(native(short)),
                     name,
                     length,
                     None,
@@ -109,7 +101,7 @@ impl NovaEngine {
             }
         });
         out?;
-        self.eval(BOOTSTRAP).map(drop)
+        self.eval(genet_wasm::BOOTSTRAP).map(drop)
     }
 
     /// Set the fuel all wasm calls on this engine draw from; `None` is

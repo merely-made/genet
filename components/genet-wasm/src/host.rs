@@ -3,9 +3,9 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The wasmi side of the bridge: one store per engine and the handle tables
-//! script reaches it through. Nothing here touches the JavaScript heap except
-//! the rooted values it holds: import wrappers, `externref` payloads and
-//! memory buffers.
+//! script reaches it through. Nothing here touches the JavaScript heap. The
+//! script values it holds (import wrappers, `externref` payloads, memory
+//! buffers) are the engine's rooted values, `V`.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -16,17 +16,16 @@ use wasmi::{
     Table, Val, errors::HostError,
 };
 
-use super::super::NovaValue;
-use super::json;
-use super::memory::MemoryEntry;
-use super::sections::{self, FUNC_KIND, GLOBAL_KIND, MEMORY_KIND, START_EXPORT, TABLE_KIND};
+use crate::json;
+use crate::memory::MemoryEntry;
+use crate::sections::{self, FUNC_KIND, GLOBAL_KIND, MEMORY_KIND, START_EXPORT, TABLE_KIND};
 
 /// Raised by every function made from script. The call suspends at it and
 /// the bridge runs the script function for `slot`, then resumes.
 #[derive(Debug)]
-pub(super) struct ImportCall {
-    pub(super) slot: usize,
-    pub(super) params: Vec<Val>,
+pub struct ImportCall {
+    pub slot: usize,
+    pub params: Vec<Val>,
 }
 
 impl fmt::Display for ImportCall {
@@ -38,27 +37,27 @@ impl fmt::Display for ImportCall {
 impl HostError for ImportCall {}
 
 /// What script supplies for one import, in the module's import order.
-pub(super) enum ImportValue {
+pub enum ImportValue<V> {
     /// A script function's wrapper, made into a host function here.
-    Script(NovaValue),
+    Script(V),
     /// An entity that already lives in the store, by kind and handle.
     Entity(u8, usize),
 }
 
-pub(super) struct ModuleEntry {
-    pub(super) module: Module,
+pub struct ModuleEntry {
+    pub module: Module,
     has_start: bool,
     /// For each import in the module's order, its place in wasmi's.
     import_order: Vec<usize>,
     /// `(name, kind, index)` for every export.
-    pub(super) exports: Vec<(String, u8, u32)>,
+    pub exports: Vec<(String, u8, u32)>,
 }
 
-pub(super) struct InstanceEntry {
-    pub(super) instance: Instance,
-    pub(super) module: usize,
+pub struct InstanceEntry {
+    pub instance: Instance,
+    pub module: usize,
     /// Handles of what it imported, by kind and then by index.
-    pub(super) imported: [Vec<usize>; 4],
+    pub imported: [Vec<usize>; 4],
 }
 
 struct FuncEntry {
@@ -71,30 +70,30 @@ struct FuncEntry {
 const UNBOUNDED_FUEL: u64 = u64::MAX;
 
 /// One engine's WebAssembly state. Handles are indices that never move.
-pub(crate) struct WasmHost {
+pub struct WasmHost<V> {
     engine: Engine,
-    pub(super) store: RefCell<Store<()>>,
-    pub(super) modules: RefCell<Vec<ModuleEntry>>,
-    pub(super) instances: RefCell<Vec<InstanceEntry>>,
+    pub store: RefCell<Store<()>>,
+    pub modules: RefCell<Vec<ModuleEntry>>,
+    pub instances: RefCell<Vec<InstanceEntry>>,
     funcs: RefCell<Vec<FuncEntry>>,
     /// Handles by function identity, so a function has one handle however it
     /// reaches script.
     func_handles: RefCell<HashMap<String, usize>>,
     /// Script wrappers for functions made from script, by slot.
-    pub(super) imports: RefCell<Vec<NovaValue>>,
+    pub imports: RefCell<Vec<V>>,
     /// The script values `externref`s hold, by slot.
-    pub(super) externs: RefCell<Vec<NovaValue>>,
-    pub(super) memories: RefCell<Vec<MemoryEntry>>,
-    pub(super) globals: RefCell<Vec<Global>>,
-    pub(super) tables: RefCell<Vec<Table>>,
+    pub externs: RefCell<Vec<V>>,
+    pub memories: RefCell<Vec<MemoryEntry<V>>>,
+    pub globals: RefCell<Vec<Global>>,
+    pub tables: RefCell<Vec<Table>>,
     /// Handles of what an instance defines, by `(instance, kind, index)`.
     defined: RefCell<HashMap<(usize, u8, u32), usize>>,
     /// Results of the last multi-value call, read one by one.
-    pub(super) results: RefCell<Vec<Val>>,
+    pub results: RefCell<Vec<Val>>,
     /// Values a script function returned for a multi-value import.
-    pub(super) staged: RefCell<Vec<NovaValue>>,
+    pub staged: RefCell<Vec<V>>,
     /// The message of the last trap `call` reported.
-    pub(super) trap: RefCell<String>,
+    pub trap: RefCell<String>,
 }
 
 fn kind_of(ty: &ExternType) -> u8 {
@@ -143,8 +142,19 @@ fn func_key(func: &Func) -> String {
     format!("{func:?}")
 }
 
-impl WasmHost {
-    pub(crate) fn new() -> Self {
+impl<V> Default for WasmHost<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V> WasmHost<V> {
+    /// A store with fuel metering on and unbounded.
+    ///
+    /// # Panics
+    ///
+    /// Never: fuel is enabled just before it is set.
+    pub fn new() -> Self {
         let mut config = Config::default();
         config.consume_fuel(true);
         let engine = Engine::new(&config);
@@ -170,7 +180,7 @@ impl WasmHost {
     }
 
     /// Whether script holds anything that lives in this store.
-    pub(crate) fn is_live(&self) -> bool {
+    pub fn is_live(&self) -> bool {
         !self.modules.borrow().is_empty()
             || !self.memories.borrow().is_empty()
             || !self.globals.borrow().is_empty()
@@ -180,13 +190,22 @@ impl WasmHost {
 
     /// Set the fuel every wasm call on this engine draws from. `None` is
     /// unbounded. Exhausted fuel stays exhausted until the host sets it again.
-    pub(crate) fn set_budget(&self, fuel: Option<u64>) {
+    ///
+    /// # Panics
+    ///
+    /// Never: the store meters fuel.
+    pub fn set_budget(&self, fuel: Option<u64>) {
         let fuel = fuel.unwrap_or(UNBOUNDED_FUEL);
         let mut store = self.store.borrow_mut();
         store.set_fuel(fuel).expect("fuel is enabled");
     }
 
-    pub(super) fn compile(&self, bytes: Vec<u8>) -> Result<usize, String> {
+    /// Compile a module, moving its start function out (`sections`).
+    ///
+    /// # Errors
+    ///
+    /// wasmi's message, for the native to throw.
+    pub fn compile(&self, bytes: Vec<u8>) -> Result<usize, String> {
         let prepared = sections::prepare(bytes);
         let module = Module::new(&self.engine, &prepared.bytes).map_err(|e| e.to_string())?;
         let import_order = import_order(&module, &prepared.imports);
@@ -201,7 +220,7 @@ impl WasmHost {
     }
 
     /// The module's imports and exports with their types, as JSON.
-    pub(super) fn describe(&self, handle: usize) -> Option<String> {
+    pub fn describe(&self, handle: usize) -> Option<String> {
         let modules = self.modules.borrow();
         let entry = modules.get(handle)?;
         let imports: Vec<_> = entry.module.imports().collect();
@@ -239,7 +258,7 @@ impl WasmHost {
     }
 
     /// The bytes of the `nth` custom section called `name`.
-    pub(super) fn custom_section(&self, module: usize, name: &str, nth: usize) -> Option<Vec<u8>> {
+    pub fn custom_section(&self, module: usize, name: &str, nth: usize) -> Option<Vec<u8>> {
         let modules = self.modules.borrow();
         let module = &modules.get(module)?.module;
         let section = module
@@ -250,12 +269,7 @@ impl WasmHost {
     }
 
     /// A host function of type `ty` that calls the script wrapper `wrapper`.
-    pub(super) fn script_func(
-        &self,
-        store: &mut Store<()>,
-        ty: FuncType,
-        wrapper: NovaValue,
-    ) -> Func {
+    pub fn script_func(&self, store: &mut Store<()>, ty: FuncType, wrapper: V) -> Func {
         let mut imports = self.imports.borrow_mut();
         let slot = imports.len();
         imports.push(wrapper);
@@ -279,11 +293,15 @@ impl WasmHost {
 
     /// Link a module against what script supplied, one value per import in
     /// order; wasmi checks every type. Returns the instance and the start
-    /// function still to be run. Errors are prefixed `link:` or `trap:`.
-    pub(super) fn instantiate(
+    /// function still to be run.
+    ///
+    /// # Errors
+    ///
+    /// The message, prefixed `link:` or `trap:` for the bootstrap.
+    pub fn instantiate(
         &self,
         module: usize,
-        values: Vec<ImportValue>,
+        values: Vec<ImportValue<V>>,
     ) -> Result<(usize, Option<Func>), String> {
         let modules = self.modules.borrow();
         let entry = modules.get(module).ok_or("link:not a module")?;
@@ -341,7 +359,7 @@ impl WasmHost {
         Ok((instances.len() - 1, start))
     }
 
-    pub(super) fn export_index(&self, module: usize, name: &str, kind: u8) -> Option<u32> {
+    pub fn export_index(&self, module: usize, name: &str, kind: u8) -> Option<u32> {
         self.modules.borrow()[module]
             .exports
             .iter()
@@ -352,7 +370,7 @@ impl WasmHost {
     /// The handle of an instance's export of `kind`. An import passed through
     /// keeps its handle, and a defined entity gets one handle however often
     /// it is exported, so script sees one object for it.
-    pub(super) fn export_of(&self, instance: usize, name: &str, kind: u8) -> Option<usize> {
+    pub fn export_of(&self, instance: usize, name: &str, kind: u8) -> Option<usize> {
         let (module, inst) = {
             let instances = self.instances.borrow();
             let entry = instances.get(instance)?;
@@ -387,14 +405,14 @@ impl WasmHost {
         Some(handle)
     }
 
-    pub(super) fn push<T>(&self, list: &RefCell<Vec<T>>, item: T) -> usize {
+    pub fn push<T>(&self, list: &RefCell<Vec<T>>, item: T) -> usize {
         let mut list = list.borrow_mut();
         list.push(item);
         list.len() - 1
     }
 
     /// The one handle for `func`, minted the first time it reaches script.
-    pub(super) fn func_handle(&self, func: Func, index: Option<u32>) -> usize {
+    pub fn func_handle(&self, func: Func, index: Option<u32>) -> usize {
         let key = func_key(&func);
         if let Some(handle) = self.func_handles.borrow().get(&key) {
             return *handle;
@@ -404,12 +422,12 @@ impl WasmHost {
         handle
     }
 
-    pub(super) fn func(&self, handle: usize) -> Option<Func> {
+    pub fn func(&self, handle: usize) -> Option<Func> {
         self.funcs.borrow().get(handle).map(|e| e.func)
     }
 
     /// `{"index":…,"parameters":[…],"results":[…]}` for a function.
-    pub(super) fn signature(&self, handle: usize) -> Option<String> {
+    pub fn signature(&self, handle: usize) -> Option<String> {
         let funcs = self.funcs.borrow();
         let entry = funcs.get(handle)?;
         let ty = entry.func.ty(&*self.store.borrow());
@@ -424,7 +442,7 @@ impl WasmHost {
         Some(out)
     }
 
-    pub(super) fn func_type(&self, func: &Func) -> FuncType {
+    pub fn func_type(&self, func: &Func) -> FuncType {
         func.ty(&*self.store.borrow())
     }
 }

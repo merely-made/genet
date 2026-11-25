@@ -1,0 +1,14 @@
+[package]
+rust-version = "1.97.1"
+name = "genet-wasm"
+version = "0.0.0"
+edition = "2021"
+license = "MPL-2.0"
+publish = false
+description = "The engine-free half of Genet's WebAssembly object: a wasmi store, its handle tables, and the bootstrap."
+
+[dependencies]
+wasmi = { version = "2", default-features = false, features = ["std", "stable", "validate", "auto-dispatch"] }
+
+[lints]
+workspace = true

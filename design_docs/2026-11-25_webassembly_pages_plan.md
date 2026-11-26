@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. In progress: P1, P2, P5 and P6 met; P3 met as far as disk mode reaches; P4 in progress (D6).
+**Status:** 2026-11-25. Met: P1 to P6. P3 is met as far as disk mode reaches. Open: the items under Open questions and Findings 7, 13, 14 and 15.
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -160,6 +160,8 @@ the counts and what is missing.
    them up is open.
 3. **D7 of the archived plan.** A grow by zero pages from wasm still can't be seen. The fix needs a
    change in wasmi (Findings 1). Whether to propose that change upstream is Mark's call.
+4. **Vano's `FinalizationRegistry`.** Findings 14 describes the bug. Fixing it in Vano would let the
+   bootstrap drop its companion tokens.
 
 ## Findings
 
@@ -255,6 +257,31 @@ the counts and what is missing.
       results only.
     - **Lost in workers, likely from Findings 7.** Three "Empty module" subtests in
       `instantiateStreaming.any.worker.html`. Not confirmed.
+14. 2026-11-25: Vano's `FinalizationRegistry` loses a held value when exactly two cells are
+    queued. The cleanup job pops one value and then tests `queue.len() == 1`. That calls only the
+    popped value and drops the one left
+    (`nova_vm/src/ecmascript/execution/weak_ref_and_finalization_registry.rs:96`, Vano
+    `a739d12d`). The fix is `queue.is_empty()`.
+    - The bootstrap works around it. Each watched object also registers a companion token that
+      shares its held record, so cells always die in pairs and the record acts once.
+    - Registering one target twice doesn't help, because Vano keeps one cell per target.
+15. 2026-11-25: with P4, the host holds no buffer object. So the engines' resize hooks find a
+    resizable buffer's memory by its pointer, length and maximum (`genet-wasm` `memory.rs`,
+    `resizable_memory`).
+    - Boa's hook can't read the maximum.
+    - Empty memories all share wasmi's dangling pointer. When two empty resizable buffers are live,
+      resizing the older one resizes the newer one's memory.
+    - Telling them apart needs the hook to carry a key for each buffer, which means a change in
+      both forks.
+16. 2026-11-25: P4's held counts, after a forced collection:
+    - Modules compiled, instantiated and dropped in rounds of 50, and fresh objects passed as
+      externrefs in rounds of 50, both return to zero wrappers, buffers, handles and externs. The
+      idle store resets once a round.
+    - One object crossing 1000 times takes one slot.
+    - An import that closes over its own instance is collected.
+    - A buffer keeps its memory's bytes after the `Memory` and its instance are gone.
+    - Externrefs that enter a long-lived instance stay until its group dies and the store resets
+      (D6).
 
 ## Progress
 
@@ -279,3 +306,11 @@ the counts and what is missing.
   - Streaming compile and instantiate run on both engines, in documents and dedicated workers.
   - Page tests cover the checks.
   - `wasm_webapi_{boa,nova}.json` record the directory in disk mode.
+- 2026-11-25: P4 met (genet `07f220b41c7`).
+  - Handles are released through a `FinalizationRegistry` and a free-list slab.
+  - Import functions and externrefs are held by keepers in script, and buffers are recorded rather
+    than held.
+  - The wasmi store resets once nothing is live.
+  - Conformance passes, 38 tests on Vano and 36 on Bole.
+  - `wasm/jsapi` and `wasm/webapi` match their expectations on both engines, apart from Bole's
+    known `js-string/constants` worker timing.

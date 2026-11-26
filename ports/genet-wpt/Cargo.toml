@@ -59,8 +59,8 @@ image = { workspace = true }
 script-engine-api = { path = "../../components/script-engine-api" }
 genet-runtime = { path = "../../components/script-runtime-api" }
 genet-webrtc = { path = "../../components/genet-webrtc", optional = true }
-genet-bole = { path = "../../components/script-engine-boa" }
-genet-vano = { path = "../../components/script-engine-nova" }
+genet-bole = { path = "../../components/script-engine-boa", features = ["wasm"] }
+genet-vano = { path = "../../components/script-engine-nova", features = ["wasm"] }
 
 # Optional `fetch()` over netfetcher (the `netfetch` feature): wires the runtime's
 # FetchHandler seam to the netfetcher engine (sibling repo). Off by default so the

@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. In progress: P2 and P5 met; P1 reopened for frame realms; P6 in progress.
+**Status:** 2026-11-25. In progress: P2, P5 and P6 met; P1 reopened for frame realms; P4 design read in progress.
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -188,6 +188,11 @@ the counts and what is missing.
    files no longer match their checked-in baselines, for reasons other than this lane. Newly passing
    HTMLCollection and `getElementsBy*` tests account for some of it, and timeouts for the rest. They
    need re-recording on an idle machine.
+9. 2026-11-25: with wasmi's `simd` and `memory64` on, the standalone runner still reads 946 of
+   1066 on both engines. This checkout's `wasm/jsapi` has no tests that use `address` or SIMD, so
+   the new paths are covered by the shared tests in `conformance/wide.rs` alone. An i32 `Memory` or
+   `Table` still takes a BigInt for `initial`, `delta` and `index`, where the spec says `TypeError`.
+   No test checks this, so it is left open.
 
 ## Progress
 
@@ -201,3 +206,7 @@ the counts and what is missing.
   `wasm_jsapi_{boa,nova}.json` pin the directory.
 - 2026-11-25: P5 met (genet `beef06a1875`). genet-bole builds Boa with `annex-b`. The `wasm/jsapi`
   runner drops its `unescape` polyfill and still reads 946 of 1066 on both engines.
+- 2026-11-25: P6 met (genet `f41dad83a30`).
+  - wasmi's SIMD, relaxed SIMD and memory64 are on.
+  - `v128` throws `TypeError` at the boundary.
+  - `Memory` and `Table` take `address`, with BigInt limits for i64.

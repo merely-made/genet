@@ -354,10 +354,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
   `contentWindow` needs realms in `ScriptEngine` or stays permanently partial —
   plus `document.domain`, the cross-origin `WindowProxy`, COOP/COEP enforcement,
   child navigation, lazy loading, focus, and a headed script-driven receipt.)
-- [webassembly_object_plan](2026-11-22_webassembly_object_plan.md)
-  (**written 2026-11-22, nothing built**: a probe that gives scripts on Vano a
-  `WebAssembly` object backed by wasmi natively, memory aliasing included; D1 to
-  D3 ruled.)
+- [webassembly_pages_plan](2026-11-25_webassembly_pages_plan.md)
+  (**plan 2026-11-25**: the `WebAssembly` object in documents, workers and
+  genet-wpt; streaming compilation; freeing dropped entities; Annex B on Bole;
+  wasmi's SIMD and 64-bit memory. Cut from the WebAssembly object plan.)
 - [websocket_plan](2026-09-07_websocket_plan.md)
   (**landed 2026-09-07**: `WebSocket` and `CloseEvent` as a script-visible state
   machine over an extended netfetcher transport. Two halves, because WebSocket is
@@ -696,6 +696,10 @@ completed corpus census or bounded slice does not close its enclosing feature.
 Per policy §4 and §8: a plan moves here once complete and once its open
 points have a home elsewhere. Links into a moved plan are repaired in the
 same session; links out of it are rewritten for its new depth.
+
+### Archived 2026-11-25
+
+- [WebAssembly object](archive_docs/2026-11-25/2026-11-22_webassembly_object_plan.md) — `WebAssembly` on Vano and Bole through wasmi and the shared `genet-wasm` crate, 946 of 1066 `wasm/jsapi` subtests on both. The [WebAssembly pages plan](2026-11-25_webassembly_pages_plan.md) holds its open items.
 
 ### Archived 2026-11-20
 

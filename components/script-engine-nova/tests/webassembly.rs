@@ -4,7 +4,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 // SPDX-License-Identifier: MPL-2.0
 
-//! `design_docs/2026-11-22_webassembly_object_plan.md` on Vano: the shared
+//! `design_docs/archive_docs/2026-11-25/2026-11-22_webassembly_object_plan.md` on Vano: the shared
 //! tests in `genet-wasm/conformance`, and the snapshot clone, which only Vano
 //! has.
 #![cfg(all(target_pointer_width = "64", feature = "wasm"))]

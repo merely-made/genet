@@ -51,152 +51,6 @@ where
     where
         D: LayoutDom<NodeId = Id>,
     {
-        /// Grow the stack on demand for deeply nested documents.
-        fn collect<D>(
-            dom: &D,
-            styles: &StylePlane<D::NodeId>,
-            default_style: &ComputedValues,
-            node: D::NodeId,
-            inherited: Option<&ComputedValues>,
-            formatting_parent: Option<&ComputedValues>,
-            output: &mut Vec<BoxTreeInput<D::NodeId>>,
-        ) where
-            D: LayoutDom,
-            D::NodeId: Copy + Eq + Hash,
-        {
-            crate::with_recursion_stack(move || {
-                collect_on_this_stack(
-                    dom,
-                    styles,
-                    default_style,
-                    node,
-                    inherited,
-                    formatting_parent,
-                    output,
-                )
-            })
-        }
-
-        fn collect_on_this_stack<D>(
-            dom: &D,
-            styles: &StylePlane<D::NodeId>,
-            default_style: &ComputedValues,
-            node: D::NodeId,
-            inherited: Option<&ComputedValues>,
-            formatting_parent: Option<&ComputedValues>,
-            output: &mut Vec<BoxTreeInput<D::NodeId>>,
-        ) where
-            D: LayoutDom,
-            D::NodeId: Copy + Eq + Hash,
-        {
-            match dom.kind(node) {
-                NodeKind::Document | NodeKind::DocumentFragment => {
-                    for child in dom.flat_children(node) {
-                        collect(
-                            dom,
-                            styles,
-                            default_style,
-                            child,
-                            inherited,
-                            formatting_parent,
-                            output,
-                        );
-                    }
-                },
-                NodeKind::Element => {
-                    let computed = styles.get(node).unwrap_or(default_style);
-                    let mut children = Vec::new();
-                    // An `<iframe>`'s content model is transparent for legacy
-                    // reasons, but its fallback children are never rendered:
-                    // the box's content is the child browsing context, which
-                    // the paint walk splices in. Generating boxes for them
-                    // would both paint the fallback and stop the element being
-                    // a measured replaced leaf.
-                    if !is_frame_container(dom, node) {
-                        // `display: contents` does not become the formatting
-                        // parent of its children; flex/grid blockification
-                        // still comes from the nearest generated parent box.
-                        let child_formatting_parent = (computed.display
-                            != ComputedDisplay::Contents)
-                            .then_some(computed)
-                            .or(formatting_parent);
-                        if !is_replaced_element(dom, node) {
-                            generated_text_input(
-                                dom,
-                                styles,
-                                node,
-                                buckram::PseudoElement::Before,
-                                &mut children,
-                            );
-                        }
-                        for child in dom.flat_children(node) {
-                            collect(
-                                dom,
-                                styles,
-                                default_style,
-                                child,
-                                Some(computed),
-                                child_formatting_parent,
-                                &mut children,
-                            );
-                        }
-                        if !is_replaced_element(dom, node) {
-                            generated_text_input(
-                                dom,
-                                styles,
-                                node,
-                                buckram::PseudoElement::After,
-                                &mut children,
-                            );
-                        }
-                    }
-                    output.push(
-                        BoxTreeInput::new(
-                            BoxOrigin::Element(node),
-                            display_role(computed.display, is_replaced_element(dom, node)),
-                            flow_axes(computed),
-                            positioning_scheme(computed.position),
-                            is_replaced_element(dom, node),
-                            children,
-                        )
-                        .with_float(float_side(computed.float))
-                        .with_containing_block_establishment(containing_block_establishment(
-                            computed,
-                            is_replaced_element(dom, node),
-                            formatting_parent.is_some_and(|parent| {
-                                matches!(
-                                    parent.display,
-                                    ComputedDisplay::Flex
-                                        | ComputedDisplay::Grid
-                                        | ComputedDisplay::InlineGrid
-                                )
-                            }),
-                        )),
-                    );
-                },
-                NodeKind::Text => {
-                    let preserves_whitespace = inherited.is_some_and(|style| {
-                        matches!(
-                            style.white_space_collapse,
-                            WhiteSpaceCollapse::Preserve | WhiteSpaceCollapse::BreakSpaces
-                        )
-                    });
-                    let whitespace_only = dom.text(node).is_none_or(|text| {
-                        text.chars()
-                            .all(|ch| matches!(ch, ' ' | '\t' | '\n' | '\r' | '\u{c}'))
-                    });
-                    let collapsible_whitespace = !preserves_whitespace && whitespace_only;
-                    output.push(BoxTreeInput::text(
-                        BoxOrigin::Text(node),
-                        inherited.map(flow_axes).unwrap_or_default(),
-                        collapsible_whitespace,
-                        whitespace_only,
-                    ));
-                },
-                _ => {},
-            }
-        }
-
         let mut roots = Vec::new();
         let default_style = ComputedValues::default();
         collect(
@@ -217,6 +71,39 @@ where
         self.tree
     }
 
+    pub(crate) fn from_tree(tree: CssBoxTree<Id>) -> Self {
+        Self { tree }
+    }
+
+    /// The box-generation input `from_dom` gives `node` as a child of the
+    /// generating element `parent`.
+    pub(crate) fn child_input<D>(
+        dom: &D,
+        styles: &StylePlane<Id>,
+        node: Id,
+        parent: Id,
+    ) -> Option<BoxTreeInput<Id>>
+    where
+        D: LayoutDom<NodeId = Id>,
+    {
+        let parent_style = styles.get(parent)?;
+        if parent_style.display == ComputedDisplay::Contents {
+            return None;
+        }
+        let mut output = Vec::new();
+        collect(
+            dom,
+            styles,
+            &ComputedValues::default(),
+            node,
+            Some(parent_style),
+            Some(parent_style),
+            &mut output,
+        );
+        let input = output.pop()?;
+        output.is_empty().then_some(input)
+    }
+
     /// Take the previous tree's identities before formatting, so fragments
     /// formatted from this tree need no later box remap.
     pub(crate) fn reconcile_identifiers(
@@ -224,6 +111,153 @@ where
         previous: &CssBoxTree<Id>,
     ) -> std::collections::HashMap<buckram::BoxId, buckram::BoxId> {
         self.tree.reconcile_identifiers(previous)
+    }
+}
+
+/// Grow the stack on demand for deeply nested documents.
+fn collect<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    default_style: &ComputedValues,
+    node: D::NodeId,
+    inherited: Option<&ComputedValues>,
+    formatting_parent: Option<&ComputedValues>,
+    output: &mut Vec<BoxTreeInput<D::NodeId>>,
+) where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    crate::with_recursion_stack(move || {
+        collect_on_this_stack(
+            dom,
+            styles,
+            default_style,
+            node,
+            inherited,
+            formatting_parent,
+            output,
+        )
+    })
+}
+
+fn collect_on_this_stack<D>(
+    dom: &D,
+    styles: &StylePlane<D::NodeId>,
+    default_style: &ComputedValues,
+    node: D::NodeId,
+    inherited: Option<&ComputedValues>,
+    formatting_parent: Option<&ComputedValues>,
+    output: &mut Vec<BoxTreeInput<D::NodeId>>,
+) where
+    D: LayoutDom,
+    D::NodeId: Copy + Eq + Hash,
+{
+    match dom.kind(node) {
+        NodeKind::Document | NodeKind::DocumentFragment => {
+            for child in dom.flat_children(node) {
+                collect(
+                    dom,
+                    styles,
+                    default_style,
+                    child,
+                    inherited,
+                    formatting_parent,
+                    output,
+                );
+            }
+        },
+        NodeKind::Element => {
+            let computed = styles.get(node).unwrap_or(default_style);
+            let mut children = Vec::new();
+            // An `<iframe>`'s content model is transparent for legacy
+            // reasons, but its fallback children are never rendered:
+            // the box's content is the child browsing context, which
+            // the paint walk splices in. Generating boxes for them
+            // would both paint the fallback and stop the element being
+            // a measured replaced leaf.
+            if !is_frame_container(dom, node) {
+                // `display: contents` does not become the formatting
+                // parent of its children; flex/grid blockification
+                // still comes from the nearest generated parent box.
+                let child_formatting_parent = (computed.display != ComputedDisplay::Contents)
+                    .then_some(computed)
+                    .or(formatting_parent);
+                if !is_replaced_element(dom, node) {
+                    generated_text_input(
+                        dom,
+                        styles,
+                        node,
+                        buckram::PseudoElement::Before,
+                        &mut children,
+                    );
+                }
+                for child in dom.flat_children(node) {
+                    collect(
+                        dom,
+                        styles,
+                        default_style,
+                        child,
+                        Some(computed),
+                        child_formatting_parent,
+                        &mut children,
+                    );
+                }
+                if !is_replaced_element(dom, node) {
+                    generated_text_input(
+                        dom,
+                        styles,
+                        node,
+                        buckram::PseudoElement::After,
+                        &mut children,
+                    );
+                }
+            }
+            output.push(
+                BoxTreeInput::new(
+                    BoxOrigin::Element(node),
+                    display_role(computed.display, is_replaced_element(dom, node)),
+                    flow_axes(computed),
+                    positioning_scheme(computed.position),
+                    is_replaced_element(dom, node),
+                    children,
+                )
+                .with_float(float_side(computed.float))
+                .with_containing_block_establishment(
+                    containing_block_establishment(
+                        computed,
+                        is_replaced_element(dom, node),
+                        formatting_parent.is_some_and(|parent| {
+                            matches!(
+                                parent.display,
+                                ComputedDisplay::Flex
+                                    | ComputedDisplay::Grid
+                                    | ComputedDisplay::InlineGrid
+                            )
+                        }),
+                    ),
+                ),
+            );
+        },
+        NodeKind::Text => {
+            let preserves_whitespace = inherited.is_some_and(|style| {
+                matches!(
+                    style.white_space_collapse,
+                    WhiteSpaceCollapse::Preserve | WhiteSpaceCollapse::BreakSpaces
+                )
+            });
+            let whitespace_only = dom.text(node).is_none_or(|text| {
+                text.chars()
+                    .all(|ch| matches!(ch, ' ' | '\t' | '\n' | '\r' | '\u{c}'))
+            });
+            let collapsible_whitespace = !preserves_whitespace && whitespace_only;
+            output.push(BoxTreeInput::text(
+                BoxOrigin::Text(node),
+                inherited.map(flow_axes).unwrap_or_default(),
+                collapsible_whitespace,
+                whitespace_only,
+            ));
+        },
+        _ => {},
     }
 }
 

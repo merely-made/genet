@@ -163,7 +163,10 @@ pub(in crate::layout) fn definite_px_size(style: &ComputedValues) -> bool {
 }
 
 /// `root` and every generated descendant.
-fn box_subtree<Id>(boxes: &buckram::CssBoxTree<Id>, root: BoxId) -> Vec<BoxId> {
+pub(in crate::layout) fn box_subtree<Id>(
+    boxes: &buckram::CssBoxTree<Id>,
+    root: BoxId,
+) -> Vec<BoxId> {
     let mut collected = vec![root];
     let mut index = 0;
     while let Some(box_id) = collected.get(index).copied() {

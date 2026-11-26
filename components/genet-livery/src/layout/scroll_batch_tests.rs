@@ -15,6 +15,7 @@ use layout_dom_api::{LayoutDomMut, QualName, ShadowRootInit, ShadowRootMode, Slo
 use super::*;
 
 mod harness;
+mod splice;
 mod timing;
 use harness::*;
 

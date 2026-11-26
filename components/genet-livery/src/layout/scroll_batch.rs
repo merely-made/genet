@@ -13,6 +13,7 @@ use layout_dom_api::DomMutation;
 
 use super::query::Reposition;
 use super::scroll_batch_admit::definite_px_size;
+use super::scroll_batch_boxes::note_box_splice;
 use super::scroll_batch_format::format_positioned_root;
 use super::scroll_batch_shape::scroll_batch_shape;
 use super::*;
@@ -160,11 +161,24 @@ impl<Id: Copy + Eq + Hash> LiveryLayout<Id> {
                 entering: Vec::new(),
             }));
         };
-        let mut boxes = phase!("box tree", GeneratedBoxTree::from_dom(dom, styles));
-        phase!(
-            "box reconcile",
-            boxes.reconcile_identifiers(self.buckram.boxes())
-        );
+        let boxes = match phase!(
+            "box splice",
+            self.splice_scroll_batch_boxes(dom, styles, batch, parent)
+        ) {
+            Ok(boxes) => {
+                note_box_splice(Ok(()));
+                boxes
+            },
+            Err(reason) => {
+                note_box_splice(Err(reason));
+                let mut boxes = phase!("box tree", GeneratedBoxTree::from_dom(dom, styles));
+                phase!(
+                    "box reconcile",
+                    boxes.reconcile_identifiers(self.buckram.boxes())
+                );
+                boxes
+            },
+        };
         let Some(roots) = phase!(
             "admit structure",
             self.admit_structure(dom, styles, &boxes, batch, parent)

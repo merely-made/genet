@@ -89,6 +89,7 @@ mod retained;
 mod retained_session;
 mod scroll_batch;
 mod scroll_batch_admit;
+mod scroll_batch_boxes;
 mod scroll_batch_format;
 mod scroll_batch_shape;
 #[cfg(test)]

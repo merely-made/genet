@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. In progress: P1, P2, P5 and P6 met; P3 and P4 in progress (D6).
+**Status:** 2026-11-25. In progress: P1, P2, P5 and P6 met; P3 met as far as disk mode reaches; P4 in progress (D6).
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -236,6 +236,25 @@ the counts and what is missing.
       needed. `script-runtime-api` already uses it with native callbacks (`fetch.rs:933`).
     - **GC differs by engine.** Vano collects only when the embedder asks: pages once per frame, and
       workers have no cadence. Bole collects on its own allocation threshold.
+12. 2026-11-25: `compileStreaming` and `instantiateStreaming` live in `script-runtime-api`
+    (`wasm_streaming.js`), beside `Response`. Each realm evaluates them once `WebAssembly` is
+    installed. The MIME check is a case-insensitive exact match on `application/wasm`, as
+    `contenttype.any.js` expects, so parameters are refused. The body is read whole through
+    `arrayBuffer()`, with no true streaming.
+13. 2026-11-25: genet-wpt `wasm/webapi` in disk mode reads 492 of 562 on both engines (19 of 56 files
+    all-pass).
+    - **Needs a server.** `abort`, `historical` and the accepting cases of `contenttype` fetch
+      `incrementer.wasm`, which disk mode can't serve. The window halves of
+      `wasm_stream_{compile,instantiate}_test` and their CORS cases are server-bound too.
+    - **Out of scope.** `esm-integration`.
+    - **Worker variants.** In workers, disk fetch works, and the ArrayBuffer, stream, blob and
+      FormData cases pass. That is the evidence the checks are right.
+    - **No server on this Mac.** `wpt serve` fails here: there is no `python` on PATH, it crashes
+      importing `pywebsocket3` under Python 3.15, and there are no `web-platform.test` hosts entries.
+      Until it runs, the server-bound subtests are untested and the `wasm_webapi_*` files hold disk
+      results only.
+    - **Lost in workers, likely from Findings 7.** Three "Empty module" subtests in
+      `instantiateStreaming.any.worker.html`. Not confirmed.
 
 ## Progress
 
@@ -256,3 +275,7 @@ the counts and what is missing.
 - 2026-11-25: P1 met in full (genet `e8d3da0f3a4`). `install_webassembly_from_call` gives realms made
   inside a native callback the object: iframes, and the document a top-level navigation opens.
   Iframe tests pass on both engines.
+- 2026-11-25: P3 met in disk mode (genet `91e1cdd0b08`, `9f9e989a4dc`).
+  - Streaming compile and instantiate run on both engines, in documents and dedicated workers.
+  - Page tests cover the checks.
+  - `wasm_webapi_{boa,nova}.json` record the directory in disk mode.

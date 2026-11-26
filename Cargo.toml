@@ -330,7 +330,7 @@ url = "2.5"
 urlpattern = "0.3"
 utf-8 = "0.7"
 uuid = { version = "1.23.1", features = ["v4", "v5"] }
-vello_cpu = { version = "0.3.0", git = "https://github.com/mark-ik/vello", branch = "mark-ik/all-vellos" }
+vello_cpu = { package = "netrender-cpu", version = ">=0.4.0" }
 webdriver = { version = "0.53.0", default-features = false }
 webpki-roots = "1.0.10"
 web_atoms = "0.2"

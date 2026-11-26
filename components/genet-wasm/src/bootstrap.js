@@ -117,17 +117,7 @@
       if (wrappers?.get(held.handle)?.deref() === undefined) wrappers?.delete(held.handle);
     }
   });
-  // Vano's cleanup job drops a cell when exactly two have died together, and
-  // a registry keeps one cell for each target. So every object gets a token
-  // that dies with it and is registered too, with the same `held`, which is
-  // acted on once. The cells then come in pairs, and a pair is enough.
-  const tokens = new WeakMap();
-  const watch = (object, held) => {
-    const token = {};
-    tokens.set(object, token);
-    registry.register(object, held);
-    registry.register(token, held);
-  };
+  const watch = (object, held) => registry.register(object, held);
   const own = (kind, handle, object) => {
     N.Retain(kind, handle);
     watch(object, { kind, handle, done: false });

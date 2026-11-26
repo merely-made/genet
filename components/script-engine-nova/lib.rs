@@ -1975,10 +1975,8 @@ mod native {
             self.agent.run_in_realm(&self.realm, |agent, _gc| {
                 drain_release(agent, &release);
             });
-            // Two passes: Nova finalizes the weak references whose targets the first
-            // cycle reclaimed on the second, so a just-dropped reflector becomes
-            // observable to `drain_dead_reflectors` — the engine half of the GC tick.
-            self.agent.gc();
+            // Vano clears dead weak targets in this pass, so the reflector cache
+            // can report their deaths immediately after collection.
             self.agent.gc();
         }
 
@@ -3298,21 +3296,32 @@ mod native {
             }
             engine.set_function::<Canonical>("canonical", 0).unwrap();
 
-            // Hold the reflector from JS; canonical identity holds (=== same object)
-            // and no death is reported while it is referenced.
+            // Keep the reflector reachable only through an ephemeron with a live key.
             engine
-                .eval("globalThis.x = canonical(); globalThis.same = (canonical() === x);")
+                .eval(
+                    "globalThis.key = {}; \
+                     globalThis.ref = new WeakRef(canonical()); \
+                     globalThis.map = new WeakMap([[key, canonical()]]);",
+                )
                 .unwrap();
-            let same = engine.eval("same").unwrap();
+            engine.force_gc();
+            let same = engine
+                .eval("map.get(key) !== undefined && map.get(key) === ref.deref()")
+                .unwrap();
             assert_eq!(engine.value_to_string(&same).unwrap(), "true");
             assert!(engine.drain_dead_reflectors().is_empty());
 
-            // Drop the last JS reference, run the microtask checkpoint (ClearKeptObjects)
-            // and the GC: the weak cache now reports the death.
-            engine.eval("globalThis.x = null;").unwrap();
-            engine.pump_microtasks();
-            engine.agent.gc();
-            engine.agent.gc();
+            // The dead key makes the ephemeron unreachable. A host value still
+            // keeps the reflector alive until its release is drained.
+            let held = engine.eval("globalThis.key = null; ref.deref()").unwrap();
+            engine.force_gc();
+            assert!(engine.drain_dead_reflectors().is_empty());
+            drop(held);
+            assert_eq!(engine.minted_reflectors(), vec![0x42]);
+
+            engine.force_gc();
+            let dead = engine.eval("ref.deref() === undefined").unwrap();
+            assert_eq!(engine.value_to_string(&dead).unwrap(), "true");
             assert!(
                 engine.minted_reflectors().is_empty(),
                 "policy inventory must omit a weak-dead reflector without sweeping it"

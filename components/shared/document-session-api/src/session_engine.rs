@@ -692,8 +692,9 @@ impl HostMutation {
 }
 
 /// What a [`HostMutation`] does to its target. The four shapes the T3
-/// instrument needs: replace an attribute (`style`, `class`), drop one, grow
-/// the subtree, shrink it.
+/// instrument needs (replace an attribute, drop one, grow the subtree, shrink
+/// it) and two for a mod replaying a page edit: remove the target, insert a
+/// sibling before it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HostMutationOp {
     /// Set or replace an attribute in the null namespace.
@@ -709,6 +710,16 @@ pub enum HostMutationOp {
     /// Remove the target's last element child. A target with no element child
     /// is reported as a miss, not an error.
     RemoveLastChild,
+    /// Remove the target element itself. A target with no parent is a miss.
+    Remove,
+    /// Insert one new element immediately before the target, as its previous
+    /// sibling, optionally carrying a class and one text node. A target with no
+    /// parent is a miss.
+    InsertBefore {
+        tag: String,
+        class: Option<String>,
+        text: Option<String>,
+    },
 }
 
 /// What one [`DocumentSession::apply_host_mutations`] batch actually did.

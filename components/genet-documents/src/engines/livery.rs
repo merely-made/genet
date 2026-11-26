@@ -310,6 +310,26 @@ pub(crate) fn element_with_id<D: LayoutDom>(dom: &D, id: &str) -> Option<D::Node
     walk(dom, dom.document(), id)
 }
 
+/// One detached element with an optional class and one optional text child.
+#[cfg(feature = "livery")]
+fn new_element<D: LayoutDomMut>(
+    dom: &mut D,
+    qual: &dyn Fn(&str) -> QualName,
+    tag: &str,
+    class: Option<&str>,
+    text: Option<&str>,
+) -> D::NodeId {
+    let child = dom.create_element(qual(tag));
+    if let Some(class) = class {
+        dom.set_attribute(child, qual("class"), class);
+    }
+    if let Some(text) = text {
+        let text_node = dom.create_text(text);
+        dom.append_child(child, text_node);
+    }
+    child
+}
+
 /// Every element `id` beginning with `prefix`, in document order.
 #[cfg(feature = "livery")]
 fn collect_ids_with_prefix<D: LayoutDom>(
@@ -2447,16 +2467,34 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                         applied += 1;
                     },
                     HostMutationOp::AppendChild { tag, class, text } => {
-                        let child = dom.create_element(qual(tag));
-                        if let Some(class) = class {
-                            dom.set_attribute(child, qual("class"), class);
-                        }
-                        if let Some(text) = text {
-                            let text_node = dom.create_text(text);
-                            dom.append_child(child, text_node);
-                        }
+                        let child =
+                            new_element(dom, &qual, tag, class.as_deref(), text.as_deref());
                         dom.append_child(*node, child);
                         applied += 1;
+                    },
+                    HostMutationOp::InsertBefore { tag, class, text } => {
+                        match dom.parent(*node) {
+                            Some(parent) => {
+                                let child = new_element(
+                                    dom,
+                                    &qual,
+                                    tag,
+                                    class.as_deref(),
+                                    text.as_deref(),
+                                );
+                                dom.insert_before(parent, child, Some(*node));
+                                applied += 1;
+                            },
+                            None => missed += 1,
+                        }
+                    },
+                    HostMutationOp::Remove => {
+                        if dom.parent(*node).is_some() {
+                            dom.remove(*node);
+                            applied += 1;
+                        } else {
+                            missed += 1;
+                        }
                     },
                     HostMutationOp::RemoveLastChild => {
                         let children: Vec<_> = dom.dom_children(*node).collect();

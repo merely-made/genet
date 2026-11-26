@@ -2716,6 +2716,92 @@ fn a_host_append_paints_and_its_removal_repaints_without_it() {
     assert_eq!((report.applied, report.missed), (0, 1));
 }
 
+/// Removing the target itself drops its box; inserting before a target adds one
+/// as its previous sibling. Both go through the engine's restyle path.
+#[cfg(feature = "livery")]
+#[test]
+fn a_host_remove_and_insert_before_restyle_and_repaint() {
+    use document_session_api::session_engine::{HostMutation, HostMutationOp};
+
+    let mut session = host_mutation_fixture();
+    let baseline = rect_count(&session.frame(320, 240));
+
+    let report = session
+        .apply_host_mutations(&[HostMutation::new(
+            "ctl1",
+            HostMutationOp::InsertBefore {
+                tag: "div".to_owned(),
+                class: Some("tick".to_owned()),
+                text: Some("x".to_owned()),
+            },
+        )])
+        .expect("insert-before is wired");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    assert!(
+        report.restyled_elements > 0,
+        "an inserted element is styled by the engine, not just parented"
+    );
+    assert_eq!(rect_count(&session.frame(320, 240)), baseline + 1);
+    {
+        let concrete = session
+            .as_any()
+            .downcast_ref::<LiveryDocumentSession>()
+            .expect("retained livery session");
+        let dom = concrete.document().dom();
+        let ctl1 = super::livery::element_with_id(dom, "ctl1").expect("ctl1 is live");
+        let before = dom.prev_sibling(ctl1).expect("a sibling now precedes ctl1");
+        assert_eq!(dom.attribute(before, &Namespace::default(), &LocalName::from("class")), Some("tick"));
+    }
+
+    let report = session
+        .apply_host_mutations(&[HostMutation::new("ctl1", HostMutationOp::Remove)])
+        .expect("remove is wired");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    assert_eq!(
+        rect_count(&session.frame(320, 240)),
+        baseline,
+        "the inserted box stays, the removed control's box goes"
+    );
+
+    // The removed element is gone: a second remove misses on the unresolved id.
+    let report = session
+        .apply_host_mutations(&[HostMutation::new("ctl1", HostMutationOp::Remove)])
+        .expect("a stale target is still a well-formed batch");
+    assert_eq!((report.applied, report.missed), (0, 1));
+}
+
+/// A removal restyles what depended on the removed element: with an adjacent-
+/// sibling rule, removing the first box restyles the second. (Where nothing
+/// depends on it, the engine recomputes nothing and reports zero.)
+#[cfg(feature = "livery")]
+#[test]
+fn a_host_remove_restyles_the_siblings_that_depended_on_it() {
+    use document_session_api::session_engine::{HostMutation, HostMutationOp};
+
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/sibling")
+        .with_body(
+            r#"<html><head><style>
+                html, body { margin: 0; padding: 0; }
+                div { display: block; width: 40px; height: 20px; background: #334455; }
+                .first + .second { background: #cc8844; }
+            </style></head><body>
+            <div class="first" id="a"></div><div class="second" id="b"></div>
+            </body></html>"#,
+        )
+        .with_viewport(320, 240);
+    let mut session = engine.spawn(&request).expect("livery session spawns");
+    let _ = session.frame(320, 240);
+    let report = session
+        .apply_host_mutations(&[HostMutation::new("a", HostMutationOp::Remove)])
+        .expect("remove is wired");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    assert!(
+        report.restyled_elements > 0,
+        "the sibling rule no longer matches, so the engine restyles the second box"
+    );
+}
+
 /// An unresolved id is reported, not fatal: a sweep over a fixture whose ids
 /// run out must say so rather than fail the run.
 #[cfg(feature = "livery")]

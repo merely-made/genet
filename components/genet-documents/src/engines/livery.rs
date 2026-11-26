@@ -2432,7 +2432,9 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         document_session_api::session_engine::HostMutationReport,
         document_session_api::session_engine::SessionError,
     > {
-        use document_session_api::session_engine::{HostMutationOp, HostMutationReport};
+        use document_session_api::session_engine::{
+            HostMutationOp, HostMutationReport, HostNewNode, HostTarget,
+        };
 
         let mut report = HostMutationReport::default();
         if mutations.is_empty() {
@@ -2444,7 +2446,15 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
         let mut plan: Vec<(genet_scripted_dom::NodeId, &HostMutationOp)> =
             Vec::with_capacity(mutations.len());
         for mutation in mutations {
-            match element_with_id(self.doc.dom(), &mutation.target_id) {
+            let dom = self.doc.dom();
+            let node = match &mutation.target {
+                HostTarget::Id(id) => element_with_id(dom, id),
+                HostTarget::Node(raw) => {
+                    let node = genet_scripted_dom::NodeId::from_raw(*raw);
+                    dom.is_live(node).then_some(node)
+                },
+            };
+            match node {
                 Some(node) => plan.push((node, &mutation.op)),
                 None => report.missed += 1,
             }
@@ -2457,6 +2467,11 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
             let mut applied = 0usize;
             let mut missed = 0usize;
             for (node, op) in &plan {
+                // An earlier op in the batch may have removed this target.
+                if !dom.is_live(*node) {
+                    missed += 1;
+                    continue;
+                }
                 match op {
                     HostMutationOp::SetAttribute { name, value } => {
                         dom.set_attribute(*node, qual(name), value);
@@ -2472,20 +2487,30 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                         dom.append_child(*node, child);
                         applied += 1;
                     },
-                    HostMutationOp::InsertBefore { tag, class, text } => {
-                        match dom.parent(*node) {
-                            Some(parent) => {
-                                let child = new_element(
+                    HostMutationOp::InsertBefore { node: new } => match dom.parent(*node) {
+                        Some(parent) => {
+                            let child = match new {
+                                HostNewNode::Element { tag, class, text } => new_element(
                                     dom,
                                     &qual,
                                     tag,
                                     class.as_deref(),
                                     text.as_deref(),
-                                );
-                                dom.insert_before(parent, child, Some(*node));
-                                applied += 1;
-                            },
-                            None => missed += 1,
+                                ),
+                                HostNewNode::Text(data) => dom.create_text(data),
+                                HostNewNode::Comment(data) => dom.create_comment(data),
+                            };
+                            dom.insert_before(parent, child, Some(*node));
+                            applied += 1;
+                        },
+                        None => missed += 1,
+                    },
+                    HostMutationOp::SetText { text } => {
+                        if matches!(dom.kind(*node), NodeKind::Text | NodeKind::Comment) {
+                            dom.set_text(*node, text);
+                            applied += 1;
+                        } else {
+                            missed += 1;
                         }
                     },
                     HostMutationOp::Remove => {

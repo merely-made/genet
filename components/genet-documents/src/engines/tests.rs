@@ -2730,9 +2730,11 @@ fn a_host_remove_and_insert_before_restyle_and_repaint() {
         .apply_host_mutations(&[HostMutation::new(
             "ctl1",
             HostMutationOp::InsertBefore {
-                tag: "div".to_owned(),
-                class: Some("tick".to_owned()),
-                text: Some("x".to_owned()),
+                node: document_session_api::session_engine::HostNewNode::Element {
+                    tag: "div".to_owned(),
+                    class: Some("tick".to_owned()),
+                    text: Some("x".to_owned()),
+                },
             },
         )])
         .expect("insert-before is wired");
@@ -2800,6 +2802,210 @@ fn a_host_remove_restyles_the_siblings_that_depended_on_it() {
         report.restyled_elements > 0,
         "the sibling rule no longer matches, so the engine restyles the second box"
     );
+}
+
+/// Targets by node identity reach nodes with no `id`: text and comments can be
+/// set, inserted before and removed, and a stale or foreign identity is a miss.
+#[cfg(feature = "livery")]
+#[test]
+fn a_host_targets_text_and_comment_nodes_by_identity() {
+    use document_session_api::session_engine::{HostMutation, HostMutationOp, HostNewNode};
+
+    let engine = LiverySessionEngine::new(NoFetch);
+    let request = SessionSpawnRequest::new("https://example.test/text")
+        .with_body(
+            r#"<html><head><style>
+                html, body { margin: 0; padding: 0; }
+                p { display: block; margin: 0; font-size: 16px; }
+            </style></head><body><p id="p">Hello</p></body></html>"#,
+        )
+        .with_viewport(320, 240);
+    let mut session = engine.spawn(&request).expect("livery session spawns");
+    let before = session.frame(320, 240);
+
+    let (text, para) = {
+        let concrete = session
+            .as_any()
+            .downcast_ref::<LiveryDocumentSession>()
+            .expect("retained livery session");
+        let dom = concrete.document().dom();
+        let para = super::livery::element_with_id(dom, "p").expect("p is live");
+        let text = dom.dom_children(para).next().expect("p holds a text node");
+        (dom.opaque_id(text), dom.opaque_id(para))
+    };
+
+    let report = session
+        .apply_host_mutations(&[HostMutation::node(
+            text,
+            HostMutationOp::SetText {
+                text: "Hello, mod".to_owned(),
+            },
+        )])
+        .expect("set-text is wired");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    let after = session.frame(320, 240);
+    assert_ne!(
+        format!("{:?}", before.ops),
+        format!("{:?}", after.ops),
+        "the new text shapes and paints differently"
+    );
+
+    // A comment before the text, then a text node before the comment; both
+    // reached by identity, neither carrying an id.
+    let report = session
+        .apply_host_mutations(&[HostMutation::node(
+            text,
+            HostMutationOp::InsertBefore {
+                node: HostNewNode::Comment("note".to_owned()),
+            },
+        )])
+        .expect("insert-before takes a comment");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    let comment = {
+        let concrete = session.as_any().downcast_ref::<LiveryDocumentSession>().unwrap();
+        let dom = concrete.document().dom();
+        let node = genet_scripted_dom::NodeId::from_raw(text);
+        dom.opaque_id(dom.prev_sibling(node).expect("the comment precedes the text"))
+    };
+    let report = session
+        .apply_host_mutations(&[
+            HostMutation::node(
+                comment,
+                HostMutationOp::InsertBefore {
+                    node: HostNewNode::Text("Say: ".to_owned()),
+                },
+            ),
+            HostMutation::node(comment, HostMutationOp::Remove),
+        ])
+        .expect("a text node is inserted and a comment removed");
+    assert_eq!((report.applied, report.missed), (2, 0));
+    let concrete = session.as_any().downcast_ref::<LiveryDocumentSession>().unwrap();
+    let dom = concrete.document().dom();
+    let para_node = genet_scripted_dom::NodeId::from_raw(para);
+    let data: Vec<_> = dom
+        .dom_children(para_node)
+        .map(|child| dom.text(child).unwrap_or("").to_owned())
+        .collect();
+    assert_eq!(data, ["Say: ", "Hello, mod"]);
+
+    // Set-text on an element, a removed node and a foreign identity all miss.
+    let report = session
+        .apply_host_mutations(&[
+            HostMutation::node(para, HostMutationOp::SetText { text: "x".to_owned() }),
+            HostMutation::node(comment, HostMutationOp::Remove),
+            HostMutation::node(u64::MAX, HostMutationOp::Remove),
+        ])
+        .expect("misses are not errors");
+    assert_eq!((report.applied, report.missed), (0, 3));
+}
+
+/// MP5b (c) measurement: the DOM mutation count (`mutation_base` plus pending)
+/// a page-moved gate would read. Image loads, hover and focus are engine-side
+/// changes; this records whether each one advances it.
+#[cfg(feature = "livery")]
+#[test]
+fn engine_side_changes_do_not_advance_the_dom_mutation_count() {
+    use document_session_api::session_engine::{
+        SessionFocusDirection, SessionInput, SessionModifiers,
+    };
+
+    fn count(session: &dyn DocumentSession<Scene>) -> u64 {
+        let concrete = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .expect("retained livery session");
+        let (base, pending) = concrete.document().dom().pending_mutations();
+        base + pending.len() as u64
+    }
+
+    let image = image::RgbaImage::from_pixel(2, 3, image::Rgba([0, 0, 255, 255]));
+    let mut bytes = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png)
+        .expect("encode test PNG");
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let engine = LiverySessionEngine::new(ImageFetch { bytes, requests });
+    let request = SessionSpawnRequest::new("https://example.test/docs/index.html")
+        .with_body(
+            r##"<html><head><style>
+                html, body { margin: 0; padding: 0; }
+                .card { display: block; width: 80px; height: 40px; background-image: url(hero.png); }
+                .hov { display: block; width: 80px; height: 40px; background: #334455; }
+                .hov:hover { background: #cc8844; }
+                a:focus, input:focus { outline: 2px solid red; }
+            </style></head><body>
+            <div class="card"></div><img src="hero.png" width="20" height="20">
+            <div class="hov"></div><a href="#x">link</a> <input type="text">
+            </body></html>"##,
+        )
+        .with_viewport(320, 240);
+    let mut session = engine.spawn(&request).expect("Livery lane spawns");
+    let spawned = count(session.as_ref());
+    let first = session.frame(320, 240);
+    let images = first
+        .ops
+        .iter()
+        .filter(|op| matches!(op, netrender::SceneOp::Image(_)))
+        .count();
+    assert!(images >= 1, "positive control: the image loaded and painted");
+    let framed = count(session.as_ref());
+    let dump = |scene: &Scene| format!("{:?}", scene.ops);
+    let still = dump(&first);
+    session.input(SessionInput::PointerMoved {
+        x: 10.0,
+        y: 70.0,
+        modifiers: SessionModifiers::default(),
+    });
+    let hover_scene = session.frame(320, 240);
+    // The Livery session wires no :hover state today, so hover also paints
+    // nothing new; the count claim below holds either way.
+    let _ = (&hover_scene, &still);
+    let hovered = count(session.as_ref());
+    session.input(SessionInput::PointerMoved {
+        x: 300.0,
+        y: 230.0,
+        modifiers: SessionModifiers::default(),
+    });
+    let _ = session.frame(320, 240);
+    let unhovered = count(session.as_ref());
+    session.input(SessionInput::FocusMove(SessionFocusDirection::Forward));
+    session.input(SessionInput::FocusMove(SessionFocusDirection::Forward));
+    let _ = session.frame(320, 240);
+    let focus_held = session
+        .as_any_ref()
+        .downcast_ref::<LiveryDocumentSession>()
+        .expect("retained livery session")
+        .focused_node
+        .is_some();
+    assert!(focus_held, "positive control: focus moved onto a control");
+    let focused = count(session.as_ref());
+    session.input(SessionInput::Text("ab".into()));
+    let _ = session.frame(320, 240);
+    let typed = count(session.as_ref());
+    let probe = session
+        .apply_host_mutations(&[document_session_api::session_engine::HostMutation::node(
+            {
+                let c = session.as_any_ref().downcast_ref::<LiveryDocumentSession>().unwrap();
+                c.document().dom().opaque_id(c.document().dom().document())
+            },
+            document_session_api::session_engine::HostMutationOp::SetAttribute {
+                name: "data-x".into(),
+                value: "1".into(),
+            },
+        )])
+        .unwrap();
+    assert_eq!(probe.applied, 1);
+    let after_host = count(session.as_ref());
+    assert_eq!(after_host, typed + 1, "positive control: a host mutation advances the count");
+    for (what, value) in [
+        ("first frame (image load)", framed),
+        ("hover", hovered),
+        ("pointer leave", unhovered),
+        ("focus moves", focused),
+        ("typed text", typed),
+    ] {
+        assert_eq!(value, spawned, "{what} must not advance the DOM mutation count");
+    }
 }
 
 /// An unresolved id is reported, not fatal: a sweep over a fixture whose ids

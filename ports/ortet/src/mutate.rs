@@ -13,7 +13,7 @@
 //! alone, so two runs of the same spec on the same document produce the same
 //! batches — which is what makes the timing comparable between runs.
 
-use document_session_api::session_engine::{HostMutation, HostMutationOp};
+use document_session_api::session_engine::{HostMutation, HostMutationOp, HostTarget};
 
 /// One mutation stream from the command line.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -250,12 +250,12 @@ mod tests {
 
         let first = plan.batch(0);
         assert_eq!(first.len(), 2);
-        assert_eq!(first[0].target_id, "ctl0");
-        assert_eq!(first[1].target_id, "ctl1");
+        assert_eq!(first[0].target, HostTarget::Id("ctl0".to_owned()));
+        assert_eq!(first[1].target, HostTarget::Id("ctl1".to_owned()));
         // Frame 1 continues the window, wrapping over the three targets.
         let second = plan.batch(1);
-        assert_eq!(second[0].target_id, "ctl2");
-        assert_eq!(second[1].target_id, "ctl0");
+        assert_eq!(second[0].target, HostTarget::Id("ctl2".to_owned()));
+        assert_eq!(second[1].target, HostTarget::Id("ctl0".to_owned()));
         assert_eq!(plan.batch(0), first, "the same frame is the same batch");
         assert_ne!(first[0].op, second[1].op, "the value moves with the frame");
     }
@@ -274,12 +274,12 @@ mod tests {
         assert_eq!(plan.batch(1)[0].op, HostMutationOp::RemoveLastChild);
         // The removal must land on the element the append grew, or the stream
         // reports misses instead of work.
-        assert_eq!(plan.batch(0)[0].target_id, plan.batch(1)[0].target_id);
+        assert_eq!(plan.batch(0)[0].target, plan.batch(1)[0].target);
         assert!(matches!(
             plan.batch(2)[0].op,
             HostMutationOp::AppendChild { .. }
         ));
-        assert_ne!(plan.batch(2)[0].target_id, plan.batch(1)[0].target_id);
+        assert_ne!(plan.batch(2)[0].target, plan.batch(1)[0].target);
     }
 
     /// A prefix that matches nothing stays in the plan and says so, rather

@@ -670,31 +670,65 @@ impl SessionPendingWork {
 /// document directly, the way Cambium's Rootstock drives its own DOM through
 /// `LayoutDomMut`, without a script engine in the picture. Sessions translate
 /// it into their own node ids and their own `drain_mutations` / restyle path;
-/// nothing about node identity, dirty bits, or style crosses this boundary.
+/// dirty bits and style never cross this boundary (a node identity may, as a
+/// target).
 ///
-/// The target is an element's `id` attribute rather than an opaque node
-/// handle, because a host that did not build the document has no other stable
-/// name for one of its elements.
+/// The target is named either by an element's `id` attribute or by the node's
+/// identity ([`HostTarget`]). A host that did not build the document has no
+/// other stable name for an element with an id, and no name at all for one
+/// without; identity names any node, text and comments included.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HostMutation {
-    /// The value of the target element's `id` attribute.
-    pub target_id: String,
+    pub target: HostTarget,
     pub op: HostMutationOp,
 }
 
+/// How a [`HostMutation`] names its target.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HostTarget {
+    /// The first element whose `id` attribute has this value.
+    Id(String),
+    /// A node by its opaque identity, as the session's DOM reports it. The
+    /// session validates it is live in its own document; an identity from
+    /// another document, or of a node since removed, is a miss.
+    Node(u64),
+}
+
 impl HostMutation {
+    /// A mutation targeting an element by `id`.
     pub fn new(target_id: impl Into<String>, op: HostMutationOp) -> Self {
         Self {
-            target_id: target_id.into(),
+            target: HostTarget::Id(target_id.into()),
+            op,
+        }
+    }
+
+    /// A mutation targeting a node by identity.
+    pub fn node(node: u64, op: HostMutationOp) -> Self {
+        Self {
+            target: HostTarget::Node(node),
             op,
         }
     }
 }
 
+/// A new node for [`HostMutationOp::InsertBefore`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HostNewNode {
+    /// An element, optionally carrying a class and one text node.
+    Element {
+        tag: String,
+        class: Option<String>,
+        text: Option<String>,
+    },
+    Text(String),
+    Comment(String),
+}
+
 /// What a [`HostMutation`] does to its target. The four shapes the T3
 /// instrument needs (replace an attribute, drop one, grow the subtree, shrink
-/// it) and two for a mod replaying a page edit: remove the target, insert a
-/// sibling before it.
+/// it) and three for a mod replaying a page edit: set a text or comment node's
+/// data, remove any node, insert a node before one.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HostMutationOp {
     /// Set or replace an attribute in the null namespace.
@@ -710,16 +744,14 @@ pub enum HostMutationOp {
     /// Remove the target's last element child. A target with no element child
     /// is reported as a miss, not an error.
     RemoveLastChild,
-    /// Remove the target element itself. A target with no parent is a miss.
+    /// Replace the data of a text or comment node. Any other target is a miss.
+    SetText { text: String },
+    /// Remove the target node, whatever its kind. A target with no parent is a
+    /// miss.
     Remove,
-    /// Insert one new element immediately before the target, as its previous
-    /// sibling, optionally carrying a class and one text node. A target with no
-    /// parent is a miss.
-    InsertBefore {
-        tag: String,
-        class: Option<String>,
-        text: Option<String>,
-    },
+    /// Insert a new node immediately before the target, as its previous
+    /// sibling. A target with no parent is a miss.
+    InsertBefore { node: HostNewNode },
 }
 
 /// What one [`DocumentSession::apply_host_mutations`] batch actually did.

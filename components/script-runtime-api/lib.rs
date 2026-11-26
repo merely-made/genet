@@ -44,7 +44,7 @@ use genet_scripted_dom::{NodeId, ScriptedDom};
 use layout_dom_api::LayoutDom;
 use script_engine_api::{
     CallCx, MAIN_REALM, NativeFn, RealmError, RealmId, ReflectorData, ScriptEngine,
-    ScriptEngineSnapshot,
+    ScriptEngineSnapshot, WasmInstallError,
 };
 
 /// The owner-resolved accessor every native sink reads nodes through.
@@ -881,6 +881,15 @@ fn install_date_source<E: ScriptEngine>(engine: &mut E, clock: &SharedClock) {
     engine.set_date_source(Rc::new(move || clock.epoch_now_ms()));
 }
 
+/// Give `realm` a `WebAssembly` object, unbounded (the embedder sets no fuel).
+/// An engine without it keeps its realms as they are.
+fn install_webassembly<E: ScriptEngine>(engine: &mut E, realm: RealmId) -> Result<(), String> {
+    match engine.install_webassembly(realm, None) {
+        Ok(()) | Err(WasmInstallError::Unsupported) => Ok(()),
+        Err(WasmInstallError::Engine(message)) => Err(message),
+    }
+}
+
 impl<E: ScriptEngine> Runtime<E> {
     /// Construct an engine and install the `Window` host surface on it.
     pub fn new() -> Result<Self, E::Error> {
@@ -1003,6 +1012,8 @@ impl<E: ScriptEngine> Runtime<E> {
         };
         if scope == GlobalScopeKind::Window {
             runtime.open_top_realm()?;
+        } else if let Err(message) = install_webassembly(&mut runtime.engine, MAIN_REALM) {
+            return Err(runtime.engine_error(&message));
         }
         Ok(runtime)
     }
@@ -1283,6 +1294,7 @@ impl<E: ScriptEngine> Runtime<E> {
             self.agent.borrow_mut().task_hooks.extend(hooks.into_iter().map(|(key, value)| {
                 (key, value as Rc<dyn std::any::Any>)
             }));
+            install_webassembly(&mut self.engine, realm).map_err(RealmError::Engine)?;
             self.engine.eval_in_realm(
                 realm,
                 "delete globalThis.__agentTimers; delete globalThis.__realmId",

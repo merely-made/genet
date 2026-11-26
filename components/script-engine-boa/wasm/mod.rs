@@ -18,7 +18,8 @@ use std::rc::Rc;
 
 use boa_engine::context::HostHooks;
 use boa_engine::object::builtins::JsArrayBuffer;
-use boa_engine::{Context, JsResult, JsString, JsValue, NativeFunction, Source};
+use boa_engine::{Context, JsNativeError, JsResult, JsString, JsValue, NativeFunction, Source};
+use script_engine_api::{MAIN_REALM, RealmId};
 
 use crate::BoaEngine;
 
@@ -88,20 +89,36 @@ impl BoaEngine {
     ///
     /// If the natives cannot be defined or the bootstrap throws.
     pub fn install_webassembly(&mut self) -> JsResult<()> {
+        self.install_webassembly_in_realm(MAIN_REALM)
+            .map_err(|e| JsNativeError::error().with_message(e).into())
+    }
+
+    /// [`install_webassembly`](Self::install_webassembly) on `realm`'s global,
+    /// for a page whose scripts run in a child realm. The store is the
+    /// engine's, shared by every realm that installs it.
+    ///
+    /// # Errors
+    ///
+    /// If the realm is unknown, the natives cannot be defined or the bootstrap
+    /// throws.
+    pub fn install_webassembly_in_realm(&mut self, realm: RealmId) -> Result<(), String> {
         if self.ctx.get_data::<WasmSlot>().is_none() {
             self.ctx
                 .insert_data::<WasmSlot>(RefCell::new(Some(Rc::new(WasmHost::new()))));
         }
-        for (short, length) in genet_wasm::NATIVES {
-            self.ctx.register_global_builtin_callable(
-                JsString::from(format!("__genetWasm{short}")),
-                length as usize,
-                NativeFunction::from_fn_ptr(native(short)),
-            )?;
-        }
-        self.ctx
-            .eval(Source::from_bytes(genet_wasm::BOOTSTRAP))
-            .map(drop)
+        self.with_realm(realm, |ctx| {
+            for (short, length) in genet_wasm::NATIVES {
+                ctx.register_global_builtin_callable(
+                    JsString::from(format!("__genetWasm{short}")),
+                    length as usize,
+                    NativeFunction::from_fn_ptr(native(short)),
+                )?;
+            }
+            ctx.eval(Source::from_bytes(genet_wasm::BOOTSTRAP))
+                .map(drop)
+        })
+        .map_err(|e| format!("{e:?}"))?
+        .map_err(|e| format!("{e:?}"))
     }
 
     /// Set the fuel all wasm calls on this engine draw from; `None` is

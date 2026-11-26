@@ -13,10 +13,10 @@ path = "main.rs"
 [dependencies]
 genet-runtime = { path = "../script-runtime-api" }
 script-engine-api = { path = "../script-engine-api" }
-genet-bole = { path = "../script-engine-boa" }
+genet-bole = { path = "../script-engine-boa", features = ["wasm"] }
 
 [target.'cfg(target_pointer_width = "64")'.dependencies]
-genet-vano = { path = "../script-engine-nova" }
+genet-vano = { path = "../script-engine-nova", features = ["wasm"] }
 
 [dev-dependencies]
 genet-host-api = { path = "../genet-host-api" }

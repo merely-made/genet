@@ -16,6 +16,7 @@ use std::rc::Rc;
 
 use nova_vm::ecmascript::{Behaviour, InternalMethods, PropertyDescriptor, PropertyKey, RegularFn};
 use nova_vm::engine::Bindable;
+use script_engine_api::{MAIN_REALM, RealmId};
 
 pub(crate) use memory_natives::resize_hook;
 
@@ -69,12 +70,35 @@ impl NovaEngine {
     ///
     /// If the natives cannot be defined or the bootstrap throws.
     pub fn install_webassembly(&mut self) -> Result<(), String> {
+        self.install_webassembly_in_realm(MAIN_REALM)
+    }
+
+    /// [`install_webassembly`](Self::install_webassembly) on `realm`'s global,
+    /// for a page whose scripts run in a child realm. The store is the
+    /// engine's, shared by every realm that installs it.
+    ///
+    /// # Errors
+    ///
+    /// If the realm is unknown, the natives cannot be defined or the bootstrap
+    /// throws.
+    pub fn install_webassembly_in_realm(&mut self, realm: RealmId) -> Result<(), String> {
+        if !self.registry.realms.borrow().contains_key(&realm) {
+            return Err(format!("no such realm: {realm}"));
+        }
+        let registry = self.registry.clone();
         if self.hook_owner.wasm.borrow().is_none() {
             *self.hook_owner.wasm.borrow_mut() = Some(Rc::new(WasmHost::new()));
         }
         let mut out = Ok(());
         self.agent.run_in_realm(&self.realm, |agent, mut gc| {
-            let global = agent.current_realm(gc.nogc()).global_object(agent).unbind();
+            let target = registry
+                .realms
+                .borrow()
+                .get(&realm)
+                .expect("checked realm")
+                .get(agent, gc.nogc())
+                .unbind();
+            let global = target.bind(gc.nogc()).global_object(agent).unbind();
             for (short, length) in genet_wasm::NATIVES {
                 let name = &format!("__genetWasm{short}");
                 let func = create_named_host_function(
@@ -82,7 +106,7 @@ impl NovaEngine {
                     Behaviour::Regular(native(short)),
                     name,
                     length,
-                    None,
+                    Some(target.bind(gc.nogc())),
                     gc.nogc(),
                 );
                 let key = PropertyKey::from_str(agent, name, gc.nogc()).unbind();
@@ -101,7 +125,9 @@ impl NovaEngine {
             }
         });
         out?;
-        self.eval(genet_wasm::BOOTSTRAP).map(drop)
+        self.eval_in_realm(realm, genet_wasm::BOOTSTRAP)
+            .map(drop)
+            .map_err(|e| format!("{e:?}"))
     }
 
     /// Set the fuel all wasm calls on this engine draw from; `None` is

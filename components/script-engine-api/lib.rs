@@ -75,6 +75,15 @@ pub enum BoundedEvalError<E> {
     Engine(E),
 }
 
+/// Why [`ScriptEngine::install_webassembly`] did not install the object.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WasmInstallError {
+    /// This backend, or this build of it, has no WebAssembly (the trait default).
+    Unsupported,
+    /// The install failed; the engine's description of why.
+    Engine(String),
+}
+
 /// The result of a [`ScriptEngine::pump`] call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PumpOutcome {
@@ -401,6 +410,18 @@ pub trait ScriptEngine: Sized {
             Budget::Unbounded => self.eval(source).map_err(BoundedEvalError::Engine),
             Budget::Steps(_) => Err(BoundedEvalError::Unsupported),
         }
+    }
+
+    /// Give `realm`'s global a `WebAssembly` object. `fuel` bounds the wasm
+    /// work the whole engine does (`None` is unbounded). Backends without it, or
+    /// built without it, refuse with [`WasmInstallError::Unsupported`].
+    fn install_webassembly(
+        &mut self,
+        realm: RealmId,
+        fuel: Option<u64>,
+    ) -> Result<(), WasmInstallError> {
+        let _ = (realm, fuel);
+        Err(WasmInstallError::Unsupported)
     }
 
     /// Coerce a value to a Rust string (`ToString`).

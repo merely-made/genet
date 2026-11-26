@@ -853,6 +853,16 @@ impl CallCx for BoaCallCx<'_> {
 
 impl ScriptEngine for BoaEngine {
     fn native_worker_backend() -> Option<&'static str> { Some("boa") }
+    #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+    fn install_webassembly(
+        &mut self,
+        realm: RealmId,
+        fuel: Option<u64>,
+    ) -> Result<(), script_engine_api::WasmInstallError> {
+        self.install_webassembly_in_realm(realm)
+            .and_then(|()| self.set_wasm_fuel(fuel))
+            .map_err(script_engine_api::WasmInstallError::Engine)
+    }
     type Value = JsValue;
     type Error = JsError;
     type CallCx<'a> = BoaCallCx<'a>;

@@ -710,3 +710,42 @@ mod animation_frame_pending_tests {
         host_lifecycle_controls_scripted_session::<script_engine_nova::NovaEngine>();
     }
 }
+
+#[cfg(all(test, feature = "scripted"))]
+mod webassembly_tests {
+    use super::*;
+
+    // (module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))
+    const ADD_MODULE: &str = "[0,97,115,109,1,0,0,0,1,7,1,96,2,127,127,1,127,3,2,1,0,\
+                              7,7,1,3,97,100,100,0,0,10,9,1,7,0,32,0,32,1,106,11]";
+
+    fn page_script_calls_wasm<E: script_engine_api::ScriptEngine + 'static>() {
+        let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(&format!(
+            "<body><script>\
+             var bytes = new Uint8Array({ADD_MODULE});\
+             var sum = new WebAssembly.Instance(new WebAssembly.Module(bytes)).exports.add(40, 2);\
+             document.body.setAttribute('data-sum', String(sum));\
+             WebAssembly.instantiate(bytes).then(function (r) {{\
+               document.body.setAttribute('data-async', String(r.instance.exports.add(1, 2)));\
+             }});\
+             </script></body>"
+        ))
+        .expect("scripted document");
+        let mut session = ScriptedDocumentSession::new(doc);
+        session.pump(0.0);
+        let dom = session.document_mut().dom_snapshot();
+        assert!(dom.contains("data-sum=\"42\""), "{dom}");
+        assert!(dom.contains("data-async=\"3\""), "{dom}");
+    }
+
+    #[test]
+    fn page_script_calls_wasm_on_boa() {
+        page_script_calls_wasm::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn page_script_calls_wasm_on_nova() {
+        page_script_calls_wasm::<script_engine_nova::NovaEngine>();
+    }
+}

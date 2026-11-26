@@ -749,6 +749,9 @@ pub enum HostMutationOp {
     /// Remove the target node, whatever its kind. A target with no parent is a
     /// miss.
     Remove,
+    /// Append a new node of any kind (element, text or comment) as the
+    /// target's last child. The target must be able to hold children.
+    AppendNode { node: HostNewNode },
     /// Insert a new node immediately before the target, as its previous
     /// sibling. A target with no parent is a miss.
     InsertBefore { node: HostNewNode },

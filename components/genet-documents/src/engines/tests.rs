@@ -3008,6 +3008,80 @@ fn engine_side_changes_do_not_advance_the_dom_mutation_count() {
     }
 }
 
+/// Appending any node kind by identity or id: an element, a text node and a
+/// comment land last under their parent, and the element restyles and paints.
+#[cfg(feature = "livery")]
+#[test]
+fn a_host_appends_elements_text_and_comments() {
+    use document_session_api::session_engine::{HostMutation, HostMutationOp, HostNewNode};
+
+    let mut session = host_mutation_fixture();
+    let baseline = rect_count(&session.frame(320, 240));
+
+    let report = session
+        .apply_host_mutations(&[HostMutation::new(
+            "ctl1",
+            HostMutationOp::AppendNode {
+                node: HostNewNode::Element {
+                    tag: "div".to_owned(),
+                    class: Some("tick".to_owned()),
+                    text: Some("x".to_owned()),
+                },
+            },
+        )])
+        .expect("append-node is wired");
+    assert_eq!((report.applied, report.missed), (1, 0));
+    assert!(
+        report.restyled_elements > 0,
+        "an appended element is styled by the engine"
+    );
+    assert_eq!(rect_count(&session.frame(320, 240)), baseline + 1);
+
+    let ctl1 = {
+        let concrete = session
+            .as_any_ref()
+            .downcast_ref::<LiveryDocumentSession>()
+            .expect("retained livery session");
+        let dom = concrete.document().dom();
+        dom.opaque_id(super::livery::element_with_id(dom, "ctl1").expect("ctl1 is live"))
+    };
+    let report = session
+        .apply_host_mutations(&[
+            HostMutation::node(
+                ctl1,
+                HostMutationOp::AppendNode {
+                    node: HostNewNode::Text("tail".to_owned()),
+                },
+            ),
+            HostMutation::node(
+                ctl1,
+                HostMutationOp::AppendNode {
+                    node: HostNewNode::Comment("note".to_owned()),
+                },
+            ),
+        ])
+        .expect("text and comment append");
+    assert_eq!((report.applied, report.missed), (2, 0));
+    let concrete = session
+        .as_any_ref()
+        .downcast_ref::<LiveryDocumentSession>()
+        .expect("retained livery session");
+    let dom = concrete.document().dom();
+    let parent = genet_scripted_dom::NodeId::from_raw(ctl1);
+    let kinds: Vec<_> = dom.dom_children(parent).map(|c| dom.kind(c)).collect();
+    assert_eq!(
+        kinds,
+        [NodeKind::Element, NodeKind::Text, NodeKind::Comment],
+        "appended in order, last"
+    );
+    let texts: Vec<_> = dom
+        .dom_children(parent)
+        .skip(1)
+        .map(|c| dom.text(c).unwrap_or("").to_owned())
+        .collect();
+    assert_eq!(texts, ["tail", "note"]);
+}
+
 /// An unresolved id is reported, not fatal: a sweep over a fixture whose ids
 /// run out must say so rather than fail the run.
 #[cfg(feature = "livery")]

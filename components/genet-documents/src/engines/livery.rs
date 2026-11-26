@@ -2487,6 +2487,17 @@ impl DocumentSession<Scene> for LiveryDocumentSession {
                         dom.append_child(*node, child);
                         applied += 1;
                     },
+                    HostMutationOp::AppendNode { node: new } => {
+                        let child = match new {
+                            HostNewNode::Element { tag, class, text } => {
+                                new_element(dom, &qual, tag, class.as_deref(), text.as_deref())
+                            },
+                            HostNewNode::Text(data) => dom.create_text(data),
+                            HostNewNode::Comment(data) => dom.create_comment(data),
+                        };
+                        dom.append_child(*node, child);
+                        applied += 1;
+                    },
                     HostMutationOp::InsertBefore { node: new } => match dom.parent(*node) {
                         Some(parent) => {
                             let child = match new {

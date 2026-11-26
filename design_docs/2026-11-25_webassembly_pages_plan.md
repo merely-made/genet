@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. In progress: P2, P5 and P6 met; P1 reopened for frame realms; P4 design read in progress.
+**Status:** 2026-11-25. In progress: P1, P2, P5 and P6 met; P4's design is with Mark; P3 next.
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -193,6 +193,30 @@ the counts and what is missing.
    the new paths are covered by the shared tests in `conformance/wide.rs` alone. An i32 `Memory` or
    `Table` still takes a BigInt for `initial`, `delta` and `index`, where the spec says `TypeError`.
    No test checks this, so it is left open.
+10. 2026-11-25: WebAssembly in frame realms made no difference to genet-wpt's `wasm/jsapi`
+    results.
+    - **`proto-from-ctor-realm.html`:** still errors. On Nova, `bindOther.call(proxy)` throws before
+      any subtest runs. On Bole, a constructor called with a `NewTarget` from another realm doesn't
+      take its prototype from that realm. Neither cause is confirmed as the whole story.
+    - **`functions/entry*` and `incumbent`:** these test entry and incumbent settings objects with
+      `window.open`, and they are still open.
+11. 2026-11-25, P4 design read:
+    - **wasmi frees nothing short of dropping the store.** A wasmi 2.0.3 store's arenas have no
+      remove (`wasmi_collections` `arena/mod.rs:64-190`). That covers funcs, memories, tables,
+      globals, instances, segments and externrefs. The engine's `CodeMap` only grows
+      (`engine/code_map/mod.rs:73-78`), so dropping a `Module` doesn't free its code. Dropping the
+      store and engine is the only release.
+    - **What things cost.** An instance with one page of memory costs about 65 KiB, and one without
+      memory about 0.9 KiB.
+    - **Genet pins everything on top of that.** The bootstrap's `funcObjects` and the entity
+      `objects` maps are strong. Import functions and externref values are strong roots on the Rust
+      side. Each externref that crosses into wasm adds a root and a wasmi externref
+      (`script-engine-nova/native/wasm/bridge.rs:186`, `script-engine-boa/wasm/bridge.rs:141`). A
+      loop calling `f(obj)` therefore grows without bound and keeps `obj` alive.
+    - **`FinalizationRegistry` works on both engines as built in Genet,** so no fork change is
+      needed. `script-runtime-api` already uses it with native callbacks (`fetch.rs:933`).
+    - **GC differs by engine.** Vano collects only when the embedder asks: pages once per frame, and
+      workers have no cadence. Bole collects on its own allocation threshold.
 
 ## Progress
 
@@ -210,3 +234,6 @@ the counts and what is missing.
   - wasmi's SIMD, relaxed SIMD and memory64 are on.
   - `v128` throws `TypeError` at the boundary.
   - `Memory` and `Table` take `address`, with BigInt limits for i64.
+- 2026-11-25: P1 met in full (genet `e8d3da0f3a4`). `install_webassembly_from_call` gives realms made
+  inside a native callback the object: iframes, and the document a top-level navigation opens.
+  Iframe tests pass on both engines.

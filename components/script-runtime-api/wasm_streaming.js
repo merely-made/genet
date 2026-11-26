@@ -1,6 +1,8 @@
 // WebAssembly.compileStreaming and instantiateStreaming (WebAssembly Web
 // API). Evaluated in a realm right after its `WebAssembly` object exists.
 (function () {
+  // A scope without fetch's Response has no streaming to offer.
+  if (typeof Response !== 'function' || typeof ReadableStream !== 'function') return;
   var W = WebAssembly, Res = Response, Stream = ReadableStream;
   var compile = W.compile, instantiate = W.instantiate;
   var TE = TypeError, resolve = Promise.resolve.bind(Promise);

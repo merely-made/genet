@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. In progress: P2 met; P1 reopened for frame realms; P5 in progress.
+**Status:** 2026-11-25. In progress: P2 and P5 met; P1 reopened for frame realms; P6 in progress.
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -181,6 +181,13 @@ the counts and what is missing.
    scripts. The fix needs an eval of a global script from a callback that keeps the thrown value.
    `eval_from_call` turns errors into strings. This is a worker runtime bug, not a wasm one, so it is
    left open here.
+8. 2026-11-25: Bole's `annex-b` feature turns on `boa_ast/annex-b` and `boa_parser/annex-b`, and it
+   gates about 40 sites in the engine. It moved no result in the 24 Bole WPT expectation files that
+   name a subset. A control run built without the feature gave the same per-test results. The
+   exceptions are two `dom` files that are killed for hanging depending on load. Even so, 17 of those
+   files no longer match their checked-in baselines, for reasons other than this lane. Newly passing
+   HTMLCollection and `getElementsBy*` tests account for some of it, and timeouts for the rest. They
+   need re-recording on an idle machine.
 
 ## Progress
 
@@ -192,3 +199,5 @@ the counts and what is missing.
   - Page tests pass on Boa and Nova, and a dedicated-worker test passes on Boa.
 - 2026-11-25: P2 met (genet `7a175209bb8`). genet-wpt builds both engines with `wasm`, and
   `wasm_jsapi_{boa,nova}.json` pin the directory.
+- 2026-11-25: P5 met (genet `beef06a1875`). genet-bole builds Boa with `annex-b`. The `wasm/jsapi`
+  runner drops its `unescape` polyfill and still reads 946 of 1066 on both engines.

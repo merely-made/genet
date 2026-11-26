@@ -33,10 +33,10 @@ pub use block::{
     solve_shrink_to_fit_inline_size,
 };
 pub use box_tree::{
-    AnonymousBoxKind, BoxGeneration, BoxId, BoxOrigin, BoxTreeInput, ContainingBlock,
-    ContainingBlockEstablishment, CssBox, CssBoxTree, DisplayInside, DisplayOutside, DisplayRole,
-    FloatContextProvenance, FormattingContextKind, InternalTableRole, PositioningScheme,
-    PseudoElement, generate_box_tree,
+    AnonymousBoxKind, BoxGeneration, BoxId, BoxOrigin, BoxTreeInput, ChildSpliceRefusal,
+    ContainingBlock, ContainingBlockEstablishment, CssBox, CssBoxTree, DisplayInside,
+    DisplayOutside, DisplayRole, FloatContextProvenance, FormattingContextKind, InternalTableRole,
+    PositioningScheme, PseudoElement, generate_box_tree,
 };
 pub use flow::{
     Direction, FlowAxes, LogicalAxis, LogicalOffset, LogicalRect, LogicalSides, LogicalSize,

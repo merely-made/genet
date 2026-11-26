@@ -14,6 +14,9 @@ use std::{
 
 use crate::{FloatSide, FlowAxes};
 
+mod splice;
+pub use splice::ChildSpliceRefusal;
+
 /// Stable identity within a retained generated [`CssBoxTree`].
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct BoxId(u32);
@@ -498,7 +501,13 @@ where
         .collect::<Vec<_>>();
     let mut tree = CssBoxTree::default();
     for root in normalized {
-        materialize(&mut tree, root, None, ContainingBlockState::INITIAL);
+        materialize(
+            &mut tree,
+            root,
+            None,
+            ContainingBlockState::INITIAL,
+            &mut None,
+        );
     }
     tree
 }
@@ -1258,16 +1267,20 @@ impl ContainingBlockState {
     }
 }
 
+/// `next` allocates ids from that number on; `None` allocates densely.
 fn materialize<Id>(
     tree: &mut CssBoxTree<Id>,
     proto: ProtoBox<Id>,
     parent: Option<BoxId>,
     containing_blocks: ContainingBlockState,
+    next: &mut Option<u32>,
 ) -> BoxId
 where
     Id: Copy + Eq + Hash,
 {
-    with_box_tree_stack(move || materialize_on_this_stack(tree, proto, parent, containing_blocks))
+    with_box_tree_stack(move || {
+        materialize_on_this_stack(tree, proto, parent, containing_blocks, next)
+    })
 }
 
 fn materialize_on_this_stack<Id>(
@@ -1275,12 +1288,13 @@ fn materialize_on_this_stack<Id>(
     proto: ProtoBox<Id>,
     parent: Option<BoxId>,
     containing_blocks: ContainingBlockState,
+    next: &mut Option<u32>,
 ) -> BoxId
 where
     Id: Copy + Eq + Hash,
 {
     let children = proto.children;
-    let id = tree.push(
+    let id = tree.push_allocated(
         CssBox::new(
             proto.origin,
             proto.display,
@@ -1295,6 +1309,7 @@ where
         .with_float(proto.float),
         parent,
         proto.principal,
+        next,
     );
     let child_containing_blocks = containing_blocks.for_children(
         id,
@@ -1303,7 +1318,7 @@ where
         proto.containing_block_establishment,
     );
     for child in children {
-        materialize(tree, child, Some(id), child_containing_blocks);
+        materialize(tree, child, Some(id), child_containing_blocks, next);
     }
     id
 }
@@ -1363,18 +1378,31 @@ where
     ///
     /// Box generation is owned by the integrating style engine until Buckram
     /// owns the complete CSS Display fixup algorithm.
-    pub fn push(
+    pub fn push(&mut self, css_box: CssBox<Id>, parent: Option<BoxId>, principal: bool) -> BoxId {
+        self.push_allocated(css_box, parent, principal, &mut None)
+    }
+
+    fn push_allocated(
         &mut self,
         mut css_box: CssBox<Id>,
         parent: Option<BoxId>,
         principal: bool,
+        next: &mut Option<u32>,
     ) -> BoxId {
-        let id = BoxId(
-            self.boxes
+        let id = BoxId(match next {
+            Some(next) => {
+                let id = *next;
+                *next = id
+                    .checked_add(1)
+                    .expect("a CSS box tree exceeded u32::MAX boxes");
+                id
+            },
+            None => self
+                .boxes
                 .len()
                 .try_into()
                 .expect("a CSS box tree exceeded u32::MAX boxes"),
-        );
+        });
         css_box.parent = parent;
         self.boxes.push(css_box);
         self.ids.push(id);

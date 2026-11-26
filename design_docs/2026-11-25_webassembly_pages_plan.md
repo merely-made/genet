@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. Plan; P1 and P5 in progress.
+**Status:** 2026-11-25. In progress: P1 met; P2 and P5 in progress.
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -152,7 +152,20 @@ the counts and what is missing.
    calls, extended constants, custom page sizes and wide arithmetic, plus a `memory64` cargo feature.
    It has none for exception handling, GC types or threads. genet-wasm turns wasmi's default features
    off, so `memory64` and `simd` are off as well.
+3. 2026-11-25: pages never run in the engine's main realm. `open_top_realm` goes through
+   `Runtime::create_child_realm` (`components/script-runtime-api/lib.rs`), so the install hook
+   takes a realm, and each window realm, iframes included, evaluates the bootstrap once. All the
+   realms share the engine's one wasm store and fuel. Fuel is therefore a setter of its own
+   (`set_webassembly_fuel`). Before that change, the next realm's install would reset it.
+4. 2026-11-25: installing at realm creation doesn't conflict with Vano's snapshot clones. Vano
+   refuses to clone only when wasm objects are live. An object that is installed but unused clones
+   with a fresh store.
 
 ## Progress
 
 - 2026-11-25: plan cut from the WebAssembly object plan's open items. The old plan is archived whole.
+- 2026-11-25: P1 met (genet `cbe8d3ed5d5`, `57fbac97e50`).
+  - `ScriptEngine::install_webassembly(realm)` and `set_webassembly_fuel` added.
+  - `Runtime` installs in window realms and worker realms.
+  - The `scripted` features and `genet-worker-process` turn the engines' `wasm` on.
+  - Page tests pass on Boa and Nova, and a dedicated-worker test passes on Boa.

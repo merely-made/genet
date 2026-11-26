@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. Met: P1 to P6. P3 is met as far as disk mode reaches. Open: the items under Open questions and Findings 7, 13, 14 and 15.
+**Status:** 2026-11-25. Met: P1 to P6. P3 is met as far as disk mode reaches. Open: the items under Open questions and Findings 7, 13 and 15.
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -160,8 +160,6 @@ the counts and what is missing.
    them up is open.
 3. **D7 of the archived plan.** A grow by zero pages from wasm still can't be seen. The fix needs a
    change in wasmi (Findings 1). Whether to propose that change upstream is Mark's call.
-4. **Vano's `FinalizationRegistry`.** Findings 14 describes the bug. Fixing it in Vano would let the
-   bootstrap drop its companion tokens.
 
 ## Findings
 
@@ -265,6 +263,10 @@ the counts and what is missing.
     - The bootstrap works around it. Each watched object also registers a companion token that
       shares its held record, so cells always die in pairs and the record acts once.
     - Registering one target twice doesn't help, because Vano keeps one cell per target.
+    - Fixed in Vano `ed1e0e5e` (Mark, 2026-11-26), with `nova_vm/tests/finalization_registry_tests.rs`,
+      which checks one to four cells dying together. test262 can't force a collection, so it never
+      reached this path; its 76 `FinalizationRegistry` and `WeakRef` tests are unchanged. The
+      companion tokens are gone from the bootstrap.
 15. 2026-11-25: with P4, the host holds no buffer object. So the engines' resize hooks find a
     resizable buffer's memory by its pointer, length and maximum (`genet-wasm` `memory.rs`,
     `resizable_memory`).
@@ -314,3 +316,6 @@ the counts and what is missing.
   - Conformance passes, 38 tests on Vano and 36 on Bole.
   - `wasm/jsapi` and `wasm/webapi` match their expectations on both engines, apart from Bole's
     known `js-string/constants` worker timing.
+- 2026-11-26: Vano's two-cell `FinalizationRegistry` fix (Vano `ed1e0e5e`, `0fd6b2c6`). The
+  bootstrap's companion tokens are removed. Conformance passes, 38 tests on Vano and 36 on Bole, and
+  `wasm/jsapi` and `wasm/webapi` on Nova match their expectations.

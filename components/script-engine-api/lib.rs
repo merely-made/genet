@@ -421,6 +421,12 @@ pub trait ScriptEngine: Sized {
         Err(WasmInstallError::Unsupported)
     }
 
+    /// [`install_webassembly`](Self::install_webassembly) on the active native
+    /// callback's realm, for realms made inside a callback. Fuel is untouched.
+    fn install_webassembly_from_call(_cx: &mut Self::CallCx<'_>) -> Result<(), WasmInstallError> {
+        Err(WasmInstallError::Unsupported)
+    }
+
     /// Bound the wasm work the whole engine does (`None` is unbounded, the
     /// state after install). Installing in a later realm keeps the setting.
     fn set_webassembly_fuel(&mut self, fuel: Option<u64>) -> Result<(), WasmInstallError> {

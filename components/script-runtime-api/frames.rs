@@ -1504,6 +1504,12 @@ fn open_document_realm<E: ScriptEngine>(
                 SurfaceError::Engine(error) => RealmError::Engine(format!("{error:?}")),
             });
         }
+        match E::install_webassembly_from_call(child) {
+            Ok(()) | Err(script_engine_api::WasmInstallError::Unsupported) => {},
+            Err(script_engine_api::WasmInstallError::Engine(message)) => {
+                return Err(RealmError::Engine(message));
+            },
+        }
         crate::capture_task_hooks_from_call::<E>(child, agent, realm)?;
         E::eval_from_call(
             child,

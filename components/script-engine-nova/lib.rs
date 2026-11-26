@@ -1342,6 +1342,12 @@ mod native {
                 .map_err(script_engine_api::WasmInstallError::Engine)
         }
         #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+        fn install_webassembly_from_call(
+            cx: &mut Self::CallCx<'_>,
+        ) -> Result<(), script_engine_api::WasmInstallError> {
+            wasm::install_from_call(cx).map_err(script_engine_api::WasmInstallError::Engine)
+        }
+        #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
         fn set_webassembly_fuel(
             &mut self,
             fuel: Option<u64>,

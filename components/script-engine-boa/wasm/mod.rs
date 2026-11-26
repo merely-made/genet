@@ -81,6 +81,25 @@ impl HostHooks for WasmHooks {
     }
 }
 
+/// Create the engine-wide wasm state if absent, register the natives on the
+/// context's current realm and run the bootstrap there.
+pub(crate) fn install_in_context(ctx: &mut Context) -> Result<(), String> {
+    if ctx.get_data::<WasmSlot>().is_none() {
+        ctx.insert_data::<WasmSlot>(RefCell::new(Some(Rc::new(WasmHost::new()))));
+    }
+    (|| {
+        for (short, length) in genet_wasm::NATIVES {
+            ctx.register_global_builtin_callable(
+                JsString::from(format!("__genetWasm{short}")),
+                length as usize,
+                NativeFunction::from_fn_ptr(native(short)),
+            )?;
+        }
+        ctx.eval(Source::from_bytes(genet_wasm::BOOTSTRAP)).map(drop)
+    })()
+    .map_err(|e| format!("{e:?}"))
+}
+
 impl BoaEngine {
     /// Give the main realm a `WebAssembly` global. Wasm calls draw on the fuel
     /// [`set_wasm_fuel`](Self::set_wasm_fuel) sets, unbounded until it is set.
@@ -102,23 +121,8 @@ impl BoaEngine {
     /// If the realm is unknown, the natives cannot be defined or the bootstrap
     /// throws.
     pub fn install_webassembly_in_realm(&mut self, realm: RealmId) -> Result<(), String> {
-        if self.ctx.get_data::<WasmSlot>().is_none() {
-            self.ctx
-                .insert_data::<WasmSlot>(RefCell::new(Some(Rc::new(WasmHost::new()))));
-        }
-        self.with_realm(realm, |ctx| {
-            for (short, length) in genet_wasm::NATIVES {
-                ctx.register_global_builtin_callable(
-                    JsString::from(format!("__genetWasm{short}")),
-                    length as usize,
-                    NativeFunction::from_fn_ptr(native(short)),
-                )?;
-            }
-            ctx.eval(Source::from_bytes(genet_wasm::BOOTSTRAP))
-                .map(drop)
-        })
-        .map_err(|e| format!("{e:?}"))?
-        .map_err(|e| format!("{e:?}"))
+        self.with_realm(realm, install_in_context)
+            .map_err(|e| format!("{e:?}"))?
     }
 
     /// Set the fuel all wasm calls on this engine draw from; `None` is

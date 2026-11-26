@@ -748,4 +748,37 @@ mod webassembly_tests {
     fn page_script_calls_wasm_on_nova() {
         page_script_calls_wasm::<script_engine_nova::NovaEngine>();
     }
+
+    fn iframe_realm_has_wasm<E: script_engine_api::ScriptEngine + 'static>() {
+        let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(&format!(
+            "<body><script>\
+             var f = document.createElement('iframe');\
+             document.body.appendChild(f);\
+             var W = f.contentWindow.WebAssembly;\
+             var bytes = new Uint8Array({ADD_MODULE});\
+             var sum = new W.Instance(new W.Module(bytes)).exports.add(20, 22);\
+             document.body.setAttribute('data-kind', typeof W);\
+             document.body.setAttribute('data-distinct', String(W !== WebAssembly));\
+             document.body.setAttribute('data-sum', String(sum));\
+             </script></body>"
+        ))
+        .expect("scripted document");
+        let mut session = ScriptedDocumentSession::new(doc);
+        session.pump(0.0);
+        let dom = session.document_mut().dom_snapshot();
+        assert!(dom.contains("data-kind=\"object\""), "{dom}");
+        assert!(dom.contains("data-distinct=\"true\""), "{dom}");
+        assert!(dom.contains("data-sum=\"42\""), "{dom}");
+    }
+
+    #[test]
+    fn iframe_realm_has_wasm_on_boa() {
+        iframe_realm_has_wasm::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn iframe_realm_has_wasm_on_nova() {
+        iframe_realm_has_wasm::<script_engine_nova::NovaEngine>();
+    }
 }

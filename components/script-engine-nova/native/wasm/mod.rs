@@ -14,13 +14,15 @@ mod natives;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use nova_vm::ecmascript::{Behaviour, InternalMethods, PropertyDescriptor, PropertyKey, RegularFn};
-use nova_vm::engine::Bindable;
+use nova_vm::ecmascript::{
+    Agent, Behaviour, InternalMethods, PropertyDescriptor, PropertyKey, Realm, RegularFn,
+};
+use nova_vm::engine::{Bindable, GcScope};
 use script_engine_api::{MAIN_REALM, RealmId};
 
 pub(crate) use memory_natives::resize_hook;
 
-use super::{NovaEngine, NovaValue, ScriptEngine, create_named_host_function};
+use super::{NovaCallCx, NovaEngine, NovaValue, ScriptEngine, create_named_host_function};
 
 /// The engine's wasm state over Vano's rooted values.
 pub(crate) type WasmHost = genet_wasm::WasmHost<NovaValue>;
@@ -62,6 +64,58 @@ fn native(name: &str) -> RegularFn {
     }
 }
 
+/// Create the engine-wide wasm state if no realm has installed it yet.
+fn ensure_host(slot: &WasmSlot) {
+    slot.borrow_mut().get_or_insert_with(|| Rc::new(WasmHost::new()));
+}
+
+/// Define the bootstrap's natives on `target`'s global, as that realm's functions.
+fn define_natives(agent: &mut Agent, target: Realm<'_>, mut gc: GcScope<'_, '_>) -> Result<(), String> {
+    let target = target.unbind();
+    let global = target.bind(gc.nogc()).global_object(agent).unbind();
+    let mut out = Ok(());
+    for (short, length) in genet_wasm::NATIVES {
+        let name = &format!("__genetWasm{short}");
+        let func = create_named_host_function(
+            agent,
+            Behaviour::Regular(native(short)),
+            name,
+            length,
+            Some(target.bind(gc.nogc())),
+            gc.nogc(),
+        );
+        let key = PropertyKey::from_str(agent, name, gc.nogc()).unbind();
+        let desc = PropertyDescriptor {
+            value: Some(func.unbind().into()),
+            writable: Some(true),
+            configurable: Some(true),
+            ..Default::default()
+        };
+        if global
+            .internal_define_own_property(agent, key, desc, gc.reborrow())
+            .is_err()
+        {
+            out = Err(format!("could not install {name}"));
+        }
+    }
+    out
+}
+
+/// Install `WebAssembly` in the realm active in `cx`, for a realm made inside a native call.
+pub(crate) fn install_from_call(cx: &mut NovaCallCx<'_>) -> Result<(), String> {
+    let slot = cx
+        .agent
+        .get_host_data()
+        .downcast_ref::<WasmSlot>()
+        .ok_or("engine built without wasm state")?;
+    ensure_host(slot);
+    let realm = cx.agent.current_realm(cx.gc.nogc()).unbind();
+    define_natives(cx.agent, realm, cx.gc.reborrow())?;
+    <NovaEngine as ScriptEngine>::eval_from_call(cx, genet_wasm::BOOTSTRAP)
+        .map(drop)
+        .map_err(|e| format!("{e:?}"))
+}
+
 impl NovaEngine {
     /// Give the main realm a `WebAssembly` global. Wasm calls draw on the fuel
     /// [`set_wasm_fuel`](Self::set_wasm_fuel) sets, unbounded until it is set.
@@ -86,11 +140,9 @@ impl NovaEngine {
             return Err(format!("no such realm: {realm}"));
         }
         let registry = self.registry.clone();
-        if self.hook_owner.wasm.borrow().is_none() {
-            *self.hook_owner.wasm.borrow_mut() = Some(Rc::new(WasmHost::new()));
-        }
+        ensure_host(&self.hook_owner.wasm);
         let mut out = Ok(());
-        self.agent.run_in_realm(&self.realm, |agent, mut gc| {
+        self.agent.run_in_realm(&self.realm, |agent, gc| {
             let target = registry
                 .realms
                 .borrow()
@@ -98,31 +150,7 @@ impl NovaEngine {
                 .expect("checked realm")
                 .get(agent, gc.nogc())
                 .unbind();
-            let global = target.bind(gc.nogc()).global_object(agent).unbind();
-            for (short, length) in genet_wasm::NATIVES {
-                let name = &format!("__genetWasm{short}");
-                let func = create_named_host_function(
-                    agent,
-                    Behaviour::Regular(native(short)),
-                    name,
-                    length,
-                    Some(target.bind(gc.nogc())),
-                    gc.nogc(),
-                );
-                let key = PropertyKey::from_str(agent, name, gc.nogc()).unbind();
-                let desc = PropertyDescriptor {
-                    value: Some(func.unbind().into()),
-                    writable: Some(true),
-                    configurable: Some(true),
-                    ..Default::default()
-                };
-                if global
-                    .internal_define_own_property(agent, key, desc, gc.reborrow())
-                    .is_err()
-                {
-                    out = Err(format!("could not install {name}"));
-                }
-            }
+            out = define_natives(agent, target, gc);
         });
         out?;
         self.eval_in_realm(realm, genet_wasm::BOOTSTRAP)

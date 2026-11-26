@@ -862,6 +862,12 @@ impl ScriptEngine for BoaEngine {
             .map_err(script_engine_api::WasmInstallError::Engine)
     }
     #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+    fn install_webassembly_from_call(
+        cx: &mut Self::CallCx<'_>,
+    ) -> Result<(), script_engine_api::WasmInstallError> {
+        wasm::install_in_context(cx.ctx).map_err(script_engine_api::WasmInstallError::Engine)
+    }
+    #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
     fn set_webassembly_fuel(
         &mut self,
         fuel: Option<u64>,

@@ -18,12 +18,12 @@ use super::WasmHost;
 use super::bridge::{
     detach_stale, error, handle_arg, host, number, require_host, root, string, type_error,
 };
-use super::entities_natives::{maximum_arg, u32_arg};
+use super::entities_natives::{maximum_arg, u64_arg};
 use genet_wasm::json;
 
 use genet_wasm::PAGE;
 
-/// `memoryNew(initial, maximum?)`: a memory handle; bad limits throw
+/// `memoryNew(initial, maximum?, is64)`: a memory handle; bad limits throw
 /// `RangeError`.
 pub(super) fn memory_new<'gc>(
     agent: &mut Agent,
@@ -33,12 +33,12 @@ pub(super) fn memory_new<'gc>(
 ) -> JsResult<'gc, Value<'gc>> {
     let gc = gc.into_nogc();
     let host = require_host(agent, gc)?;
-    let initial = u32_arg(agent, args.get(0));
+    let initial = u64_arg(agent, args.get(0));
     let maximum = maximum_arg(agent, args.get(1));
     let (Some(initial), Ok(maximum)) = (initial, maximum) else {
         return Err(type_error(agent, "expected page counts", gc));
     };
-    match host.memory_new(initial, maximum) {
+    match host.memory_new(initial, maximum, args.get(2) == Value::Boolean(true)) {
         Ok(handle) => Ok(number(agent, handle as f64, gc)),
         Err(message) => Err(error(agent, ExceptionType::RangeError, &message, gc)),
     }
@@ -55,7 +55,7 @@ pub(super) fn memory_grow<'gc>(
     let gc = gc.into_nogc();
     let host = require_host(agent, gc)?;
     let memory = handle_arg(agent, args.get(0));
-    let Some((memory, delta)) = memory.zip(u32_arg(agent, args.get(1))) else {
+    let Some((memory, delta)) = memory.zip(u64_arg(agent, args.get(1))) else {
         return Err(type_error(agent, "expected a memory and a page count", gc));
     };
     match host.memory_grow(memory, delta) {
@@ -177,7 +177,11 @@ pub(super) fn memory_to_resizable<'gc>(
         }
     }
     let maximum = host.memory_type(memory).and_then(|ty| ty.maximum());
-    let Some(max) = maximum.and_then(|pages| usize::try_from(pages * PAGE).ok()) else {
+    let Some(max) = maximum.and_then(|pages| {
+        pages
+            .checked_mul(PAGE)
+            .and_then(|bytes| usize::try_from(bytes).ok())
+    }) else {
         return Err(type_error(
             agent,
             "a memory without a maximum cannot have a resizable buffer",
@@ -211,7 +215,7 @@ pub(crate) fn resize_hook<'gc>(
     if new_byte_length < current {
         return Err(range(agent, "a memory's buffer cannot shrink"));
     }
-    let delta = u32::try_from((new_byte_length - current) / PAGE as usize).unwrap_or(u32::MAX);
+    let delta = ((new_byte_length - current) / PAGE as usize) as u64;
     if let Err(message) = host.memory_grow(memory, delta) {
         return Err(range(agent, &message));
     }

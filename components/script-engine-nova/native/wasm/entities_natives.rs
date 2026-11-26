@@ -6,25 +6,30 @@
 //! the bootstrap for the entity's type; a bad handle or a value of the wrong
 //! type throws `TypeError`, and a bound exceeded throws `RangeError`.
 
-use genet_wasm::wasmi::{TableType, ValType};
+use genet_wasm::wasmi::ValType;
 use nova_vm::ecmascript::{Agent, ArgumentsList, ExceptionType, JsResult, Value};
 use nova_vm::engine::GcScope;
 
 use super::bridge::{
     error, handle_arg, number, require_host, string, string_arg, to_js, to_val, type_error,
 };
-use genet_wasm::entities::val_ref;
+use genet_wasm::entities::{table_type_of, val_ref};
 use genet_wasm::json;
 
-pub(super) fn u32_arg(agent: &Agent, value: Value) -> Option<u32> {
-    handle_arg(agent, value).and_then(|n| u32::try_from(n).ok())
+/// A count as a number, or as the decimal string the bootstrap sends for a
+/// 64-bit limit.
+pub(super) fn u64_arg(agent: &Agent, value: Value) -> Option<u64> {
+    match string_arg(agent, value) {
+        Some(text) => text.parse().ok(),
+        None => handle_arg(agent, value).map(|n| n as u64),
+    }
 }
 
 /// An optional maximum: undefined, or a page or element count.
-pub(super) fn maximum_arg(agent: &Agent, value: Value) -> Result<Option<u32>, ()> {
+pub(super) fn maximum_arg(agent: &Agent, value: Value) -> Result<Option<u64>, ()> {
     match value {
         Value::Undefined => Ok(None),
-        value => u32_arg(agent, value).map(Some).ok_or(()),
+        value => u64_arg(agent, value).map(Some).ok_or(()),
     }
 }
 
@@ -109,7 +114,8 @@ fn table_element(host: &super::WasmHost, handle: usize) -> Option<ValType> {
     })
 }
 
-/// `tableNew(element, initial, maximum?, init)`: a table handle.
+/// `tableNew(element, initial, maximum?, init, is64)`: a table handle; a
+/// maximum below the initial size throws `RangeError`.
 pub(super) fn table_new<'gc>(
     agent: &mut Agent,
     _this: Value,
@@ -119,12 +125,20 @@ pub(super) fn table_new<'gc>(
     let gc = gc.into_nogc();
     let host = require_host(agent, gc)?;
     let element = string_arg(agent, args.get(0)).and_then(|t| json::ref_type(&t));
-    let initial = u32_arg(agent, args.get(1));
+    let initial = u64_arg(agent, args.get(1));
     let maximum = maximum_arg(agent, args.get(2));
     let (Some(element), Some(initial), Ok(maximum)) = (element, initial, maximum) else {
         return Err(type_error(agent, "expected an element type and limits", gc));
     };
-    let ty = TableType::new(element, initial, maximum);
+    let is64 = args.get(4) == Value::Boolean(true);
+    let Some(ty) = table_type_of(element, initial, maximum, is64) else {
+        return Err(error(
+            agent,
+            ExceptionType::RangeError,
+            "invalid table limits",
+            gc,
+        ));
+    };
     let value_ty = match element {
         genet_wasm::wasmi::RefType::Func => ValType::FuncRef,
         genet_wasm::wasmi::RefType::Extern => ValType::ExternRef,
@@ -148,11 +162,8 @@ pub(super) fn table_get<'gc>(
     let gc = gc.into_nogc();
     let host = require_host(agent, gc)?;
     let handle = handle_arg(agent, args.get(0));
-    let index = u32_arg(agent, args.get(1));
-    match handle
-        .zip(index)
-        .and_then(|(h, i)| host.table_get(h, u64::from(i)))
-    {
+    let index = u64_arg(agent, args.get(1));
+    match handle.zip(index).and_then(|(h, i)| host.table_get(h, i)) {
         Some(Some(element)) => Ok(to_js(agent, &host, &element.into(), gc)),
         Some(None) => Err(error(
             agent,
@@ -174,7 +185,7 @@ pub(super) fn table_set<'gc>(
     let gc = gc.into_nogc();
     let host = require_host(agent, gc)?;
     let handle = handle_arg(agent, args.get(0));
-    let index = u32_arg(agent, args.get(1));
+    let index = u64_arg(agent, args.get(1));
     let Some(((handle, index), ty)) = handle
         .zip(index)
         .and_then(|(h, i)| Some(((h, i), table_element(&host, h)?)))
@@ -184,7 +195,7 @@ pub(super) fn table_set<'gc>(
     let Some(value) = to_val(agent, &host, args.get(2), ty, gc).and_then(val_ref) else {
         return Err(type_error(agent, "a value of the wrong type", gc));
     };
-    match host.table_set(handle, u64::from(index), value) {
+    match host.table_set(handle, index, value) {
         Ok(()) => Ok(Value::Undefined),
         Err(message) => Err(error(agent, ExceptionType::RangeError, &message, gc)),
     }
@@ -200,7 +211,7 @@ pub(super) fn table_grow<'gc>(
     let gc = gc.into_nogc();
     let host = require_host(agent, gc)?;
     let handle = handle_arg(agent, args.get(0));
-    let delta = u32_arg(agent, args.get(1));
+    let delta = u64_arg(agent, args.get(1));
     let Some(((handle, delta), ty)) = handle
         .zip(delta)
         .and_then(|(h, d)| Some(((h, d), table_element(&host, h)?)))
@@ -210,7 +221,7 @@ pub(super) fn table_grow<'gc>(
     let Some(init) = to_val(agent, &host, args.get(2), ty, gc).and_then(val_ref) else {
         return Err(type_error(agent, "a value of the wrong type", gc));
     };
-    match host.table_grow(handle, u64::from(delta), init) {
+    match host.table_grow(handle, delta, init) {
         Ok(old) => Ok(number(agent, old as f64, gc)),
         Err(message) => Err(error(agent, ExceptionType::RangeError, &message, gc)),
     }

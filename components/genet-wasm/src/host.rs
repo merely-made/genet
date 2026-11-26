@@ -156,7 +156,11 @@ impl<V> WasmHost<V> {
     /// Never: fuel is enabled just before it is set.
     pub fn new() -> Self {
         let mut config = Config::default();
-        config.consume_fuel(true);
+        config
+            .consume_fuel(true)
+            .wasm_simd(true)
+            .wasm_relaxed_simd(true)
+            .wasm_memory64(true);
         let engine = Engine::new(&config);
         let mut store = Store::new(&engine, ());
         store.set_fuel(UNBOUNDED_FUEL).expect("fuel is enabled");

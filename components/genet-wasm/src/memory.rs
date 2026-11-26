@@ -61,13 +61,20 @@ impl<V> WasmHost<V> {
         self.memories.borrow().get(handle).map(|e| e.memory)
     }
 
-    /// `new WebAssembly.Memory({ initial, maximum })`, in pages.
+    /// `new WebAssembly.Memory({ initial, maximum, address })`, in pages.
     ///
     /// # Errors
     ///
     /// wasmi's message, for the native to throw.
-    pub fn memory_new(&self, initial: u32, maximum: Option<u32>) -> Result<usize, String> {
-        let ty = MemoryType::new(initial, maximum);
+    pub fn memory_new(
+        &self,
+        initial: u64,
+        maximum: Option<u64>,
+        is64: bool,
+    ) -> Result<usize, String> {
+        let mut builder = MemoryType::builder();
+        builder.memory64(is64).min(initial).max(maximum);
+        let ty = builder.build().map_err(|e| e.to_string())?;
         let memory = Memory::new(&mut *self.store.borrow_mut(), ty).map_err(|e| e.to_string())?;
         Ok(self.push_memory(memory))
     }
@@ -78,12 +85,10 @@ impl<V> WasmHost<V> {
     /// # Errors
     ///
     /// wasmi's message, for the native to throw.
-    pub fn memory_grow(&self, handle: usize, delta: u32) -> Result<u64, String> {
+    pub fn memory_grow(&self, handle: usize, delta: u64) -> Result<u64, String> {
         let memory = self.memory(handle).ok_or("not a memory")?;
         let mut store = self.store.borrow_mut();
-        memory
-            .grow(&mut *store, u64::from(delta))
-            .map_err(|e| e.to_string())
+        memory.grow(&mut *store, delta).map_err(|e| e.to_string())
     }
 
     pub fn memory_type(&self, handle: usize) -> Option<MemoryType> {

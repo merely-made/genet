@@ -3,7 +3,8 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The WebAssembly object's tests, shared by every backend (Genet's
-//! WebAssembly object plan, W5): W1 and W2 in `calls.rs`, W4 in `entities.rs`.
+//! WebAssembly object plan, W5): W1 and W2 in `calls.rs`, W4 in `entities.rs`,
+//! SIMD and 64-bit addresses in `wide.rs`.
 //! A backend includes this module in a test crate, implements [`Harness`] for
 //! its engine and invokes `conformance_tests!` with it; `suite` runs the
 //! tree's web platform tests the same way.
@@ -13,6 +14,7 @@
 pub mod calls;
 pub mod entities;
 pub mod suite;
+pub mod wide;
 
 /// What the tests need from an engine with `WebAssembly` installed.
 pub trait Harness: Sized {
@@ -163,6 +165,22 @@ macro_rules! conformance_tests {
         #[test]
         fn a_memory_without_a_maximum_has_no_resizable_buffer() {
             conformance::entities::a_memory_without_a_maximum_has_no_resizable_buffer::<$harness>();
+        }
+        #[test]
+        fn v128_throws_a_type_error_at_the_boundary() {
+            conformance::wide::v128_throws_a_type_error_at_the_boundary::<$harness>();
+        }
+        #[test]
+        fn simd_runs_inside_a_module() {
+            conformance::wide::simd_runs_inside_a_module::<$harness>();
+        }
+        #[test]
+        fn an_i64_memory_uses_bigints() {
+            conformance::wide::an_i64_memory_uses_bigints::<$harness>();
+        }
+        #[test]
+        fn an_i64_table_uses_bigints() {
+            conformance::wide::an_i64_table_uses_bigints::<$harness>();
         }
     };
 }

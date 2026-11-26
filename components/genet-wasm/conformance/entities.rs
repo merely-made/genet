@@ -58,7 +58,7 @@ pub fn a_table_holds_functions_with_their_identity<H: Harness>() {
     );
     assert_eq!(
         out,
-        r#"true|7|9|true|2|3||RangeError|{"minimum":3,"element":"funcref"}"#
+        r#"true|7|9|true|2|3||RangeError|{"minimum":3,"element":"funcref","address":"i32"}"#
     );
 }
 

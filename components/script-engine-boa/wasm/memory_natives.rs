@@ -14,20 +14,20 @@ use genet_wasm::{PAGE, json};
 use super::WasmHost;
 use super::bridge::{
     arg, detach_key, detach_stale, handle_arg, host, number, range_error, require_host, string,
-    take_buffer_and_detach, type_error, u32_arg,
+    take_buffer_and_detach, type_error,
 };
-use super::entities_natives::maximum_arg;
+use super::entities_natives::{maximum_arg, u64_arg};
 
-/// `memoryNew(initial, maximum?)`: a memory handle.
+/// `memoryNew(initial, maximum?, is64)`: a memory handle.
 pub(super) fn memory_new(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
-    let initial = u32_arg(&arg(args, 0));
+    let initial = u64_arg(&arg(args, 0));
     let maximum = maximum_arg(&arg(args, 1));
     let (Some(initial), Ok(maximum)) = (initial, maximum) else {
         return Err(type_error("expected page counts"));
     };
     let handle = host
-        .memory_new(initial, maximum)
+        .memory_new(initial, maximum, arg(args, 2).as_boolean() == Some(true))
         .map_err(|m| range_error(&m))?;
     Ok(number(handle))
 }
@@ -36,7 +36,7 @@ pub(super) fn memory_new(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> Js
 pub(super) fn memory_grow(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
     let memory = handle_arg(&arg(args, 0));
-    let Some((memory, delta)) = memory.zip(u32_arg(&arg(args, 1))) else {
+    let Some((memory, delta)) = memory.zip(u64_arg(&arg(args, 1))) else {
         return Err(type_error("expected a memory and a page count"));
     };
     let old = host
@@ -119,8 +119,11 @@ pub(super) fn memory_to_resizable(
             "a memory without a maximum cannot have a resizable buffer",
         ));
     };
+    let bytes = max
+        .checked_mul(PAGE)
+        .ok_or_else(|| range_error("the maximum is too large for a buffer"))?;
     take_buffer_and_detach(&host, memory);
-    make_buffer(&host, memory, Some(max * PAGE), ctx)
+    make_buffer(&host, memory, Some(bytes), ctx)
 }
 
 /// `memoryType(memory)`: its limits as JSON, `minimum` its current size.
@@ -158,7 +161,7 @@ pub(crate) fn resize_hook(
     if new_byte_length < current {
         return Err(range_error("a memory's buffer cannot shrink"));
     }
-    let delta = u32::try_from((new_byte_length - current) / PAGE).unwrap_or(u32::MAX);
+    let delta = (new_byte_length - current) / PAGE;
     host.memory_grow(memory, delta)
         .map_err(|m| range_error(&m))?;
     detach_stale(&host, Some(memory));

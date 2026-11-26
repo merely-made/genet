@@ -5,22 +5,31 @@
 //! The natives for `Global` and `Table`, on Bole.
 
 use boa_engine::{Context, JsResult, JsValue};
-use genet_wasm::entities::val_ref;
+use genet_wasm::entities::{table_type_of, val_ref};
 use genet_wasm::json;
-use genet_wasm::wasmi::{RefType, TableType, ValType};
+use genet_wasm::wasmi::{RefType, ValType};
 
 use super::WasmHost;
 use super::bridge::{
     arg, handle_arg, number, range_error, require_host, string, string_arg, to_js, to_val,
-    type_error, u32_arg,
+    type_error,
 };
 
+/// A count as a number, or as the decimal string the bootstrap sends for a
+/// 64-bit limit.
+pub(super) fn u64_arg(value: &JsValue) -> Option<u64> {
+    match string_arg(value) {
+        Some(text) => text.parse().ok(),
+        None => handle_arg(value).map(|n| n as u64),
+    }
+}
+
 /// An optional maximum: undefined, or a count.
-pub(super) fn maximum_arg(value: &JsValue) -> Result<Option<u32>, ()> {
+pub(super) fn maximum_arg(value: &JsValue) -> Result<Option<u64>, ()> {
     if value.is_undefined() {
         return Ok(None);
     }
-    u32_arg(value).map(Some).ok_or(())
+    u64_arg(value).map(Some).ok_or(())
 }
 
 /// `globalNew(type, mutable, value)`: a global handle.
@@ -82,11 +91,11 @@ fn table_element(host: &WasmHost, handle: usize) -> Option<ValType> {
     Some(element_type(host.table_type(handle)?.element()))
 }
 
-/// `tableNew(element, initial, maximum?, init)`: a table handle.
+/// `tableNew(element, initial, maximum?, init, is64)`: a table handle.
 pub(super) fn table_new(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
     let element = string_arg(&arg(args, 0)).and_then(|t| json::ref_type(&t));
-    let initial = u32_arg(&arg(args, 1));
+    let initial = u64_arg(&arg(args, 1));
     let maximum = maximum_arg(&arg(args, 2));
     let (Some(element), Some(initial), Ok(maximum)) = (element, initial, maximum) else {
         return Err(type_error("expected an element type and limits"));
@@ -94,9 +103,10 @@ pub(super) fn table_new(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsR
     let Some(init) = to_val(&host, &arg(args, 3), element_type(element)).and_then(val_ref) else {
         return Err(type_error("a value of the wrong type"));
     };
-    let handle = host
-        .table_new(TableType::new(element, initial, maximum), init)
-        .map_err(|m| range_error(&m))?;
+    let is64 = arg(args, 4).as_boolean() == Some(true);
+    let ty = table_type_of(element, initial, maximum, is64)
+        .ok_or_else(|| range_error("invalid table limits"))?;
+    let handle = host.table_new(ty, init).map_err(|m| range_error(&m))?;
     Ok(number(handle))
 }
 
@@ -104,11 +114,8 @@ pub(super) fn table_new(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsR
 pub(super) fn table_get(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
     let handle = handle_arg(&arg(args, 0));
-    let index = u32_arg(&arg(args, 1));
-    match handle
-        .zip(index)
-        .and_then(|(h, i)| host.table_get(h, u64::from(i)))
-    {
+    let index = u64_arg(&arg(args, 1));
+    match handle.zip(index).and_then(|(h, i)| host.table_get(h, i)) {
         Some(Some(element)) => Ok(to_js(&host, &element.into())),
         Some(None) => Err(range_error("table index out of bounds")),
         None => Err(type_error("not a table handle")),
@@ -119,7 +126,7 @@ pub(super) fn table_get(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsR
 pub(super) fn table_set(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
     let handle = handle_arg(&arg(args, 0));
-    let index = u32_arg(&arg(args, 1));
+    let index = u64_arg(&arg(args, 1));
     let Some(((handle, index), ty)) = handle
         .zip(index)
         .and_then(|(h, i)| Some(((h, i), table_element(&host, h)?)))
@@ -129,7 +136,7 @@ pub(super) fn table_set(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsR
     let Some(value) = to_val(&host, &arg(args, 2), ty).and_then(val_ref) else {
         return Err(type_error("a value of the wrong type"));
     };
-    host.table_set(handle, u64::from(index), value)
+    host.table_set(handle, index, value)
         .map_err(|m| range_error(&m))?;
     Ok(JsValue::undefined())
 }
@@ -138,7 +145,7 @@ pub(super) fn table_set(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsR
 pub(super) fn table_grow(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
     let handle = handle_arg(&arg(args, 0));
-    let delta = u32_arg(&arg(args, 1));
+    let delta = u64_arg(&arg(args, 1));
     let Some(((handle, delta), ty)) = handle
         .zip(delta)
         .and_then(|(h, d)| Some(((h, d), table_element(&host, h)?)))
@@ -149,7 +156,7 @@ pub(super) fn table_grow(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> Js
         return Err(type_error("a value of the wrong type"));
     };
     let old = host
-        .table_grow(handle, u64::from(delta), init)
+        .table_grow(handle, delta, init)
         .map_err(|m| range_error(&m))?;
     Ok(JsValue::new(old as f64))
 }

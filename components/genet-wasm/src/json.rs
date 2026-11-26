@@ -75,10 +75,26 @@ fn types(out: &mut String, types: &[ValType]) {
     out.push(']');
 }
 
-fn maximum(out: &mut String, max: Option<u64>) {
+/// A limit as a JSON number, or a string for a 64-bit type, which the
+/// bootstrap turns into a BigInt.
+fn limit(out: &mut String, name: &str, value: u64, is64: bool) {
+    let quote = if is64 { "\"" } else { "" };
+    out.push_str(&format!("\"{name}\":{quote}{value}{quote}"));
+}
+
+fn maximum(out: &mut String, max: Option<u64>, is64: bool) {
     if let Some(max) = max {
-        out.push_str(&format!(",\"maximum\":{max}"));
+        out.push(',');
+        limit(out, "maximum", max, is64);
     }
+}
+
+fn address(out: &mut String, is64: bool) {
+    out.push_str(if is64 {
+        ",\"address\":\"i64\""
+    } else {
+        ",\"address\":\"i32\""
+    });
 }
 
 /// `"parameters":[…],"results":[…]`.
@@ -92,17 +108,19 @@ pub fn func(out: &mut String, ty: &FuncType) {
 /// A memory's type, with `minimum` its current size in pages as type
 /// reflection reports it.
 pub fn memory(out: &mut String, ty: &MemoryType, size: u64) {
-    out.push_str(&format!("\"minimum\":{size}"));
-    maximum(out, ty.maximum());
-    out.push_str(",\"shared\":false,\"index\":\"i32\"");
+    limit(out, "minimum", size, ty.is_64());
+    maximum(out, ty.maximum(), ty.is_64());
+    out.push_str(",\"shared\":false");
+    address(out, ty.is_64());
 }
 
 /// A table's type, with `minimum` its current length.
 pub fn table(out: &mut String, ty: &TableType, size: u64) {
-    out.push_str(&format!("\"minimum\":{size}"));
-    maximum(out, ty.maximum());
+    limit(out, "minimum", size, ty.is_64());
+    maximum(out, ty.maximum(), ty.is_64());
     out.push_str(",\"element\":");
     string(out, ref_type_name(ty.element()));
+    address(out, ty.is_64());
 }
 
 pub fn global(out: &mut String, ty: &GlobalType) {

@@ -55,10 +55,6 @@ pub(super) fn handle_arg(value: &JsValue) -> Option<usize> {
     (n >= 0.0 && n.fract() == 0.0 && n < usize::MAX as f64).then_some(n as usize)
 }
 
-pub(super) fn u32_arg(value: &JsValue) -> Option<u32> {
-    handle_arg(value).and_then(|n| u32::try_from(n).ok())
-}
-
 /// A string argument, or `None` if it is not a string or has a lone surrogate.
 pub(super) fn string_arg(value: &JsValue) -> Option<String> {
     value.as_string()?.to_std_string().ok()

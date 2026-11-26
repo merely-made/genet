@@ -4,7 +4,7 @@
 
 //! `WebAssembly.Global` and `WebAssembly.Table` on the store (W4).
 
-use wasmi::{Global, GlobalType, Mutability, Ref, Table, TableType, Val};
+use wasmi::{Global, GlobalType, Mutability, Ref, RefType, Table, TableType, Val};
 
 use crate::host::WasmHost;
 
@@ -15,6 +15,28 @@ pub fn val_ref(value: Val) -> Option<Ref> {
         Val::ExternRef(r) => Some(Ref::Extern(r)),
         _ => None,
     }
+}
+
+/// A table type of `element`, 64-bit if `is64`; `None` if `initial` exceeds
+/// `maximum` or a 32-bit limit does not fit.
+pub fn table_type_of(
+    element: RefType,
+    initial: u64,
+    maximum: Option<u64>,
+    is64: bool,
+) -> Option<TableType> {
+    if maximum.is_some_and(|max| max < initial) {
+        return None;
+    }
+    if is64 {
+        return Some(TableType::new64(element, initial, maximum));
+    }
+    let maximum = maximum.map(u32::try_from).transpose().ok()?;
+    Some(TableType::new(
+        element,
+        u32::try_from(initial).ok()?,
+        maximum,
+    ))
 }
 
 impl<V> WasmHost<V> {

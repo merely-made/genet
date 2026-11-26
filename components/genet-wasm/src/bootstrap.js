@@ -27,6 +27,8 @@
   const KIND = { function: 0, table: 1, memory: 2, global: 3 };
   const TRAPPED = freeze(create(null));
   const MAX_PAGES = 65536;
+  const MAX_PAGES_64 = 1n << 48n;
+  const MAX_U64 = (1n << 64n) - 1n;
   const MAX_TABLE = 10000000;
 
   const errorClass = (name) => {
@@ -84,12 +86,44 @@
     return type;
   };
   const defaultValue = (type) => ({ i32: 0, i64: 0n, f32: 0, f64: 0, anyfunc: null, funcref: null })[type];
+  // The memory64 additions: an `address` of "i32" or "i64" makes limits, deltas,
+  // indices and sizes numbers or BigInts. An i64 value is a BigInt in 0..2^64-1,
+  // or a number standing for one.
+  const addressType = (value) => {
+    if (value === undefined) return 'i32';
+    const type = String(value);
+    if (type !== 'i32' && type !== 'i64') throw new TypeError('address must be "i32" or "i64"');
+    return type;
+  };
+  const addressValue = (value, what, is64) => {
+    if (!is64) return enforceRange(value, what);
+    let n = value;
+    if (typeof n !== 'bigint') {
+      n = Number(n);
+      if (!Number.isFinite(n)) throw new TypeError(`${what} must be a finite number`);
+      n = BigInt(Math.trunc(n));
+    }
+    if (n < 0n || n > MAX_U64) throw new TypeError(`${what} is out of range`);
+    return n;
+  };
+  // What a native takes for a count: a decimal string for i64 limits, which may
+  // not fit a double, and a number, saturated, for deltas and indices.
+  const limitArg = (n) => (n === undefined ? undefined : String(n));
+  const countArg = (n) => (typeof n === 'bigint' ? Number(n < 2n ** 53n ? n : 2n ** 53n - 1n) : n);
+  const sizeResult = (n, is64) => (is64 ? BigInt(n) : n);
+  // A reflected type's limits are BigInts for an i64 address.
+  const reflect = (type) => {
+    if (type.address !== 'i64') return type;
+    const out = { ...type, minimum: BigInt(type.minimum) };
+    if ('maximum' in type) out.maximum = BigInt(type.maximum);
+    return out;
+  };
   // A descriptor's limits, each member read once and in WebIDL's order; type
   // reflection's `minimum` stands in for `initial`.
-  const limits = (descriptor) => {
+  const limits = (descriptor, is64) => {
     const read = (name) => {
       const value = descriptor[name];
-      return value === undefined ? undefined : enforceRange(value, name);
+      return value === undefined ? undefined : addressValue(value, name, is64);
     };
     const initial = read('initial');
     const maximum = read('maximum');
@@ -114,7 +148,12 @@
     const sig = parse(N.Signature(handle));
     const params = sig.parameters.map(to);
     const results = sig.results.map(from);
-    f = (...args) => callWasm(handle, results, params.map((convert, i) => convert(args[i])));
+    // A v128 anywhere in the signature refuses the call before it runs.
+    const crossing = [...sig.parameters, ...sig.results].includes('v128');
+    f = (...args) => {
+      if (crossing) throw new TypeError('v128 values cannot cross to or from script');
+      return callWasm(handle, results, params.map((convert, i) => convert(args[i])));
+    };
     setPrototypeOf(f, WasmFunction.prototype);
     defineProperty(f, 'name', { value: String(sig.index ?? handle), configurable: true });
     defineProperty(f, 'length', { value: sig.parameters.length, configurable: true });
@@ -166,16 +205,19 @@
   class Memory {
     constructor(descriptor) {
       if (!isObject(descriptor)) throw new TypeError('the memory descriptor must be an object');
-      const { initial, maximum } = limits(descriptor);
+      const is64 = addressType(descriptor.address) === 'i64';
+      const { initial, maximum } = limits(descriptor, is64);
       if (descriptor.shared) throw new TypeError('shared memory is not supported yet');
-      if (initial > MAX_PAGES || (maximum !== undefined && (maximum > MAX_PAGES || maximum < initial))) {
+      const cap = is64 ? MAX_PAGES_64 : MAX_PAGES;
+      if (initial > cap || (maximum !== undefined && (maximum > cap || maximum < initial))) {
         throw new RangeError('invalid memory limits');
       }
-      memories.register(this, N.MemoryNew(initial, maximum));
+      memories.register(this, N.MemoryNew(limitArg(initial), limitArg(maximum), is64));
     }
     grow(delta) {
       const handle = memories.handle(this);
-      return N.MemoryGrow(handle, enforceRange(delta, 'delta'));
+      const is64 = parse(N.MemoryType(handle)).address === 'i64';
+      return sizeResult(N.MemoryGrow(handle, countArg(addressValue(delta, 'delta', is64))), is64);
     }
     get buffer() {
       return N.MemoryBuffer(memories.handle(this));
@@ -187,7 +229,7 @@
       return N.MemoryToResizable(memories.handle(this));
     }
     type() {
-      return parse(N.MemoryType(memories.handle(this)));
+      return reflect(parse(N.MemoryType(memories.handle(this))));
     }
   }
 
@@ -220,43 +262,48 @@
   }
 
   const elementType = (handle) => parse(N.TableType(handle)).element;
+  const is64Table = (handle) => parse(N.TableType(handle)).address === 'i64';
   class Table {
     constructor(descriptor, value = undefined) {
       if (!isObject(descriptor)) throw new TypeError('the table descriptor must be an object');
+      const is64 = addressType(descriptor.address) === 'i64';
       const element = String(descriptor.element);
       if (!['anyfunc', 'funcref', 'externref'].includes(element)) {
         throw new TypeError('element must be anyfunc, funcref or externref');
       }
-      const { initial, maximum } = limits(descriptor);
+      const { initial, maximum } = limits(descriptor, is64);
       if (initial > MAX_TABLE || (maximum !== undefined && maximum < initial)) {
         throw new RangeError('invalid table limits');
       }
       const init = value === undefined ? defaultValue(element) : value;
-      tables.register(this, N.TableNew(element, initial, maximum, to(element)(init)));
+      tables.register(this, N.TableNew(element, limitArg(initial), limitArg(maximum), to(element)(init), is64));
     }
     get length() {
-      return N.TableLength(tables.handle(this));
+      const handle = tables.handle(this);
+      return sizeResult(N.TableLength(handle), is64Table(handle));
     }
     get(index) {
       const handle = tables.handle(this);
-      return from(elementType(handle))(N.TableGet(handle, enforceRange(index, 'index')));
+      const i = countArg(addressValue(index, 'index', is64Table(handle)));
+      return from(elementType(handle))(N.TableGet(handle, i));
     }
     set(index, value = undefined) {
       const handle = tables.handle(this);
-      const i = enforceRange(index, 'index');
+      const i = countArg(addressValue(index, 'index', is64Table(handle)));
       const element = elementType(handle);
       const v = arguments.length < 2 ? defaultValue(element) : value;
       N.TableSet(handle, i, to(element)(v));
     }
     grow(delta, value = undefined) {
       const handle = tables.handle(this);
-      const d = enforceRange(delta, 'delta');
+      const is64 = is64Table(handle);
+      const d = countArg(addressValue(delta, 'delta', is64));
       const element = elementType(handle);
       const v = arguments.length < 2 ? defaultValue(element) : value;
-      return N.TableGrow(handle, d, to(element)(v));
+      return sizeResult(N.TableGrow(handle, d, to(element)(v)), is64);
     }
     type() {
-      return parse(N.TableType(tables.handle(this)));
+      return reflect(parse(N.TableType(tables.handle(this))));
     }
   }
 
@@ -308,11 +355,11 @@
     }
     static imports(module) {
       return parse(N.Describe(moduleHandle(module))).imports
-        .map(({ module, name, kind, type }) => ({ module, name, kind, type }));
+        .map(({ module, name, kind, type }) => ({ module, name, kind, type: reflect(type) }));
     }
     static exports(module) {
       return parse(N.Describe(moduleHandle(module))).exports
-        .map(({ name, kind, type }) => ({ name, kind, type }));
+        .map(({ name, kind, type }) => ({ name, kind, type: reflect(type) }));
     }
     static customSections(module, sectionName) {
       const handle = moduleHandle(module);

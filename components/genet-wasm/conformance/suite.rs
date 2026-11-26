@@ -21,12 +21,6 @@ const LIMIT: Duration = Duration::from_secs(180);
 
 const PRELUDE: &str = "globalThis.self = globalThis;
 globalThis.GLOBAL = { isWindow: () => false, isWorker: () => false, isShadowRealm: () => false };
-// `wasm-module-builder.js` encodes names with Annex B's `unescape`, which
-// genet-bole builds without; this measures WebAssembly, not Annex B.
-if (typeof unescape === 'undefined') {
-  globalThis.unescape = (s) => String(s).replace(/%u([0-9a-fA-F]{4})|%([0-9a-fA-F]{2})/g,
-    (_, u, x) => String.fromCharCode(parseInt(u ?? x, 16)));
-}
 if (typeof console === 'undefined') {
   const quiet = () => {};
   globalThis.console = { log: quiet, debug: quiet, info: quiet, warn: quiet, error: quiet };

@@ -17,6 +17,12 @@ use std::collections::{HashMap, HashSet};
 
 use accesskit::{Node, NodeId, TreeId, TreeInfo, TreeUpdate};
 
+#[cfg(test)]
+thread_local! {
+    /// Delta computations on this thread, for tests that prove none happen.
+    pub(super) static DELTAS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// One whole root-host tree with parent links for local validation.
 #[derive(Clone, Debug)]
 pub(super) struct RetainedTree {
@@ -241,6 +247,8 @@ impl RetainedTree {
 
     /// The changes a reader holding the tree from before `pending` still needs.
     pub(super) fn delta(&self, pending: &Pending) -> TreeUpdate {
+        #[cfg(test)]
+        DELTAS.with(|count| count.set(count.get() + 1));
         match pending {
             Pending::All => self.snapshot(self.focus),
             Pending::Nodes { ids, tree, .. } => TreeUpdate {

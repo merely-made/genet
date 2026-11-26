@@ -102,11 +102,23 @@ impl A11yPublication {
             .then(|| self.initial.clone())
             .flatten()
     }
-    fn replay(&self) -> Vec<TreeUpdate> {
+    // Replay entries are built only when an adapter asks for one, so a flush
+    // with no active reader does no tree work.
+    fn replay_len(&self) -> usize {
         match &self.retained {
-            Some(retained) => vec![retained.tree.delta(&retained.pending)],
-            None => self.ordered.clone(),
+            Some(_) => 1,
+            None => self.ordered.len(),
         }
+    }
+    fn replay_entry(&self, index: usize) -> TreeUpdate {
+        match &self.retained {
+            Some(retained) => retained.tree.delta(&retained.pending),
+            None => self.ordered[index].clone(),
+        }
+    }
+    #[cfg(test)]
+    fn replay(&self) -> Vec<TreeUpdate> {
+        (0..self.replay_len()).map(|i| self.replay_entry(i)).collect()
     }
     fn mark_delivered(&mut self) {
         if let Some(retained) = &mut self.retained {
@@ -407,15 +419,15 @@ impl BridgeState {
             return self.delivered;
         }
         self.delivered = false;
-        let updates = self
+        let entries = self
             .publication
             .lock()
-            .map(|p| p.replay())
+            .map(|p| p.replay_len())
             .unwrap_or_default();
-        if updates.is_empty() {
+        if entries == 0 {
             return false;
         }
-        for update in updates {
+        for index in 0..entries {
             if self.activation_epoch() != delivery_epoch {
                 self.replay.store(true, Ordering::Release);
                 return false;
@@ -427,7 +439,13 @@ impl BridgeState {
                 current = self.activation_epoch() == delivery_epoch;
                 match &safe_root {
                     Some(safe_root) if !current => safe_root.clone(),
-                    _ => update.clone(),
+                    // Built on request; activation never calls the adapter
+                    // while holding this lock, so taking it here is safe.
+                    _ => self
+                        .publication
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .replay_entry(index),
                 }
             };
             let accepted = deliver(&mut supplier);

@@ -345,6 +345,42 @@ fn late_reader_gets_the_whole_tree_then_the_current_focus() {
 }
 
 #[test]
+fn draining_without_a_taker_computes_no_delta() {
+    let deltas = || super::retained::DELTAS.with(|count| count.get());
+    let mut model = Model::new();
+    let mut state = installed(&model);
+    let mut rng = Lcg(5);
+    for _ in 0..10 {
+        state.update_partial(model.edit(&mut rng)).unwrap();
+    }
+    let before = deltas();
+    for _ in 0..50 {
+        assert!(!state.flush(|_| false), "no reader is active");
+    }
+    assert_eq!(deltas(), before, "an inactive adapter never asks for the tree");
+
+    let initial = state.activation().request_initial_tree().unwrap();
+    let mut reader = Tree::new(initial, true);
+    let mut feed = |state: &mut BridgeState| {
+        state.flush(|supply| {
+            reader.update_and_process_changes(supply(), &mut Quiet);
+            true
+        })
+    };
+    assert!(feed(&mut state));
+    assert_eq!(deltas(), before + 1, "the backlog is built once, on request");
+    for _ in 0..50 {
+        assert!(feed(&mut state), "nothing pending, still in sync");
+    }
+    assert_eq!(deltas(), before + 1, "a drain with nothing pending does no tree work");
+
+    state.update_partial(model.edit(&mut rng)).unwrap();
+    assert!(feed(&mut state));
+    assert_eq!(deltas(), before + 2, "a new partial is delivered once");
+    reader_matches(&reader, &model);
+}
+
+#[test]
 fn removing_a_subtree_drops_it_from_the_retained_tree() {
     let mut model = Model::new();
     let mut tree = RetainedTree::from_full(model.full(model.focus)).unwrap();

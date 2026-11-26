@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. In progress: P1, P2, P5 and P6 met; P4's design is with Mark; P3 next.
+**Status:** 2026-11-25. In progress: P1, P2, P5 and P6 met; P3 and P4 in progress (D6).
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -132,6 +132,25 @@ the counts and what is missing.
   reviewed before it lands on main. Outcome: new.
 
   Links: area Scripting · plans webassembly-pages P1, webassembly-pages P4, webassembly-pages P5, webassembly-pages P6 · summary The WebAssembly pages lane runs two agents at a time.
+
+- **D6. Keepers and an idle reset (Mark, 2026-11-25):**
+  - **Evidence:** Findings 11. wasmi frees nothing short of dropping the store, and Genet pins every
+    wrapper, import and externref.
+  - **Offered:** keepers and an idle reset (recommended); one store for each linked group; releasing
+    handles only.
+  - **Answer:** "Keepers + idle reset (Recommended)".
+  - **What follows:**
+    - Wrappers register with a `FinalizationRegistry` that releases their handles and module bytes.
+      The handle tables reuse released slots.
+    - Import functions and externref values are held from script, by a keeper for each linked
+      group. The tracing collector then reclaims cycles, and no root is added per crossing.
+    - Every buffer script can see keeps its keeper alive.
+    - When no wrapper or buffer is live, the host drops its wasmi engine and store and starts fresh.
+  - **What stays:** a long-lived instance still lets the store's small entries grow, and memory bytes
+    are freed only at a reset.
+  - **Outcome:** new; answers P4's design fork.
+
+  Links: area Scripting · plans webassembly-pages P4 · summary Dropped WebAssembly is freed through FinalizationRegistry, keepers held from script, and a reset of the wasmi store once nothing is live.
 
 ## Open questions
 

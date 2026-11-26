@@ -881,11 +881,22 @@ fn install_date_source<E: ScriptEngine>(engine: &mut E, clock: &SharedClock) {
     engine.set_date_source(Rc::new(move || clock.epoch_now_ms()));
 }
 
+/// `WebAssembly.compileStreaming` and `instantiateStreaming`, which need the
+/// realm's `Response`, so they live here rather than in the wasm bootstrap.
+pub(crate) const WASM_STREAMING: &str = include_str!("wasm_streaming.js");
+
 /// Give `realm` a `WebAssembly` object; fuel stays as the embedder set it
 /// (unbounded by default). An engine without it keeps its realms as they are.
 fn install_webassembly<E: ScriptEngine>(engine: &mut E, realm: RealmId) -> Result<(), String> {
     match engine.install_webassembly(realm) {
-        Ok(()) | Err(WasmInstallError::Unsupported) => Ok(()),
+        Ok(()) => {
+            if realm == MAIN_REALM {
+                engine.eval(WASM_STREAMING).map(drop).map_err(|e| engine.describe_error(&e))
+            } else {
+                engine.eval_in_realm(realm, WASM_STREAMING).map(drop).map_err(|e| e.to_string())
+            }
+        },
+        Err(WasmInstallError::Unsupported) => Ok(()),
         Err(WasmInstallError::Engine(message)) => Err(message),
     }
 }

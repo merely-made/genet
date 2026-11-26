@@ -1505,7 +1505,10 @@ fn open_document_realm<E: ScriptEngine>(
             });
         }
         match E::install_webassembly_from_call(child) {
-            Ok(()) | Err(script_engine_api::WasmInstallError::Unsupported) => {},
+            Ok(()) => {
+                E::eval_from_call(child, crate::WASM_STREAMING)?;
+            },
+            Err(script_engine_api::WasmInstallError::Unsupported) => {},
             Err(script_engine_api::WasmInstallError::Engine(message)) => {
                 return Err(RealmError::Engine(message));
             },

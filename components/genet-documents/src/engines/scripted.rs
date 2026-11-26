@@ -749,6 +749,85 @@ mod webassembly_tests {
         page_script_calls_wasm::<script_engine_nova::NovaEngine>();
     }
 
+    /// Runs `body` (script that ends by calling `done(string)`) and returns what it reported.
+    fn streaming_result<E: script_engine_api::ScriptEngine + 'static>(body: &str) -> String {
+        let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(&format!(
+            "<body><script>\
+             var bytes = new Uint8Array({ADD_MODULE});\
+             var wasm = {{ headers: {{ 'Content-Type': 'application/wasm' }} }};\
+             function done(s) {{ document.body.setAttribute('data-r', s); }}\
+             function name(e) {{ return e.constructor === WebAssembly.CompileError \
+               ? 'CompileError' : e.constructor === TypeError ? 'TypeError' : String(e); }}\
+             {body}\
+             </script></body>"
+        ))
+        .expect("scripted document");
+        let mut session = ScriptedDocumentSession::new(doc);
+        for _ in 0..4 {
+            session.pump(0.0);
+        }
+        let dom = session.document_mut().dom_snapshot();
+        let start = dom.find("data-r=\"").unwrap_or_else(|| panic!("no result: {dom}")) + 8;
+        dom[start..].split('"').next().unwrap().to_owned()
+    }
+
+    fn streaming_cases<E: script_engine_api::ScriptEngine + 'static>() {
+        assert_eq!(
+            streaming_result::<E>(
+                "WebAssembly.instantiateStreaming(Promise.resolve(new Response(bytes, wasm)))\
+                 .then(r => done(String(r.instance.exports.add(40, 2))), e => done(name(e)));"
+            ),
+            "42"
+        );
+        assert_eq!(
+            streaming_result::<E>(
+                "WebAssembly.compileStreaming(new Response(bytes, wasm))\
+                 .then(m => done(String(m instanceof WebAssembly.Module)), e => done(name(e)));"
+            ),
+            "true"
+        );
+        assert_eq!(
+            streaming_result::<E>(
+                "WebAssembly.instantiateStreaming(new Response(bytes, \
+                 { headers: { 'Content-Type': 'application/wasm;charset=utf-8' } }))\
+                 .then(() => done('resolved'), e => done(name(e)));"
+            ),
+            "TypeError"
+        );
+        assert_eq!(
+            streaming_result::<E>(
+                "var r = new Response(bytes, wasm);\
+                 r.arrayBuffer().then(() => WebAssembly.compileStreaming(r))\
+                 .then(() => done('resolved'), e => done(name(e)));"
+            ),
+            "TypeError"
+        );
+        assert_eq!(
+            streaming_result::<E>(
+                "WebAssembly.instantiateStreaming(new Response(new Uint8Array([1, 2, 3]), wasm))\
+                 .then(() => done('resolved'), e => done(name(e)));"
+            ),
+            "CompileError"
+        );
+        assert_eq!(
+            streaming_result::<E>(
+                "WebAssembly.compileStreaming({}).then(() => done('resolved'), e => done(name(e)));"
+            ),
+            "TypeError"
+        );
+    }
+
+    #[test]
+    fn streaming_on_boa() {
+        streaming_cases::<script_engine_boa::BoaEngine>();
+    }
+
+    #[cfg(all(target_pointer_width = "64", feature = "scripted-nova"))]
+    #[test]
+    fn streaming_on_nova() {
+        streaming_cases::<script_engine_nova::NovaEngine>();
+    }
+
     fn iframe_realm_has_wasm<E: script_engine_api::ScriptEngine + 'static>() {
         let doc = genet_scripted::LiveryScriptedDocument::<E>::parse(&format!(
             "<body><script>\

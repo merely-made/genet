@@ -1,0 +1,2628 @@
+{
+  "command": "testharness",
+  "engine": "boa",
+  "manifest_sha256": "d5ec5be9bf1a75ed00d7e7ab28afe8a694a55e11682ba74305874d70b18dd422",
+  "policy": "exact",
+  "renderer": "livery",
+  "runner_sha256": "abc53843fdb7254260685458722cf6fc5c98d2d4b7bae70bcbe8fbb429448607",
+  "subset": "wasm/webapi",
+  "tests": {
+    "wasm/webapi/abort.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "compileStreaming() on an already-aborted request should reject with AbortError",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming() synchronously followed by abort should reject with AbortError",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming() asynchronously racing with abort should succeed or reject with AbortError",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming() on an already-aborted request should reject with AbortError",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming() synchronously followed by abort should reject with AbortError",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming() asynchronously racing with abort should succeed or reject with AbortError",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 6
+    },
+    "wasm/webapi/abort.any.worker.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "compileStreaming() on an already-aborted request should reject with AbortError",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming() synchronously followed by abort should reject with AbortError",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming() asynchronously racing with abort should succeed or reject with AbortError",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming() on an already-aborted request should reject with AbortError",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming() synchronously followed by abort should reject with AbortError",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming() asynchronously racing with abort should succeed or reject with AbortError",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 6
+    },
+    "wasm/webapi/body.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming after consumption",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming before consumption",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming after consumption",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming before consumption",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/body.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming after consumption",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming before consumption",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming after consumption",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming before consumption",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/contenttype.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Response with no Content-Type: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with no Content-Type: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/javascript\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/javascript\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/octet-stream\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/octet-stream\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"text/wasm\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"text/wasm\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;x\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;x\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;charset=UTF-8\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;charset=UTF-8\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm\": compileStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm\": instantiateStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/wasm\": compileStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/wasm\": instantiateStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/WASM\": compileStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/WASM\": instantiateStreaming",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 16,
+      "subtests_total": 22
+    },
+    "wasm/webapi/contenttype.any.worker.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Response with no Content-Type: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with no Content-Type: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/javascript\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/javascript\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/octet-stream\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/octet-stream\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"text/wasm\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"text/wasm\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;x\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;x\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;charset=UTF-8\": compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm;charset=UTF-8\": instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm\": compileStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"application/wasm\": instantiateStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/wasm\": compileStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/wasm\": instantiateStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/WASM\": compileStreaming",
+          "status": "fail"
+        },
+        {
+          "name": "Response with Content-Type \"APPLICATION/WASM\": instantiateStreaming",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 16,
+      "subtests_total": 22
+    },
+    "wasm/webapi/empty-body.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming: no body",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: no body in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: empty body",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: empty body in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: no body",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: no body in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: empty body",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: empty body in a promise",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 8,
+      "subtests_total": 8
+    },
+    "wasm/webapi/empty-body.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming: no body",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: no body in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: empty body",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: empty body in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: no body",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: no body in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: empty body",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: empty body in a promise",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 8,
+      "subtests_total": 8
+    },
+    "wasm/webapi/esm-integration/execute-start.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Importing a WebAssembly module should execute the start function.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/exported-names.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/invalid-bytecode.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that imports of invalid WebAssembly modules leads to WebAssembly.CompileError on window.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/js-wasm-cycle-errors.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Check cyclic linking between JavaScript and WebAssembly where JavaScript is higher in the module graph.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/js-wasm-cycle.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/module-parse-error.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Test that imports of invalid WebAssembly modules leads to WebAssembly.CompileError on window.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/resolve-export.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Re-export of missing Wasm export should result in SyntaxError.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/reuse-wasm-loaded-as-classic-script.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Reuse Wasm loaded as classic script",
+          "status": "timeout"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/script-src-allows-source-phase-wasm.tentative.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/script-src-allows-wasm.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Importing a WebAssembly module should be allowed by script-src CSP.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/script-src-blocks-wasm.tentative.sub.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Importing a WebAssembly module should be guarded by script-src CSP.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/source-phase-blocked-by-csp.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Importing a WebAssembly module should be guarded by script-src CSP.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/source-phase-import-non-UTF8.tentative.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/source-phase-js-string.tentative.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/source-phase-preload.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error",
+      "subtests": [
+        {
+          "name": "Static source phase import.",
+          "status": "timeout"
+        },
+        {
+          "name": "Dynamic source phase import.",
+          "status": "not-run"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 2
+    },
+    "wasm/webapi/esm-integration/source-phase.tentative.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/wasm-import-wasm-export.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/wasm-import.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Invalid imports for WebAssembly modules should error.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/wasm-js-cycle.tentative.html": {
+      "reason": "harness-timeout",
+      "status": "error"
+    },
+    "wasm/webapi/esm-integration/wasm-to-wasm-link-error.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Link errors for imports between WebAssembly modules should be reported.",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/worker-import-source-phase.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Testing import of WebAssembly source phase from JavaScript worker",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/worker-import.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Testing import of WebAssembly from JavaScript worker",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/worker.tentative.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Testing WebAssembly worker",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/esm-integration/worklet-import-source-phase.tentative.https.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Import a source phase module to a worklet",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/historical.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "historical",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/historical.any.worker.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "historical",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/idlharness.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "idl_test setup",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 0,
+      "subtests_total": 1
+    },
+    "wasm/webapi/idlharness.any.worker.html": {
+      "reason": "harness-error",
+      "status": "error"
+    },
+    "wasm/webapi/instantiateStreaming-bad-imports.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Non-object imports argument: null",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: true",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: null",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: true",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Missing imports argument",
+          "status": "pass"
+        },
+        {
+          "name": "Imports argument with missing property: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Imports argument with missing property: empty object",
+          "status": "pass"
+        },
+        {
+          "name": "Imports argument with missing property: wrong property",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: object \"[object Object]\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: BigInt",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: Number",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: BigInt",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: BigInt",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: WebAssembly.Memory",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: WebAssembly.Memory.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: Object.create(WebAssembly.Memory.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: WebAssembly.Memory object (too large)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: WebAssembly.Table",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: WebAssembly.Table.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: Object.create(WebAssembly.Table.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: WebAssembly.Table object (too large)",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 106,
+      "subtests_total": 106
+    },
+    "wasm/webapi/instantiateStreaming-bad-imports.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Non-object imports argument: null",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: true",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object imports argument: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: null",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: true",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Non-object module: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Missing imports argument",
+          "status": "pass"
+        },
+        {
+          "name": "Imports argument with missing property: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Imports argument with missing property: empty object",
+          "status": "pass"
+        },
+        {
+          "name": "Imports argument with missing property: wrong property",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Importing a function with an incorrectly-typed value: object \"[object Object]\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: BigInt",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: Number",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: BigInt",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: WebAssembly.Global",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: WebAssembly.Global.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: Object.create(WebAssembly.Global.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: BigInt",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 global with an incorrectly-typed value: WebAssembly.Global object (wrong value type)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i32 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an i64 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f32 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 mutable global with a primitive value",
+          "status": "pass"
+        },
+        {
+          "name": "Importing an f64 mutable global with an immutable Global object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: WebAssembly.Memory",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: WebAssembly.Memory.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: Object.create(WebAssembly.Memory.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing memory with an incorrectly-typed value: WebAssembly.Memory object (too large)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: null",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: true",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: \"\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: 1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: plain object",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: WebAssembly.Table",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: WebAssembly.Table.prototype",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: Object.create(WebAssembly.Table.prototype)",
+          "status": "pass"
+        },
+        {
+          "name": "Importing table with an incorrectly-typed value: WebAssembly.Table object (too large)",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 106,
+      "subtests_total": 106
+    },
+    "wasm/webapi/instantiateStreaming.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Empty module without imports argument",
+          "status": "pass"
+        },
+        {
+          "name": "Empty module with undefined imports argument",
+          "status": "pass"
+        },
+        {
+          "name": "Empty module with empty imports argument",
+          "status": "pass"
+        },
+        {
+          "name": "getter order for imports object",
+          "status": "pass"
+        },
+        {
+          "name": "imports",
+          "status": "pass"
+        },
+        {
+          "name": "imports with empty module names",
+          "status": "pass"
+        },
+        {
+          "name": "imports with empty names",
+          "status": "pass"
+        },
+        {
+          "name": "exports with empty name: function",
+          "status": "pass"
+        },
+        {
+          "name": "exports with empty name: table",
+          "status": "pass"
+        },
+        {
+          "name": "exports with empty name: global",
+          "status": "pass"
+        },
+        {
+          "name": "No imports",
+          "status": "pass"
+        },
+        {
+          "name": "exports and imports",
+          "status": "pass"
+        },
+        {
+          "name": "i64 exports and imports",
+          "status": "pass"
+        },
+        {
+          "name": "import with i32-returning function",
+          "status": "pass"
+        },
+        {
+          "name": "import with function that takes and returns i32",
+          "status": "pass"
+        },
+        {
+          "name": "import with i64-returning function",
+          "status": "pass"
+        },
+        {
+          "name": "import with function that takes and returns i64",
+          "status": "pass"
+        },
+        {
+          "name": "import with i32-taking function",
+          "status": "pass"
+        },
+        {
+          "name": "import with i64-taking function",
+          "status": "pass"
+        },
+        {
+          "name": "export i64-returning function",
+          "status": "pass"
+        },
+        {
+          "name": "i32 mutable WebAssembly.Global import",
+          "status": "pass"
+        },
+        {
+          "name": "i64 mutable WebAssembly.Global import",
+          "status": "pass"
+        },
+        {
+          "name": "Multiple i64 arguments",
+          "status": "pass"
+        },
+        {
+          "name": "stray argument",
+          "status": "pass"
+        },
+        {
+          "name": "Synchronous options handling",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 25,
+      "subtests_total": 25
+    },
+    "wasm/webapi/instantiateStreaming.any.worker.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "Empty module without imports argument",
+          "status": "fail"
+        },
+        {
+          "name": "Empty module with undefined imports argument",
+          "status": "fail"
+        },
+        {
+          "name": "Empty module with empty imports argument",
+          "status": "fail"
+        },
+        {
+          "name": "getter order for imports object",
+          "status": "pass"
+        },
+        {
+          "name": "imports",
+          "status": "pass"
+        },
+        {
+          "name": "imports with empty module names",
+          "status": "pass"
+        },
+        {
+          "name": "imports with empty names",
+          "status": "pass"
+        },
+        {
+          "name": "exports with empty name: function",
+          "status": "pass"
+        },
+        {
+          "name": "exports with empty name: table",
+          "status": "pass"
+        },
+        {
+          "name": "exports with empty name: global",
+          "status": "pass"
+        },
+        {
+          "name": "No imports",
+          "status": "pass"
+        },
+        {
+          "name": "exports and imports",
+          "status": "pass"
+        },
+        {
+          "name": "i64 exports and imports",
+          "status": "pass"
+        },
+        {
+          "name": "import with i32-returning function",
+          "status": "pass"
+        },
+        {
+          "name": "import with function that takes and returns i32",
+          "status": "pass"
+        },
+        {
+          "name": "import with i64-returning function",
+          "status": "pass"
+        },
+        {
+          "name": "import with function that takes and returns i64",
+          "status": "pass"
+        },
+        {
+          "name": "import with i32-taking function",
+          "status": "pass"
+        },
+        {
+          "name": "import with i64-taking function",
+          "status": "pass"
+        },
+        {
+          "name": "export i64-returning function",
+          "status": "pass"
+        },
+        {
+          "name": "i32 mutable WebAssembly.Global import",
+          "status": "pass"
+        },
+        {
+          "name": "i64 mutable WebAssembly.Global import",
+          "status": "pass"
+        },
+        {
+          "name": "Multiple i64 arguments",
+          "status": "pass"
+        },
+        {
+          "name": "stray argument",
+          "status": "fail"
+        },
+        {
+          "name": "Synchronous options handling",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 21,
+      "subtests_total": 25
+    },
+    "wasm/webapi/invalid-args.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: undefined in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: null",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: null in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: true",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: true in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: \"test\"",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: \"test\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: symbol \"Symbol()\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0.1 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: NaN in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Empty object",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Empty object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface object",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface prototype object",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface prototype object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: undefined in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: null",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: null in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: true",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: true in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: \"test\"",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: \"test\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: symbol \"Symbol()\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0.1 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: NaN in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Empty object",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Empty object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface object",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface prototype object",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface prototype object in a promise",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 44,
+      "subtests_total": 44
+    },
+    "wasm/webapi/invalid-args.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: undefined in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: null",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: null in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: true",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: true in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: \"test\"",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: \"test\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: symbol \"Symbol()\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: 0.1 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: NaN in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Empty object",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Empty object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface object",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface prototype object",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming: Response interface prototype object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: undefined",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: undefined in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: null",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: null in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: true",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: true in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: \"test\"",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: \"test\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: symbol \"Symbol()\"",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: symbol \"Symbol()\" in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0.1",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: 0.1 in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: NaN",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: NaN in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Empty object",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Empty object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface object",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface object in a promise",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface prototype object",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming: Response interface prototype object in a promise",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 44,
+      "subtests_total": 44
+    },
+    "wasm/webapi/invalid-code.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Invalid code (0x0000): compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Invalid code (0xCAFE): compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Invalid code (0x0000): instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Invalid code (0xCAFE): instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/invalid-code.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Invalid code (0x0000): compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Invalid code (0xCAFE): compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Invalid code (0x0000): instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Invalid code (0xCAFE): instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/modified-contenttype.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming with Content-Type set late",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming with Content-Type removed late",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming with Content-Type set late",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming with Content-Type removed late",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/modified-contenttype.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming with Content-Type set late",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming with Content-Type removed late",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming with Content-Type set late",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming with Content-Type removed late",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/origin.sub.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Opaque response: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Opaque redirect response: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Opaque response: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Opaque redirect response: instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/origin.sub.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Opaque response: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Opaque redirect response: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Opaque response: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Opaque redirect response: instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 4
+    },
+    "wasm/webapi/rejected-arg.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "wasm/webapi/rejected-arg.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 2,
+      "subtests_total": 2
+    },
+    "wasm/webapi/status.any.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Response with status 0: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 300: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 400: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 404: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 500: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 600: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 700: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 999: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 0: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 300: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 400: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 404: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 500: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 600: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 700: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 999: instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 16,
+      "subtests_total": 16
+    },
+    "wasm/webapi/status.any.worker.html": {
+      "status": "pass",
+      "subtests": [
+        {
+          "name": "Response with status 0: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 300: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 400: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 404: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 500: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 600: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 700: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 999: compileStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 0: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 300: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 400: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 404: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 500: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 600: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 700: instantiateStreaming",
+          "status": "pass"
+        },
+        {
+          "name": "Response with status 999: instantiateStreaming",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 16,
+      "subtests_total": 16
+    },
+    "wasm/webapi/wasm_stream_compile_test.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "compileStreaming using resolved response",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using resolved response and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using promise response from fetch and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming raise error if wrong mime type",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming raise error if no mime type",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming raise error if 404 status",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming check CORS",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming raise error if no-cors",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming receive promise with response created from ArrayBuffer",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using ReadableStream with Uint8Array chunks",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using ReadableStream with ArrayBuffer chunk",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using blob",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using FormData",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 13
+    },
+    "wasm/webapi/wasm_stream_compile_test.any.worker.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "compileStreaming using resolved response",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using resolved response and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming using promise response from fetch and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming raise error if wrong mime type",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming raise error if no mime type",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming raise error if 404 status",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming check CORS",
+          "status": "fail"
+        },
+        {
+          "name": "compileStreaming raise error if no-cors",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming receive promise with response created from ArrayBuffer",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming using ReadableStream with Uint8Array chunks",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming using ReadableStream with ArrayBuffer chunk",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming using blob",
+          "status": "pass"
+        },
+        {
+          "name": "compileStreaming using FormData",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 9,
+      "subtests_total": 13
+    },
+    "wasm/webapi/wasm_stream_instantiate_test.any.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "instantiateStreaming using resolved response",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using resolved response and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using promise response from fetch and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming raise error if wrong mime type",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming raise error if no mime type",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming raise error if 404 status",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming check CORS",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming raise error if no-cors",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming receive promise with response created from ArrayBuffer",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using ReadableStream with Uint8Array chunks",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using ReadableStream with ArrayBuffer chunk",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using blob",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using FormData",
+          "status": "fail"
+        }
+      ],
+      "subtests_passed": 4,
+      "subtests_total": 13
+    },
+    "wasm/webapi/wasm_stream_instantiate_test.any.worker.html": {
+      "status": "fail",
+      "subtests": [
+        {
+          "name": "instantiateStreaming using resolved response",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using resolved response and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming using promise response from fetch and check instantiate",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming raise error if wrong mime type",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming raise error if no mime type",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming raise error if 404 status",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming check CORS",
+          "status": "fail"
+        },
+        {
+          "name": "instantiateStreaming raise error if no-cors",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming receive promise with response created from ArrayBuffer",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming using ReadableStream with Uint8Array chunks",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming using ReadableStream with ArrayBuffer chunk",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming using blob",
+          "status": "pass"
+        },
+        {
+          "name": "instantiateStreaming using FormData",
+          "status": "pass"
+        }
+      ],
+      "subtests_passed": 9,
+      "subtests_total": 13
+    }
+  },
+  "version": 1
+}

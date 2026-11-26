@@ -1,6 +1,6 @@
 # WebAssembly pages plan: the `WebAssembly` object in documents and workers
 
-**Status:** 2026-11-25. In progress: P1 met; P2 and P5 in progress.
+**Status:** 2026-11-25. In progress: P2 met; P1 reopened for frame realms; P5 in progress.
 
 **For:** pages and workers that use WebAssembly. The object exists on both Genet JavaScript engines
 behind a `wasm` feature, but no document, worker or WPT run turns it on, so no page can reach it.
@@ -161,6 +161,27 @@ the counts and what is missing.
    refuses to clone only when wasm objects are live. An object that is installed but unused clones
    with a fresh store.
 
+5. 2026-11-25: realms made inside a native callback had no `WebAssembly`. These come from
+   `create_realm_from_call` in `components/script-runtime-api/frames.rs`, which makes every iframe
+   realm and the document a top-level navigation opens. A second hook installs into the callback's
+   realm (P1, reopened).
+6. 2026-11-25: genet-wpt `wasm/jsapi`, before the frame-realm fix:
+   - **Window scope:** 946 of 1072 on both engines. Every file the standalone runner reads gives the
+     same count. The extra subtests are `idlharness` (it fetches `WebIDLParser.js`, and the disk mode
+     has no server) and `reserved-import-names`.
+   - **Workers:** 934 of 1071 on Vano and 934 of 1059 on Bole.
+   - **Bole timing:** Bole's `js-string/constants` needs about 20 s, which overruns a worker's
+     10-second testharness limit. Bole is recorded at `--jobs 3`, because `instantiate-bad-imports`
+     flakes at 6.
+7. 2026-11-25: `importScripts` evaluates each script with an indirect eval
+   (`components/script-runtime-api/worker.rs:1657`). A top-level `let` or `const` in one imported
+   script is therefore invisible to the next, where classic scripts share the global lexical
+   environment. That costs 12 worker subtests in `wasm/jsapi` (`constructor/instantiate`,
+   `instance/constructor`), and it affects every worker test that splits top-level bindings across
+   scripts. The fix needs an eval of a global script from a callback that keeps the thrown value.
+   `eval_from_call` turns errors into strings. This is a worker runtime bug, not a wasm one, so it is
+   left open here.
+
 ## Progress
 
 - 2026-11-25: plan cut from the WebAssembly object plan's open items. The old plan is archived whole.
@@ -169,3 +190,5 @@ the counts and what is missing.
   - `Runtime` installs in window realms and worker realms.
   - The `scripted` features and `genet-worker-process` turn the engines' `wasm` on.
   - Page tests pass on Boa and Nova, and a dedicated-worker test passes on Boa.
+- 2026-11-25: P2 met (genet `7a175209bb8`). genet-wpt builds both engines with `wasm`, and
+  `wasm_jsapi_{boa,nova}.json` pin the directory.

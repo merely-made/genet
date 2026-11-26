@@ -272,6 +272,10 @@ pub const WINDOW_PROXY_HANDLER_SLOT: &str = "__windowProxyHandler";
 pub const WINDOW_PROXY_TARGET_SLOT: &str = "__windowProxyTarget";
 
 pub trait ScriptEngine: Sized {
+    /// Whether all supported native function registration paths define writable,
+    /// non-enumerable, configurable own properties and reject conflicting definitions.
+    const NATIVE_FUNCTIONS_USE_BUILTIN_DESCRIPTOR: bool = false;
+
     /// Identifies a concrete native worker helper backend, when available.
     /// An absent identity cannot be used with a killable worker helper.
     fn native_worker_backend() -> Option<&'static str> {

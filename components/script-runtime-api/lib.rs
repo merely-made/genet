@@ -178,25 +178,27 @@ impl<'cx, E: ScriptEngine + 'cx> Surface<'_, 'cx, E> {
         name: &str,
         length: usize,
     ) -> Result<(), SurfaceError<E::Error>> {
-        // These setup-only aliases are captured by trusted bootstrap and then
-        // deleted. Predeclare their flags before a value-only native installer
-        // can create a nonconfigurable property. A refusal aborts registration.
-        if name.starts_with("__webgl_") || name.starts_with("__rtc_") || matches!(
-            name,
-            "__formFileAllocate"
-                | "__hostFormEdit"
-                | "__formFilesReplace"
-                | "__formFilesSnapshot"
-                | "__formEntrySnapshot"
-                | "__formDataEncode"
-                | "__formControlInfo"
-                | "__formSubmitterCheck"
-                | "__formImplicitDecision"
-                | "__formMeta"
-                | "__formSubmissionPlan"
-                | "__formSubmissionUserValidity"
-                | "__domRegisterHooks"
-        ) {
+        // The bootstrap captures and deletes these aliases. A value-only native
+        // installer needs a configurable property to be in place first.
+        let setup_only = name.starts_with("__webgl_")
+            || name.starts_with("__rtc_")
+            || matches!(
+                name,
+                "__formFileAllocate"
+                    | "__hostFormEdit"
+                    | "__formFilesReplace"
+                    | "__formFilesSnapshot"
+                    | "__formEntrySnapshot"
+                    | "__formDataEncode"
+                    | "__formControlInfo"
+                    | "__formSubmitterCheck"
+                    | "__formImplicitDecision"
+                    | "__formMeta"
+                    | "__formSubmissionPlan"
+                    | "__formSubmissionUserValidity"
+                    | "__domRegisterHooks"
+            );
+        if setup_only && !E::NATIVE_FUNCTIONS_USE_BUILTIN_DESCRIPTOR {
             self.eval(&format!(
                 "Object.defineProperty(globalThis, {}, {{value:undefined,writable:true,enumerable:false,configurable:true}})",
                 js_str(name)
@@ -4224,6 +4226,80 @@ const SHELL_GLOBALS_BOOTSTRAP: &str = r#"
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn boa_installs_private_sinks_without_evaluating_a_descriptor() {
+        use script_engine_boa::BoaEngine;
+
+        const PREPARE: &str = r#"
+            Object.defineProperty(globalThis, '__domRegisterHooks', {
+                value: 0, enumerable: true, configurable: true
+            });
+            Object.defineProperty(globalThis, '__formFileAllocate', {value: 1});
+            Object.defineProperty = function() { throw new Error('unexpected descriptor script'); };
+        "#;
+        const CHECK: &str = r#"
+            (function() {
+                var d = Object.getOwnPropertyDescriptor(globalThis, '__domRegisterHooks');
+                return d.value === __domRegisterHooks && d.value.length === 1 &&
+                    d.value() === 'sink' && d.writable && !d.enumerable && d.configurable &&
+                    __formFileAllocate === 1 && delete globalThis.__domRegisterHooks &&
+                    !Object.hasOwn(globalThis, '__domRegisterHooks');
+            })()
+        "#;
+
+        struct Sink;
+        impl<E: ScriptEngine> NativeFn<E> for Sink {
+            fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+                cx.make_string("sink")
+            }
+        }
+
+        fn install<E: ScriptEngine>(surface: &mut Surface<'_, '_, E>) {
+            surface
+                .set_function::<Sink>("__domRegisterHooks", 1)
+                .expect("private sink should bypass the descriptor script");
+            assert!(
+                surface
+                    .set_function::<Sink>("__formFileAllocate", 1)
+                    .is_err()
+            );
+        }
+
+        struct InstallFromCall;
+        impl<E: ScriptEngine> NativeFn<E> for InstallFromCall {
+            fn call(cx: &mut E::CallCx<'_>) -> Result<E::Value, E::Error> {
+                install(&mut Surface::<E>::Callback(cx));
+                Ok(cx.undefined())
+            }
+        }
+
+        let mut engine = BoaEngine::new().unwrap();
+        let child = engine.create_realm().unwrap();
+        for realm in [MAIN_REALM, child] {
+            let mut surface = Surface::Engine {
+                engine: &mut engine,
+                realm,
+            };
+            surface.eval(PREPARE).unwrap();
+            install(&mut surface);
+            assert_eq!(surface.eval(CHECK).unwrap().as_boolean(), Some(true));
+        }
+
+        let callback_realm = engine.create_realm().unwrap();
+        engine
+            .set_function_in_realm::<InstallFromCall>(callback_realm, "setup", 0)
+            .unwrap();
+        engine.eval_in_realm(callback_realm, PREPARE).unwrap();
+        engine.eval_in_realm(callback_realm, "setup()").unwrap();
+        assert_eq!(
+            engine
+                .eval_in_realm(callback_realm, CHECK)
+                .unwrap()
+                .as_boolean(),
+            Some(true)
+        );
+    }
 
     fn malformed_task_boolean_is_error<E: ScriptEngine>() {
         let mut rt = Runtime::<E>::new().expect("runtime");

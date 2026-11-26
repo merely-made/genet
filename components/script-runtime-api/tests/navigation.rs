@@ -80,6 +80,72 @@ fn child_realms<E: ScriptEngine>(runtime: &Runtime<E>) -> Vec<RealmId> {
         .collect()
 }
 
+fn window_bindings_are_ready_and_fresh_after_navigation<E: ScriptEngine>() {
+    let mut runtime = Runtime::<E>::new().expect("runtime");
+    runtime
+        .set_base_url("https://parent.test/page.html")
+        .expect("base URL");
+    runtime.set_script_resource_loader(Box::new(Documents));
+    runtime.parse_document_interleaved("<html><body></body></html>", &NoScriptLoader);
+    runtime
+        .eval(
+            r#"
+            var frame = document.createElement('iframe');
+            document.body.appendChild(frame);
+            var held = frame.contentWindow;
+            var initialDocument = frame.contentDocument;
+            var initialWasm = held.WebAssembly;
+            var names = ['HTMLInputElement', 'FormData', 'Response',
+                         'WebGLRenderingContext', 'RTCPeerConnection'];
+            var initialBindings = names.map(function(name) { return held[name]; });
+            function hasWindowBindings() {
+                return names.every(function(name) {
+                    return typeof held[name] === 'function' && held[name] !== window[name];
+                }) && ['FormData', 'RTCPeerConnection'].every(function(name) {
+                    var d = Object.getOwnPropertyDescriptor(held, name);
+                    return d.value === held[name] && d.writable && !d.enumerable && d.configurable;
+                }) && ['__domRegisterHooks', '__formFileAllocate',
+                       '__webgl_create_context', '__rtc_new'].every(function(name) {
+                    return Object.getOwnPropertyDescriptor(held, name) === undefined;
+                }) && typeof held.WebAssembly === typeof window.WebAssembly &&
+                    (typeof window.WebAssembly === 'undefined' ||
+                     (held.WebAssembly !== window.WebAssembly &&
+                      typeof held.WebAssembly.Module === 'function'));
+            }
+            "#,
+        )
+        .expect("attach initial about:blank");
+    check(
+        &mut runtime,
+        "held.document === initialDocument && initialDocument.URL === 'about:blank'",
+    );
+    check(&mut runtime, "hasWindowBindings()");
+    check(
+        &mut runtime,
+        "initialDocument.createElement('input') instanceof held.HTMLInputElement",
+    );
+
+    runtime
+        .eval("frame.src = 'https://parent.test/one.html';")
+        .expect("navigate");
+    runtime.run_event_loop(100).expect("navigation tasks");
+    check(
+        &mut runtime,
+        "held === frame.contentWindow && held.document === frame.contentDocument",
+    );
+    check(
+        &mut runtime,
+        "held.document !== initialDocument && held.location.origin === location.origin",
+    );
+    check(&mut runtime, "held.__page === 'one' && hasWindowBindings()");
+    check(
+        &mut runtime,
+        "held.document.createElement('input') instanceof held.HTMLInputElement &&\
+         names.every(function(name, i) { return held[name] !== initialBindings[i]; }) &&\
+         (initialWasm === undefined || initialWasm !== held.WebAssembly)",
+    );
+}
+
 /// Three navigations of one child, driven by `iframe.src`. The identity the
 /// parent took before the first one survives all three.
 fn a_child_navigates_three_times_and_keeps_its_window_proxy<E: ScriptEngine>() {
@@ -319,6 +385,10 @@ fn an_origin_change_flips_the_parents_view<E: ScriptEngine>() {
 macro_rules! backend {
     ($name:ident, $engine:ty) => {
         mod $name {
+            #[test]
+            fn window_bindings_are_ready_and_fresh() {
+                super::window_bindings_are_ready_and_fresh_after_navigation::<$engine>();
+            }
             #[test]
             fn navigates_three_times() {
                 super::a_child_navigates_three_times_and_keeps_its_window_proxy::<$engine>();

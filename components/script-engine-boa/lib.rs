@@ -852,6 +852,9 @@ impl CallCx for BoaCallCx<'_> {
 }
 
 impl ScriptEngine for BoaEngine {
+    // Every registration path uses Context::register_global_builtin_callable.
+    const NATIVE_FUNCTIONS_USE_BUILTIN_DESCRIPTOR: bool = true;
+
     fn native_worker_backend() -> Option<&'static str> { Some("boa") }
     #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
     fn install_webassembly(

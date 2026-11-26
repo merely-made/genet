@@ -4,57 +4,43 @@
 
 //! Memories and the buffers script sees them through (W2, D6 and D7).
 //!
-//! A memory's buffer is a Vano `ArrayBuffer` over wasmi's own bytes, made only
-//! when script asks for it. wasmi may move those bytes when the memory grows,
-//! so each buffer is kept beside the pointer and length it was made over, and
-//! a buffer whose memory no longer matches is detached before script runs
-//! again. A grow that adds no pages from wasm moves nothing and goes unseen
-//! (D7); one from script always detaches. A resizable buffer
-//! (`toResizableBuffer`) is not detached: it is repointed at the moved bytes
-//! and their new length, and keeps its identity.
+//! A memory's buffer is an engine `ArrayBuffer` over wasmi's own bytes, made
+//! only when script asks for it. The host never holds the buffer: script's
+//! bootstrap does, weakly, so a dropped buffer can be collected. The host keeps
+//! only a record of the bytes it was made over. wasmi may move those bytes when
+//! the memory grows, so at every point control passes between script and wasm
+//! the bootstrap asks [`WasmHost::stale`] which buffers no longer match their
+//! memory, and the engine detaches them (a fixed-length one) or repoints them
+//! (a resizable one, `toResizableBuffer`, which keeps its identity). A grow that
+//! adds no pages from wasm moves nothing and goes unseen (D7); one from script
+//! always detaches.
 
 use wasmi::{Memory, MemoryType};
 
 use crate::host::WasmHost;
 
-/// A buffer script holds, and the bytes it was made over.
-struct BufferView<V> {
-    value: V,
+/// The bytes a memory's current buffer was made over.
+struct BufferRecord {
+    /// Order of creation, to pick between empty buffers that look alike.
+    seq: u64,
     ptr: *mut u8,
     len: usize,
     resizable: bool,
+    /// A resizable buffer's maximum length, in bytes.
+    max: usize,
 }
 
-/// What the caller must do to the buffers after a memory may have moved.
-pub struct Refresh<V> {
-    /// Fixed-length buffers to detach.
-    pub detach: Vec<V>,
-    /// Memories whose resizable buffer must be repointed at these bytes.
-    pub repoint: Vec<(usize, *mut u8, usize)>,
-}
-
-impl<V> Default for Refresh<V> {
-    fn default() -> Self {
-        Self {
-            detach: Vec::new(),
-            repoint: Vec::new(),
-        }
-    }
-}
-
-pub struct MemoryEntry<V> {
+pub struct MemoryEntry {
     memory: Memory,
-    buffer: Option<BufferView<V>>,
+    record: Option<BufferRecord>,
 }
 
 impl<V> WasmHost<V> {
     pub fn push_memory(&self, memory: Memory) -> usize {
-        let mut memories = self.memories.borrow_mut();
-        memories.push(MemoryEntry {
+        self.memories.borrow_mut().insert(MemoryEntry {
             memory,
-            buffer: None,
-        });
-        memories.len() - 1
+            record: None,
+        })
     }
 
     pub fn memory(&self, handle: usize) -> Option<Memory> {
@@ -79,8 +65,8 @@ impl<V> WasmHost<V> {
         Ok(self.push_memory(memory))
     }
 
-    /// Grow by `delta` pages and return the old size. The caller detaches the
-    /// buffer whether or not any page was added, as the spec requires.
+    /// Grow by `delta` pages and return the old size. The bootstrap detaches
+    /// the buffer whether or not any page was added, as the spec requires.
     ///
     /// # Errors
     ///
@@ -102,80 +88,114 @@ impl<V> WasmHost<V> {
         Some((memory.data_ptr(&*store), memory.data_size(&*store)))
     }
 
-    /// Run `f` on the buffer script holds for `handle`, if it is current.
-    pub fn with_buffer<R>(&self, handle: usize, f: impl FnOnce(&V) -> R) -> Option<R> {
-        let memories = self.memories.borrow();
-        memories.get(handle)?.buffer.as_ref().map(|b| f(&b.value))
-    }
-
-    pub fn set_buffer(
-        &self,
-        handle: usize,
-        value: V,
-        (ptr, len): (*mut u8, usize),
-        resizable: bool,
-    ) {
+    /// Record the buffer just made over the memory's current bytes. A
+    /// resizable one holds `max` bytes at most.
+    pub fn set_record(&self, handle: usize, resizable: bool, max: usize) {
+        let Some((ptr, len)) = self.memory_bytes(handle) else {
+            return;
+        };
         if let Some(entry) = self.memories.borrow_mut().get_mut(handle) {
-            entry.buffer = Some(BufferView {
-                value,
+            self.record_seq.set(self.record_seq.get() + 1);
+            entry.record = Some(BufferRecord {
+                seq: self.record_seq.get(),
                 ptr,
                 len,
                 resizable,
+                max,
             });
+        }
+    }
+
+    /// Note that the memory's resizable buffer was repointed at its bytes.
+    pub fn sync_record(&self, handle: usize) {
+        let Some((ptr, len)) = self.memory_bytes(handle) else {
+            return;
+        };
+        if let Some(record) = self
+            .memories
+            .borrow_mut()
+            .get_mut(handle)
+            .and_then(|e| e.record.as_mut())
+        {
+            (record.ptr, record.len) = (ptr, len);
+        }
+    }
+
+    pub fn clear_record(&self, handle: usize) {
+        if let Some(entry) = self.memories.borrow_mut().get_mut(handle) {
+            entry.record = None;
         }
     }
 
     /// Whether the memory's current buffer is resizable; `None` if it has none.
     pub fn buffer_is_resizable(&self, handle: usize) -> Option<bool> {
         let memories = self.memories.borrow();
-        memories.get(handle)?.buffer.as_ref().map(|b| b.resizable)
+        Some(memories.get(handle)?.record.as_ref()?.resizable)
     }
 
-    /// Take the memory's current buffer out, for the caller to detach.
-    pub fn take_buffer(&self, handle: usize) -> Option<V> {
-        let mut memories = self.memories.borrow_mut();
-        memories
-            .get_mut(handle)?
-            .buffer
-            .take()
-            .map(|view| view.value)
-    }
-
-    /// Every buffer whose memory has moved or changed length, and `force`'s
-    /// fixed-length buffer in any case: fixed-length ones taken out to be
-    /// detached, resizable ones to be repointed.
-    pub fn refresh(&self, force: Option<usize>) -> Refresh<V> {
+    /// Every memory whose buffer no longer matches its bytes, and `force`'s
+    /// fixed-length buffer in any case. `true` means detach it, and its record
+    /// is dropped; `false` means repoint it, and its record is updated.
+    pub fn stale(&self, force: Option<usize>) -> Vec<(usize, bool)> {
         let store = self.store.borrow();
         let mut memories = self.memories.borrow_mut();
-        let mut refresh = Refresh::default();
-        for (handle, entry) in memories.iter_mut().enumerate() {
-            let Some(view) = &mut entry.buffer else {
+        let mut out = Vec::new();
+        for (handle, entry) in memories.iter_mut() {
+            let Some(record) = &mut entry.record else {
                 continue;
             };
             let now = (
                 entry.memory.data_ptr(&*store),
                 entry.memory.data_size(&*store),
             );
-            let moved = now != (view.ptr, view.len);
-            if view.resizable {
+            let moved = now != (record.ptr, record.len);
+            if record.resizable {
                 if moved {
-                    (view.ptr, view.len) = now;
-                    refresh.repoint.push((handle, now.0, now.1));
+                    (record.ptr, record.len) = now;
+                    out.push((handle, false));
                 }
             } else if moved || force == Some(handle) {
-                refresh
-                    .detach
-                    .extend(entry.buffer.take().map(|view| view.value));
+                entry.record = None;
+                out.push((handle, true));
             }
         }
-        refresh
+        out
     }
 
-    /// The memory whose current buffer `is` picks out.
-    pub fn memory_with_buffer(&self, mut is: impl FnMut(&V) -> bool) -> Option<usize> {
-        let memories = self.memories.borrow();
+    /// The memory with a resizable buffer of `len` bytes at `ptr`, at most
+    /// `max` if the engine can say. An empty buffer has no pointer of its own
+    /// to tell by, and the engine's resize hook gives nothing else, so of
+    /// several empty memories with the same maximum the newest wins. A buffer
+    /// that script dropped still has its record until it is collected, so this
+    /// is wrong only if an older empty buffer is resized while a newer one
+    /// like it exists.
+    pub fn resizable_memory(
+        &self,
+        ptr: *const u8,
+        len: usize,
+        max: Option<usize>,
+    ) -> Option<usize> {
+        let mut memories = self.memories.borrow_mut();
         memories
-            .iter()
-            .position(|e| e.buffer.as_ref().is_some_and(|b| is(&b.value)))
+            .iter_mut()
+            .filter_map(|(handle, e)| Some((handle, e.record.as_ref()?)))
+            .filter(|(_, r)| {
+                r.resizable
+                    && max.is_none_or(|m| r.max == m)
+                    && r.len == len
+                    && (len == 0 || r.ptr.cast_const() == ptr)
+            })
+            .max_by_key(|(_, r)| r.seq)
+            .map(|(handle, _)| handle)
+    }
+
+    /// Handles of the memories that still have a buffer recorded.
+    pub(crate) fn recorded(&self) -> Vec<usize> {
+        let mut memories = self.memories.borrow_mut();
+        memories
+            .iter_mut()
+            .filter(|(_, e)| e.record.is_some())
+            .map(|(handle, _)| handle)
+            .collect()
     }
 }

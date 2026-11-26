@@ -13,6 +13,7 @@
 
 pub mod calls;
 pub mod entities;
+pub mod freeing;
 pub mod suite;
 pub mod wide;
 
@@ -26,6 +27,11 @@ pub trait Harness: Sized {
     fn pump(&mut self);
     /// Set the wasm fuel budget.
     fn set_fuel(&mut self, fuel: Option<u64>);
+    /// Collect garbage, and run the jobs it queues (`FinalizationRegistry`
+    /// cleanups), until nothing more is freed.
+    fn collect(&mut self);
+    /// What the wasm store holds.
+    fn stats(&mut self) -> genet_wasm::Stats;
 
     /// An engine with `bytes` bound to `wat`'s module as a `Uint8Array`.
     fn with_module(wat: &str) -> Self {
@@ -165,6 +171,34 @@ macro_rules! conformance_tests {
         #[test]
         fn a_memory_without_a_maximum_has_no_resizable_buffer() {
             conformance::entities::a_memory_without_a_maximum_has_no_resizable_buffer::<$harness>();
+        }
+        #[test]
+        fn compiled_and_dropped_modules_stay_bounded() {
+            conformance::freeing::compiled_and_dropped_modules_stay_bounded::<$harness>();
+        }
+        #[test]
+        fn externrefs_in_a_loop_stay_bounded() {
+            conformance::freeing::externrefs_in_a_loop_stay_bounded::<$harness>();
+        }
+        #[test]
+        fn an_object_crossing_again_reuses_its_slot() {
+            conformance::freeing::an_object_crossing_again_reuses_its_slot::<$harness>();
+        }
+        #[test]
+        fn wasm_keeps_an_object_script_dropped() {
+            conformance::freeing::wasm_keeps_an_object_script_dropped::<$harness>();
+        }
+        #[test]
+        fn an_import_closing_over_its_own_instance_is_collected() {
+            conformance::freeing::an_import_closing_over_its_own_instance_is_collected::<$harness>();
+        }
+        #[test]
+        fn the_store_is_rebuilt_once_nothing_is_live() {
+            conformance::freeing::the_store_is_rebuilt_once_nothing_is_live::<$harness>();
+        }
+        #[test]
+        fn a_buffer_holds_the_store_and_its_memory() {
+            conformance::freeing::a_buffer_holds_the_store_and_its_memory::<$harness>();
         }
         #[test]
         fn v128_throws_a_type_error_at_the_boundary() {

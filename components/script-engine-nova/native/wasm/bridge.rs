@@ -6,23 +6,22 @@
 //!
 //! The bridge calls wasm resumably. A function made from script suspends the
 //! call and ends the store borrow, so the script it runs can call back into
-//! wasm on the same store before the outer call resumes. Every time control
-//! passes from wasm back to script, buffers over memory that moved are
-//! detached first (`memory.rs`).
+//! wasm on the same store before the outer call resumes. The bootstrap keeps
+//! buffers over memory that moved up to date (`memory.rs`) whenever control
+//! passes between script and wasm.
 //!
 //! Values cross already converted by the bootstrap. A `funcref` crosses as its
 //! function handle and the bootstrap gives it its script function; an
-//! `externref` crosses as the script value it holds.
+//! `externref` crosses as its keeper slot, a number. A function made from
+//! script is reached through the `lookup` function the caller passes, which
+//! finds it in the caller's keeper: the host holds no script value for it.
 
-use std::ptr::NonNull;
 use std::rc::Rc;
 
-use genet_wasm::wasmi::{
-    ExternRef, F32, F64, Func, Nullable, ResumableCall, TrapCode, Val, ValType,
-};
+use genet_wasm::wasmi::{F32, F64, Func, Nullable, ResumableCall, TrapCode, Val, ValType};
 use nova_vm::ecmascript::{
-    Agent, ArgumentsList, ArrayBuffer, BigInt, DetachKey, ExceptionType, Function, JsError,
-    JsResult, Number, String as JsString, Value,
+    Agent, ArgumentsList, BigInt, ExceptionType, Function, JsError, JsResult, Number,
+    String as JsString, Value,
 };
 use nova_vm::engine::{Bindable, GcScope, Global, NoGcScope};
 
@@ -86,36 +85,6 @@ pub(super) fn root(agent: &mut Agent, value: Value, gc: NoGcScope<'_, '_>) -> No
     NovaValue::new(Global::new(agent, value.unbind()), &release)
 }
 
-/// Bring every buffer over memory up to date before script runs: detach the
-/// fixed-length ones whose memory moved, and `force`'s in any case, and
-/// repoint the resizable ones at their memory's bytes.
-pub(super) fn detach_stale(
-    agent: &mut Agent,
-    host: &WasmHost,
-    force: Option<usize>,
-    gc: NoGcScope<'_, '_>,
-) {
-    let refresh = host.refresh(force);
-    for value in refresh.detach {
-        if let Ok(buffer) = ArrayBuffer::try_from(value.get(agent, gc)) {
-            // The key is ours, so this detach cannot fail.
-            let _ = buffer.detach(agent, Some(DetachKey {}), gc);
-        }
-    }
-    for (memory, ptr, len) in refresh.repoint {
-        let Some(value) = host.with_buffer(memory, |v| v.get(agent, gc)) else {
-            continue;
-        };
-        if let Ok(buffer) = ArrayBuffer::try_from(value) {
-            let ptr = NonNull::new(ptr).unwrap_or(NonNull::dangling());
-            // SAFETY: the store's bytes, which this function is called to
-            // follow every time they can move.
-            let repointed = unsafe { buffer.repoint_foreign(agent, ptr, len) };
-            debug_assert!(repointed, "a memory's resizable buffer is over its bytes");
-        }
-    }
-}
-
 pub(super) fn handle_arg(agent: &Agent, value: Value) -> Option<usize> {
     let n = Number::try_from(value).ok()?.into_f64(agent);
     (n >= 0.0 && n.fract() == 0.0 && n < usize::MAX as f64).then_some(n as usize)
@@ -154,11 +123,8 @@ pub(super) fn to_js<'gc>(
             number(agent, host.func_handle(*func, None) as f64, gc)
         },
         Val::ExternRef(Nullable::Val(r)) => {
-            let slot = *r
-                .data(&*host.store.borrow())
-                .downcast_ref::<usize>()
-                .expect("every externref holds a slot");
-            host.externs.borrow()[slot].get(agent, gc)
+            let slot = host.extern_slot(r).expect("every externref holds a slot");
+            number(agent, slot as f64, gc)
         },
         Val::FuncRef(Nullable::Null) | Val::ExternRef(Nullable::Null) => Value::Null,
         Val::V128(_) => Value::Undefined,
@@ -171,7 +137,7 @@ pub(super) fn to_val(
     host: &WasmHost,
     value: Value,
     ty: ValType,
-    gc: NoGcScope<'_, '_>,
+    _gc: NoGcScope<'_, '_>,
 ) -> Option<Val> {
     let float = |agent: &Agent, value| Some(Number::try_from(value).ok()?.into_f64(agent));
     Some(match ty {
@@ -183,12 +149,7 @@ pub(super) fn to_val(
         ValType::FuncRef => Val::FuncRef(Nullable::Val(host.func(handle_arg(agent, value)?)?)),
         ValType::ExternRef if value == Value::Null => Val::ExternRef(Nullable::Null),
         ValType::ExternRef => {
-            let rooted = root(agent, value, gc);
-            let slot = host.push(&host.externs, rooted);
-            Val::ExternRef(Nullable::Val(ExternRef::new(
-                &mut *host.store.borrow_mut(),
-                slot,
-            )))
+            Val::ExternRef(Nullable::Val(host.extern_ref(handle_arg(agent, value)?)?))
         },
         ValType::V128 => return None,
     })
@@ -210,22 +171,29 @@ pub(super) fn args_for(
     Some(out)
 }
 
+/// The keeper's `lookup` function: `args[at]` of the native that started the
+/// call. Read afresh each time, since collection moves what is on the stack.
+pub(super) struct Lookup<'a, 'b> {
+    pub args: &'a ArgumentsList<'b, 'b>,
+    pub at: usize,
+}
+
 fn call_script(
     agent: &mut Agent,
     host: &WasmHost,
+    lookup: &Lookup,
     call: &ImportCall,
     gc: GcScope<'_, '_>,
 ) -> Result<Value<'static>, JsError<'static>> {
-    detach_stale(agent, host, None, gc.nogc());
-    let wrapper = host.imports.borrow()[call.slot].get(agent, gc.nogc());
-    let Ok(function) = Function::try_from(wrapper) else {
+    let Ok(function) = Function::try_from(lookup.args.get(lookup.at)) else {
         return Err(type_error(agent, "import is not callable", gc.nogc()).unbind());
     };
-    let mut args: Vec<Value> = call
-        .params
-        .iter()
-        .map(|v| to_js(agent, host, v, gc.nogc()).unbind())
-        .collect();
+    let mut args: Vec<Value> = vec![number(agent, call.slot as f64, gc.nogc()).unbind()];
+    args.extend(
+        call.params
+            .iter()
+            .map(|v| to_js(agent, host, v, gc.nogc()).unbind()),
+    );
     function
         .call(agent, Value::Undefined, &mut args, gc)
         .map(|v| v.unbind())
@@ -264,23 +232,11 @@ fn script_results(
     }
 }
 
-/// Run `func` to completion, calling script for every import on the way, and
-/// leave no stale buffer behind for the script that runs next.
+/// Run `func` to completion, calling script for every import on the way.
 pub(super) fn drive(
     agent: &mut Agent,
     host: &WasmHost,
-    func: Func,
-    inputs: &[Val],
-    mut gc: GcScope<'_, '_>,
-) -> Result<Outcome, JsError<'static>> {
-    let outcome = run(agent, host, func, inputs, gc.reborrow());
-    detach_stale(agent, host, None, gc.nogc());
-    outcome
-}
-
-fn run(
-    agent: &mut Agent,
-    host: &WasmHost,
+    lookup: &Lookup,
     func: Func,
     inputs: &[Val],
     mut gc: GcScope<'_, '_>,
@@ -302,7 +258,7 @@ fn run(
                 };
                 let types = host.func_type(&pending.host_func()).results().to_vec();
                 // Dropping `pending` on an error unwinds the wasm frames.
-                let value = call_script(agent, host, call, gc.reborrow())?;
+                let value = call_script(agent, host, lookup, call, gc.reborrow())?;
                 let resumed = script_results(agent, host, value, &types, gc.nogc())?;
                 step = pending.resume(&mut *host.store.borrow_mut(), &resumed, &mut results);
             },
@@ -311,7 +267,7 @@ fn run(
                 // suspend, as when it is called directly or tail-called from
                 // the root frame: its result is the call's.
                 if let Some(call) = error.downcast_ref::<ImportCall>() {
-                    let value = call_script(agent, host, call, gc.reborrow())?;
+                    let value = call_script(agent, host, lookup, call, gc.reborrow())?;
                     return script_results(agent, host, value, ty.results(), gc.nogc())
                         .map(Outcome::Done);
                 }

@@ -4,18 +4,17 @@
 
 //! Values across the boundary, and the call bridge, on Bole. The same design
 //! as `genet-vano`'s: wasm is called resumably, so script a wasm call reaches
-//! can call back into the same store; buffers over memory that moved are
-//! brought up to date whenever control passes from wasm back to script.
+//! can call back into the same store. The bootstrap keeps buffers over memory
+//! that moved up to date whenever control passes between script and wasm; an
+//! `externref` crosses as its keeper slot, and a function made from script is
+//! reached through the `lookup` function the caller passes.
 
-use std::ptr::NonNull;
 use std::rc::Rc;
 
 use boa_engine::object::builtins::JsArrayBuffer;
 use boa_engine::{Context, JsBigInt, JsError, JsNativeError, JsResult, JsString, JsValue};
 use genet_wasm::ImportCall;
-use genet_wasm::wasmi::{
-    ExternRef, F32, F64, Func, Nullable, ResumableCall, TrapCode, Val, ValType,
-};
+use genet_wasm::wasmi::{F32, F64, Func, Nullable, ResumableCall, TrapCode, Val, ValType};
 
 use super::{WasmHost, WasmSlot};
 
@@ -74,37 +73,8 @@ pub(super) fn detach_key() -> JsValue {
     string("WebAssembly.Memory".to_string())
 }
 
-fn array_buffer(value: &JsValue) -> Option<JsArrayBuffer> {
+pub(super) fn array_buffer(value: &JsValue) -> Option<JsArrayBuffer> {
     JsArrayBuffer::from_object(value.as_object()?.clone()).ok()
-}
-
-/// Bring every buffer over memory up to date before script runs: detach the
-/// fixed-length ones whose memory moved, and `force`'s in any case, and
-/// repoint the resizable ones at their memory's bytes.
-pub(super) fn detach_stale(host: &WasmHost, force: Option<usize>) {
-    let refresh = host.refresh(force);
-    for value in refresh.detach {
-        if let Some(buffer) = array_buffer(&value) {
-            // The key is ours, so this detach cannot fail.
-            let _ = buffer.detach_foreign(&detach_key());
-        }
-    }
-    for (memory, ptr, len) in refresh.repoint {
-        let Some(buffer) = host.with_buffer(memory, array_buffer).flatten() else {
-            continue;
-        };
-        let ptr = NonNull::new(ptr).unwrap_or(NonNull::dangling());
-        // SAFETY: the store's bytes, which this function is called to follow
-        // every time they can move.
-        let repointed = unsafe { buffer.repoint_foreign(ptr, len) };
-        debug_assert!(repointed, "a memory's resizable buffer is over its bytes");
-    }
-}
-
-pub(super) fn take_buffer_and_detach(host: &WasmHost, memory: usize) {
-    if let Some(buffer) = host.take_buffer(memory).as_ref().and_then(array_buffer) {
-        let _ = buffer.detach_foreign(&detach_key());
-    }
 }
 
 /// A wasm value as the bootstrap receives it.
@@ -116,11 +86,7 @@ pub(super) fn to_js(host: &WasmHost, value: &Val) -> JsValue {
         Val::F64(v) => JsValue::new(v.to_float()),
         Val::FuncRef(Nullable::Val(func)) => number(host.func_handle(*func, None)),
         Val::ExternRef(Nullable::Val(r)) => {
-            let slot = *r
-                .data(&*host.store.borrow())
-                .downcast_ref::<usize>()
-                .expect("every externref holds a slot");
-            host.externs.borrow()[slot].clone()
+            number(host.extern_slot(r).expect("every externref holds a slot"))
         },
         Val::FuncRef(Nullable::Null) | Val::ExternRef(Nullable::Null) => JsValue::null(),
         Val::V128(_) => JsValue::undefined(),
@@ -137,13 +103,7 @@ pub(super) fn to_val(host: &WasmHost, value: &JsValue, ty: ValType) -> Option<Va
         ValType::FuncRef if value.is_null() => Val::FuncRef(Nullable::Null),
         ValType::FuncRef => Val::FuncRef(Nullable::Val(host.func(handle_arg(value)?)?)),
         ValType::ExternRef if value.is_null() => Val::ExternRef(Nullable::Null),
-        ValType::ExternRef => {
-            let slot = host.push(&host.externs, value.clone());
-            Val::ExternRef(Nullable::Val(ExternRef::new(
-                &mut *host.store.borrow_mut(),
-                slot,
-            )))
-        },
+        ValType::ExternRef => Val::ExternRef(Nullable::Val(host.extern_ref(handle_arg(value)?)?)),
         ValType::V128 => return None,
     })
 }
@@ -162,13 +122,17 @@ pub(super) fn args_for(
         .collect()
 }
 
-fn call_script(host: &WasmHost, call: &ImportCall, ctx: &mut Context) -> JsResult<JsValue> {
-    detach_stale(host, None);
-    let wrapper = host.imports.borrow()[call.slot].clone();
-    let Some(function) = wrapper.as_callable() else {
+fn call_script(
+    host: &WasmHost,
+    lookup: &JsValue,
+    call: &ImportCall,
+    ctx: &mut Context,
+) -> JsResult<JsValue> {
+    let Some(function) = lookup.as_callable() else {
         return Err(type_error("import is not callable"));
     };
-    let args: Vec<JsValue> = call.params.iter().map(|v| to_js(host, v)).collect();
+    let mut args = vec![number(call.slot)];
+    args.extend(call.params.iter().map(|v| to_js(host, v)));
     function.call(&JsValue::undefined(), &args, ctx)
 }
 
@@ -193,20 +157,14 @@ fn script_results(host: &WasmHost, value: &JsValue, types: &[ValType]) -> JsResu
     }
 }
 
-/// Run `func` to completion, calling script for every import on the way, and
-/// leave no stale buffer behind for the script that runs next.
+/// Run `func` to completion, calling script for every import on the way.
 pub(super) fn drive(
     host: &WasmHost,
+    lookup: &JsValue,
     func: Func,
     inputs: &[Val],
     ctx: &mut Context,
 ) -> JsResult<Outcome> {
-    let outcome = run(host, func, inputs, ctx);
-    detach_stale(host, None);
-    outcome
-}
-
-fn run(host: &WasmHost, func: Func, inputs: &[Val], ctx: &mut Context) -> JsResult<Outcome> {
     let ty = host.func_type(&func);
     let mut results: Vec<Val> = ty
         .results()
@@ -224,7 +182,7 @@ fn run(host: &WasmHost, func: Func, inputs: &[Val], ctx: &mut Context) -> JsResu
                 };
                 let types = host.func_type(&pending.host_func()).results().to_vec();
                 // Dropping `pending` on an error unwinds the wasm frames.
-                let value = call_script(host, call, ctx)?;
+                let value = call_script(host, lookup, call, ctx)?;
                 let resumed = script_results(host, &value, &types)?;
                 step = pending.resume(&mut *host.store.borrow_mut(), &resumed, &mut results);
             },
@@ -232,7 +190,7 @@ fn run(host: &WasmHost, func: Func, inputs: &[Val], ctx: &mut Context) -> JsResu
                 // A function made from script reached with no wasm frame to
                 // suspend: its result is the call's.
                 if let Some(call) = error.downcast_ref::<ImportCall>() {
-                    let value = call_script(host, call, ctx)?;
+                    let value = call_script(host, lookup, call, ctx)?;
                     return script_results(host, &value, ty.results()).map(Outcome::Done);
                 }
                 if error.as_trap_code() == Some(TrapCode::OutOfFuel) {

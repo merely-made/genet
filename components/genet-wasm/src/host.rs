@@ -3,22 +3,26 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The wasmi side of the bridge: one store per engine and the handle tables
-//! script reaches it through. Nothing here touches the JavaScript heap. The
-//! script values it holds (import wrappers, `externref` payloads, memory
-//! buffers) are the engine's rooted values, `V`.
+//! script reaches it through. Nothing here touches the JavaScript heap: import
+//! functions and `externref` values live in script's keepers and cross as
+//! numbers (D6), and the only script values the host holds are the `V`s a
+//! script function stages for a multi-value return. A handle lives until its
+//! last owner releases it (`handles.rs`).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt;
+use std::rc::Rc;
 
 use wasmi::{
-    Config, Engine, Error, Extern, ExternType, Func, FuncType, Global, Instance, Module, Store,
-    Table, Val, errors::HostError,
+    Config, Engine, Error, Extern, ExternRef, ExternType, Func, FuncType, Global, Instance, Module,
+    Store, Table, Val, errors::HostError,
 };
 
 use crate::json;
 use crate::memory::MemoryEntry;
 use crate::sections::{self, FUNC_KIND, GLOBAL_KIND, MEMORY_KIND, START_EXPORT, TABLE_KIND};
+use crate::slab::Slab;
 
 /// Raised by every function made from script. The call suspends at it and
 /// the bridge runs the script function for `slot`, then resumes.
@@ -36,58 +40,92 @@ impl fmt::Display for ImportCall {
 
 impl HostError for ImportCall {}
 
+/// Import plan entries of this kind name a script function's keeper slot.
+const SCRIPT_KIND: u8 = 4;
+
 /// What script supplies for one import, in the module's import order.
-pub enum ImportValue<V> {
-    /// A script function's wrapper, made into a host function here.
-    Script(V),
+pub enum ImportValue {
+    /// A script function, by its slot in the group's keeper.
+    Script(usize),
     /// An entity that already lives in the store, by kind and handle.
     Entity(u8, usize),
 }
+
+impl ImportValue {
+    /// Read the bootstrap's plan: comma-separated `kind:handle` entries, kind
+    /// 4 being a script function's slot.
+    pub fn parse_plan(plan: &str) -> Option<Vec<Self>> {
+        plan.split(',')
+            .filter(|entry| !entry.is_empty())
+            .map(|entry| {
+                let (kind, handle) = entry.split_once(':')?;
+                let (kind, handle) = (kind.parse::<u8>().ok()?, handle.parse().ok()?);
+                Some(if kind == SCRIPT_KIND {
+                    Self::Script(handle)
+                } else {
+                    Self::Entity(kind, handle)
+                })
+            })
+            .collect()
+    }
+}
+
+/// `(name, kind, index)` for every export of a module.
+pub type Exports = Rc<Vec<(String, u8, u32)>>;
 
 pub struct ModuleEntry {
     pub module: Module,
     has_start: bool,
     /// For each import in the module's order, its place in wasmi's.
     import_order: Vec<usize>,
-    /// `(name, kind, index)` for every export.
-    pub exports: Vec<(String, u8, u32)>,
+    pub exports: Exports,
 }
 
+/// An instance matters only while its exports are being read, so script
+/// releases it as soon as they are.
 pub struct InstanceEntry {
     pub instance: Instance,
-    pub module: usize,
+    exports: Exports,
     /// Handles of what it imported, by kind and then by index.
     pub imported: [Vec<usize>; 4],
 }
 
-struct FuncEntry {
+pub(crate) struct FuncEntry {
     func: Func,
     /// Index in its module's function space, which names the script function.
     index: Option<u32>,
+    /// Its place in `func_handles`.
+    pub(crate) key: String,
 }
 
 /// Fuel a store holds when the host has set no budget.
-const UNBOUNDED_FUEL: u64 = u64::MAX;
+pub(crate) const UNBOUNDED_FUEL: u64 = u64::MAX;
 
-/// One engine's WebAssembly state. Handles are indices that never move.
+/// One engine's WebAssembly state. A handle is an index that stays put until
+/// its last owner releases it.
 pub struct WasmHost<V> {
-    engine: Engine,
+    pub(crate) engine: RefCell<Engine>,
     pub store: RefCell<Store<()>>,
-    pub modules: RefCell<Vec<ModuleEntry>>,
-    pub instances: RefCell<Vec<InstanceEntry>>,
-    funcs: RefCell<Vec<FuncEntry>>,
+    pub(crate) modules: RefCell<Slab<ModuleEntry>>,
+    pub(crate) instances: RefCell<Slab<InstanceEntry>>,
+    pub(crate) funcs: RefCell<Slab<FuncEntry>>,
     /// Handles by function identity, so a function has one handle however it
     /// reaches script.
-    func_handles: RefCell<HashMap<String, usize>>,
-    /// Script wrappers for functions made from script, by slot.
-    pub imports: RefCell<Vec<V>>,
-    /// The script values `externref`s hold, by slot.
-    pub externs: RefCell<Vec<V>>,
-    pub memories: RefCell<Vec<MemoryEntry<V>>>,
-    pub globals: RefCell<Vec<Global>>,
-    pub tables: RefCell<Vec<Table>>,
+    pub(crate) func_handles: RefCell<HashMap<String, usize>>,
+    /// The wasmi `externref` for each keeper slot script holds a value in.
+    pub(crate) externs: RefCell<HashMap<usize, ExternRef>>,
+    pub(crate) next_extern: Cell<usize>,
+    pub(crate) memories: RefCell<Slab<MemoryEntry>>,
+    pub(crate) globals: RefCell<Slab<Global>>,
+    pub(crate) tables: RefCell<Slab<Table>>,
+    /// Live wrappers and attached buffers, and the resets so far
+    /// (`handles.rs`).
+    pub(crate) wrappers: Cell<usize>,
+    pub(crate) buffers: Cell<usize>,
+    pub(crate) resets: Cell<usize>,
+    pub(crate) record_seq: Cell<u64>,
     /// Handles of what an instance defines, by `(instance, kind, index)`.
-    defined: RefCell<HashMap<(usize, u8, u32), usize>>,
+    pub(crate) defined: RefCell<HashMap<(usize, u8, u32), usize>>,
     /// Results of the last multi-value call, read one by one.
     pub results: RefCell<Vec<Val>>,
     /// Values a script function returned for a multi-value import.
@@ -137,6 +175,20 @@ fn import_order(module: &Module, original: &[(String, String, u8)]) -> Vec<usize
     }
 }
 
+/// An engine with fuel metering and the store that goes with it, holding `fuel`.
+pub(crate) fn fresh_store(fuel: u64) -> (Engine, Store<()>) {
+    let mut config = Config::default();
+    config
+        .consume_fuel(true)
+        .wasm_simd(true)
+        .wasm_relaxed_simd(true)
+        .wasm_memory64(true);
+    let engine = Engine::new(&config);
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(fuel).expect("fuel is enabled");
+    (engine, store)
+}
+
 /// wasmi gives `Func` no equality; its debug form names the store and index.
 fn func_key(func: &Func) -> String {
     format!("{func:?}")
@@ -155,41 +207,28 @@ impl<V> WasmHost<V> {
     ///
     /// Never: fuel is enabled just before it is set.
     pub fn new() -> Self {
-        let mut config = Config::default();
-        config
-            .consume_fuel(true)
-            .wasm_simd(true)
-            .wasm_relaxed_simd(true)
-            .wasm_memory64(true);
-        let engine = Engine::new(&config);
-        let mut store = Store::new(&engine, ());
-        store.set_fuel(UNBOUNDED_FUEL).expect("fuel is enabled");
+        let (engine, store) = fresh_store(UNBOUNDED_FUEL);
         Self {
-            engine,
+            engine: RefCell::new(engine),
             store: RefCell::new(store),
             modules: RefCell::default(),
             instances: RefCell::default(),
             funcs: RefCell::default(),
             func_handles: RefCell::default(),
-            imports: RefCell::default(),
             externs: RefCell::default(),
+            next_extern: Cell::new(0),
             memories: RefCell::default(),
             globals: RefCell::default(),
             tables: RefCell::default(),
+            wrappers: Cell::new(0),
+            buffers: Cell::new(0),
+            resets: Cell::new(0),
+            record_seq: Cell::new(0),
             defined: RefCell::default(),
             results: RefCell::default(),
             staged: RefCell::default(),
             trap: RefCell::default(),
         }
-    }
-
-    /// Whether script holds anything that lives in this store.
-    pub fn is_live(&self) -> bool {
-        !self.modules.borrow().is_empty()
-            || !self.memories.borrow().is_empty()
-            || !self.globals.borrow().is_empty()
-            || !self.tables.borrow().is_empty()
-            || !self.funcs.borrow().is_empty()
     }
 
     /// Set the fuel every wasm call on this engine draws from. `None` is
@@ -211,16 +250,15 @@ impl<V> WasmHost<V> {
     /// wasmi's message, for the native to throw.
     pub fn compile(&self, bytes: Vec<u8>) -> Result<usize, String> {
         let prepared = sections::prepare(bytes);
-        let module = Module::new(&self.engine, &prepared.bytes).map_err(|e| e.to_string())?;
+        let module =
+            Module::new(&self.engine.borrow(), &prepared.bytes).map_err(|e| e.to_string())?;
         let import_order = import_order(&module, &prepared.imports);
-        let mut modules = self.modules.borrow_mut();
-        modules.push(ModuleEntry {
+        Ok(self.modules.borrow_mut().insert(ModuleEntry {
             module,
             has_start: prepared.has_start,
             import_order,
-            exports: prepared.exports,
-        });
-        Ok(modules.len() - 1)
+            exports: Rc::new(prepared.exports),
+        }))
     }
 
     /// The module's imports and exports with their types, as JSON.
@@ -272,11 +310,9 @@ impl<V> WasmHost<V> {
         Some(section.data().to_vec())
     }
 
-    /// A host function of type `ty` that calls the script wrapper `wrapper`.
-    pub fn script_func(&self, store: &mut Store<()>, ty: FuncType, wrapper: V) -> Func {
-        let mut imports = self.imports.borrow_mut();
-        let slot = imports.len();
-        imports.push(wrapper);
+    /// A host function of type `ty` that calls the script function in keeper
+    /// slot `slot`.
+    pub fn script_func(&self, store: &mut Store<()>, ty: FuncType, slot: usize) -> Func {
         Func::new(store, ty, move |_, params, _| {
             Err(Error::host(ImportCall {
                 slot,
@@ -288,9 +324,9 @@ impl<V> WasmHost<V> {
     fn entity(&self, kind: u8, handle: usize) -> Option<Extern> {
         Some(match kind {
             FUNC_KIND => Extern::Func(self.func(handle)?),
-            TABLE_KIND => Extern::Table(*self.tables.borrow().get(handle)?),
+            TABLE_KIND => Extern::Table(self.tables.borrow().copied(handle)?),
             MEMORY_KIND => Extern::Memory(self.memory(handle)?),
-            GLOBAL_KIND => Extern::Global(*self.globals.borrow().get(handle)?),
+            GLOBAL_KIND => Extern::Global(self.globals.borrow().copied(handle)?),
             _ => return None,
         })
     }
@@ -305,7 +341,7 @@ impl<V> WasmHost<V> {
     pub fn instantiate(
         &self,
         module: usize,
-        values: Vec<ImportValue<V>>,
+        values: Vec<ImportValue>,
     ) -> Result<(usize, Option<Func>), String> {
         let modules = self.modules.borrow();
         let entry = modules.get(module).ok_or("link:not a module")?;
@@ -317,9 +353,9 @@ impl<V> WasmHost<V> {
         let mut imported: [Vec<usize>; 4] = Default::default();
         for (value, &w) in values.into_iter().zip(&entry.import_order) {
             let ext = match (imports[w].ty(), value) {
-                (ExternType::Func(ty), ImportValue::Script(wrapper)) => {
+                (ExternType::Func(ty), ImportValue::Script(slot)) => {
                     let mut store = self.store.borrow_mut();
-                    let func = self.script_func(&mut store, ty.clone(), wrapper);
+                    let func = self.script_func(&mut store, ty.clone(), slot);
                     Extern::Func(func)
                 },
                 (_, ImportValue::Entity(kind, handle)) => {
@@ -354,38 +390,33 @@ impl<V> WasmHost<V> {
             .has_start
             .then(|| instance.get_func(&*store, START_EXPORT))
             .flatten();
-        let mut instances = self.instances.borrow_mut();
-        instances.push(InstanceEntry {
+        let exports = entry.exports.clone();
+        let handle = self.instances.borrow_mut().insert(InstanceEntry {
             instance,
-            module,
+            exports,
             imported,
         });
-        Ok((instances.len() - 1, start))
-    }
-
-    pub fn export_index(&self, module: usize, name: &str, kind: u8) -> Option<u32> {
-        self.modules.borrow()[module]
-            .exports
-            .iter()
-            .find(|(export, k, _)| export == name && *k == kind)
-            .map(|(_, _, index)| *index)
+        Ok((handle, start))
     }
 
     /// The handle of an instance's export of `kind`. An import passed through
     /// keeps its handle, and a defined entity gets one handle however often
     /// it is exported, so script sees one object for it.
     pub fn export_of(&self, instance: usize, name: &str, kind: u8) -> Option<usize> {
-        let (module, inst) = {
+        let (exports, inst) = {
             let instances = self.instances.borrow();
             let entry = instances.get(instance)?;
-            (entry.module, entry.instance)
+            (entry.exports.clone(), entry.instance)
         };
-        let index = self.export_index(module, name, kind)?;
+        let index = exports
+            .iter()
+            .find(|(export, k, _)| export == name && *k == kind)
+            .map(|(_, _, index)| *index)?;
         if kind == FUNC_KIND {
             let func = inst.get_func(&*self.store.borrow(), name)?;
             return Some(self.func_handle(func, Some(index)));
         }
-        let imported = self.instances.borrow()[instance].imported[kind as usize]
+        let imported = self.instances.borrow().get(instance)?.imported[kind as usize]
             .get(index as usize)
             .copied();
         if imported.is_some() {
@@ -398,8 +429,14 @@ impl<V> WasmHost<V> {
             let store = self.store.borrow();
             match kind {
                 MEMORY_KIND => self.push_memory(inst.get_memory(&*store, name)?),
-                TABLE_KIND => self.push(&self.tables, inst.get_table(&*store, name)?),
-                GLOBAL_KIND => self.push(&self.globals, inst.get_global(&*store, name)?),
+                TABLE_KIND => self
+                    .tables
+                    .borrow_mut()
+                    .insert(inst.get_table(&*store, name)?),
+                GLOBAL_KIND => self
+                    .globals
+                    .borrow_mut()
+                    .insert(inst.get_global(&*store, name)?),
                 _ => return None,
             }
         };
@@ -409,19 +446,17 @@ impl<V> WasmHost<V> {
         Some(handle)
     }
 
-    pub fn push<T>(&self, list: &RefCell<Vec<T>>, item: T) -> usize {
-        let mut list = list.borrow_mut();
-        list.push(item);
-        list.len() - 1
-    }
-
     /// The one handle for `func`, minted the first time it reaches script.
     pub fn func_handle(&self, func: Func, index: Option<u32>) -> usize {
         let key = func_key(&func);
         if let Some(handle) = self.func_handles.borrow().get(&key) {
             return *handle;
         }
-        let handle = self.push(&self.funcs, FuncEntry { func, index });
+        let handle = self.funcs.borrow_mut().insert(FuncEntry {
+            func,
+            index,
+            key: key.clone(),
+        });
         self.func_handles.borrow_mut().insert(key, handle);
         handle
     }

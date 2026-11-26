@@ -31,4 +31,15 @@ impl Harness for Vano {
     fn set_fuel(&mut self, fuel: Option<u64>) {
         self.0.set_wasm_fuel(fuel).unwrap();
     }
+
+    fn collect(&mut self) {
+        for _ in 0..3 {
+            self.0.force_gc();
+            self.0.pump_microtasks();
+        }
+    }
+
+    fn stats(&mut self) -> genet_wasm::Stats {
+        self.0.wasm_stats().expect("WebAssembly is installed")
+    }
 }

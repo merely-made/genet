@@ -5,9 +5,17 @@
 // The `WebAssembly` namespace over the natives in natives.rs and
 // entities_natives.rs (Genet's WebAssembly object plan, W1, W2 and W4). The
 // conversions of the JS API live here: values reach the natives converted for
-// their wasm type, a `funcref` as its function handle, and error strings
-// become the namespace's error classes. A memory's buffer is its linear
-// memory, not a copy.
+// their wasm type, a `funcref` as its function handle, an `externref` as a
+// slot number, and error strings become the namespace's error classes. A
+// memory's buffer is its linear memory, not a copy.
+//
+// Freeing (D6). Every wrapper, and every buffer over a memory, retains its
+// handle with the host and registers with one FinalizationRegistry, whose
+// cleanup releases it. Script values wasm holds (import functions, externrefs)
+// are not rooted by the host. They live in a keeper, one for each linked group
+// of instances and what they share, which the group's wrappers reference. The
+// tracing collector then frees a group, cycles through its imports included,
+// and a group that two wrappers come to share is merged into one keeper.
 (() => {
   'use strict';
   const g = globalThis;
@@ -15,7 +23,7 @@
   for (const name of [
     'Compile', 'Describe', 'Instantiate', 'ExportOf', 'Signature', 'Call', 'TrapMessage',
     'ResultAt', 'Stage', 'FuncNew', 'CustomSection', 'MemoryNew', 'MemoryGrow', 'MemoryBuffer', 'MemoryType',
-    'MemoryToFixed', 'MemoryToResizable',
+    'Stale', 'Detach', 'Repoint', 'Retain', 'Release', 'Extern',
     'GlobalNew', 'GlobalGet', 'GlobalSet', 'GlobalType', 'TableNew', 'TableGet', 'TableSet',
     'TableGrow', 'TableLength', 'TableType',
   ]) {
@@ -25,6 +33,10 @@
   const { create, defineProperty, freeze, setPrototypeOf } = Object;
   const parse = JSON.parse;
   const KIND = { function: 0, table: 1, memory: 2, global: 3 };
+  // What a handle names, as `genet_wasm::handles` numbers them.
+  const FUNC = 0, TABLE = 1, MEMORY = 2, GLOBAL = 3, MODULE = 4, INSTANCE = 5, BUFFER = 6, EXTERN = 7;
+  // An import plan entry of this kind names a script function's keeper slot.
+  const PLAN_SCRIPT = 4;
   const TRAPPED = freeze(create(null));
   const MAX_PAGES = 65536;
   const MAX_PAGES_64 = 1n << 48n;
@@ -51,462 +63,124 @@
     return t;
   };
 
-  // Script values to wasm values, and back.
-  const funcObjects = new Map();
-  const funcHandles = new WeakMap();
-  const toWasm = {
-    i32: (v) => v | 0,
-    i64: (v) => BigInt.asIntN(64, v),
-    f32: (v) => +v,
-    f64: (v) => +v,
-    externref: (v) => v,
-    anyfunc: (v) => {
-      if (v === null) return null;
-      const handle = funcHandles.get(v);
-      if (handle === undefined) throw new TypeError('expected an exported WebAssembly function or null');
-      return handle;
-    },
-    v128: () => {
-      throw new TypeError('v128 values cannot cross to or from script');
-    },
+  // Buffers script holds over memories, by memory handle: the current one,
+  // weakly, and the record that retains the memory while it is attached.
+  const bufferCache = new Map();
+  // One wrapper per handle while it lives, by kind (FUNC to GLOBAL).
+  const identity = [new Map(), new Map(), new Map(), new Map()];
+  // The keeper of every wrapper and of every buffer over a memory.
+  const groups = new WeakMap();
+
+  const applyStale = (list) => {
+    for (const item of list.split(',')) {
+      const handle = Number(item.slice(1));
+      const entry = bufferCache.get(handle);
+      const buffer = entry?.ref.deref();
+      if (item[0] === 'r') {
+        if (buffer) N.Repoint(handle, buffer);
+        continue;
+      }
+      if (entry === undefined) continue;
+      bufferCache.delete(handle);
+      if (buffer) N.Detach(buffer);
+      if (entry.rec.live) {
+        entry.rec.live = false;
+        N.Release(BUFFER, handle, false);
+      }
+    }
   };
-  toWasm.funcref = toWasm.anyfunc;
-  const to = (type) => toWasm[type] ?? (() => {
-    throw new TypeError(`${type} values cannot cross`);
+  const release = (kind, handle, current = false) => {
+    const stale = N.Release(kind, handle, current);
+    if (stale) applyStale(stale);
+  };
+  // Detach every buffer whose memory has moved, and `force`'s in any case.
+  const sync = (force = -1) => {
+    if (bufferCache.size === 0) return;
+    const list = N.Stale(force);
+    if (list !== '') applyStale(list);
+  };
+
+  const registry = new FinalizationRegistry((held) => {
+    if (held.done) return;
+    held.done = true;
+    if (held.kind === EXTERN) {
+      for (const id of held.ids) N.Release(EXTERN, id, false);
+    } else if (held.kind === BUFFER) {
+      if (!held.live) return;
+      held.live = false;
+      const current = bufferCache.get(held.handle)?.rec === held;
+      if (current) bufferCache.delete(held.handle);
+      release(BUFFER, held.handle, current);
+    } else {
+      release(held.kind, held.handle);
+      const wrappers = identity[held.kind];
+      if (wrappers?.get(held.handle)?.deref() === undefined) wrappers?.delete(held.handle);
+    }
   });
-  const from = (type) => {
-    if (type === 'anyfunc' || type === 'funcref') return (h) => (h === null ? null : exportedFunction(h));
-    if (type === 'v128') return toWasm.v128;
-    return (v) => v;
+  // Vano's cleanup job drops a cell when exactly two have died together, and
+  // a registry keeps one cell for each target. So every object gets a token
+  // that dies with it and is registered too, with the same `held`, which is
+  // acted on once. The cells then come in pairs, and a pair is enough.
+  const tokens = new WeakMap();
+  const watch = (object, held) => {
+    const token = {};
+    tokens.set(object, token);
+    registry.register(object, held);
+    registry.register(token, held);
   };
-  const VALUE_TYPES = ['i32', 'i64', 'f32', 'f64', 'v128', 'externref', 'anyfunc', 'funcref'];
-  const valueType = (value, what) => {
-    const type = String(value);
-    if (!VALUE_TYPES.includes(type)) throw new TypeError(`${what} must be a value type`);
-    return type;
-  };
-  const defaultValue = (type) => ({ i32: 0, i64: 0n, f32: 0, f64: 0, anyfunc: null, funcref: null })[type];
-  // The memory64 additions: an `address` of "i32" or "i64" makes limits, deltas,
-  // indices and sizes numbers or BigInts. An i64 value is a BigInt in 0..2^64-1,
-  // or a number standing for one.
-  const addressType = (value) => {
-    if (value === undefined) return 'i32';
-    const type = String(value);
-    if (type !== 'i32' && type !== 'i64') throw new TypeError('address must be "i32" or "i64"');
-    return type;
-  };
-  const addressValue = (value, what, is64) => {
-    if (!is64) return enforceRange(value, what);
-    let n = value;
-    if (typeof n !== 'bigint') {
-      n = Number(n);
-      if (!Number.isFinite(n)) throw new TypeError(`${what} must be a finite number`);
-      n = BigInt(Math.trunc(n));
-    }
-    if (n < 0n || n > MAX_U64) throw new TypeError(`${what} is out of range`);
-    return n;
-  };
-  // What a native takes for a count: a decimal string for i64 limits, which may
-  // not fit a double, and a number, saturated, for deltas and indices.
-  const limitArg = (n) => (n === undefined ? undefined : String(n));
-  const countArg = (n) => (typeof n === 'bigint' ? Number(n < 2n ** 53n ? n : 2n ** 53n - 1n) : n);
-  const sizeResult = (n, is64) => (is64 ? BigInt(n) : n);
-  // A reflected type's limits are BigInts for an i64 address.
-  const reflect = (type) => {
-    if (type.address !== 'i64') return type;
-    const out = { ...type, minimum: BigInt(type.minimum) };
-    if ('maximum' in type) out.maximum = BigInt(type.maximum);
-    return out;
-  };
-  // A descriptor's limits, each member read once and in WebIDL's order; type
-  // reflection's `minimum` stands in for `initial`.
-  const limits = (descriptor, is64) => {
-    const read = (name) => {
-      const value = descriptor[name];
-      return value === undefined ? undefined : addressValue(value, name, is64);
-    };
-    const initial = read('initial');
-    const maximum = read('maximum');
-    const minimum = read('minimum');
-    if (initial !== undefined && minimum !== undefined) throw new TypeError('give initial or minimum, not both');
-    const min = initial ?? minimum;
-    if (min === undefined) throw new TypeError('initial is required');
-    return { initial: min, maximum };
+  const own = (kind, handle, object) => {
+    N.Retain(kind, handle);
+    watch(object, { kind, handle, done: false });
+    return object;
   };
 
-  // A wasm function crossing into script, one script function per handle.
-  const callWasm = (handle, results, args) => {
-    const r = N.Call(TRAPPED, handle, ...args);
-    if (r === TRAPPED) throw new RuntimeError(N.TrapMessage());
-    if (results.length === 0) return undefined;
-    if (results.length === 1) return results[0](r);
-    return results.map((convert, i) => convert(N.ResultAt(i)));
+  // A keeper holds what wasm in its group refers to by number: externref
+  // values by slot, and the wrappers of imported script functions. `into` is
+  // set once it is merged into another.
+  let nextFn = 0;
+  const root = (keeper) => {
+    while (keeper.into !== null) keeper = keeper.into;
+    return keeper;
   };
-  const exportedFunction = (handle) => {
-    let f = funcObjects.get(handle);
-    if (f) return f;
-    const sig = parse(N.Signature(handle));
-    const params = sig.parameters.map(to);
-    const results = sig.results.map(from);
-    // A v128 anywhere in the signature refuses the call before it runs.
-    const crossing = [...sig.parameters, ...sig.results].includes('v128');
-    f = (...args) => {
-      if (crossing) throw new TypeError('v128 values cannot cross to or from script');
-      return callWasm(handle, results, params.map((convert, i) => convert(args[i])));
-    };
-    setPrototypeOf(f, WasmFunction.prototype);
-    defineProperty(f, 'name', { value: String(sig.index ?? handle), configurable: true });
-    defineProperty(f, 'length', { value: sig.parameters.length, configurable: true });
-    funcObjects.set(handle, f);
-    funcHandles.set(f, handle);
-    return f;
-  };
-  // A script function wasm calls: arguments from wasm, results to wasm. Several
-  // results are staged for the bridge, which reads them as the wrapper returns.
-  const scriptWrapper = (fn, type) => {
-    const params = type.parameters.map(from);
-    const results = type.results.map(to);
-    return (...args) => {
-      const value = fn(...params.map((convert, i) => convert(args[i])));
-      if (results.length === 0) return undefined;
-      if (results.length === 1) return results[0](value);
-      const values = [...value];
-      if (values.length !== results.length) throw new TypeError('a script function returned the wrong number of values');
-      N.Stage(...values.map((v, i) => results[i](v)));
-      return undefined;
-    };
-  };
-
-  // Each entity class keeps its handle in a WeakMap, and one object per handle.
-  const entityClass = (name) => {
-    const handles = new WeakMap();
-    const objects = new Map();
-    return {
-      handles,
-      handle(object) {
-        const handle = handles.get(object);
-        if (handle === undefined) throw new TypeError(`expected a WebAssembly.${name}`);
-        return handle;
-      },
-      register(object, handle) {
-        handles.set(object, handle);
-        objects.set(handle, object);
-        return object;
-      },
-      object(C, handle) {
-        return objects.get(handle) ?? this.register(create(C.prototype), handle);
-      },
-    };
-  };
-  const memories = entityClass('Memory');
-  const globals = entityClass('Global');
-  const tables = entityClass('Table');
-
-  class Memory {
-    constructor(descriptor) {
-      if (!isObject(descriptor)) throw new TypeError('the memory descriptor must be an object');
-      const is64 = addressType(descriptor.address) === 'i64';
-      const { initial, maximum } = limits(descriptor, is64);
-      if (descriptor.shared) throw new TypeError('shared memory is not supported yet');
-      const cap = is64 ? MAX_PAGES_64 : MAX_PAGES;
-      if (initial > cap || (maximum !== undefined && (maximum > cap || maximum < initial))) {
-        throw new RangeError('invalid memory limits');
-      }
-      memories.register(this, N.MemoryNew(limitArg(initial), limitArg(maximum), is64));
-    }
-    grow(delta) {
-      const handle = memories.handle(this);
-      const is64 = parse(N.MemoryType(handle)).address === 'i64';
-      return sizeResult(N.MemoryGrow(handle, countArg(addressValue(delta, 'delta', is64))), is64);
-    }
-    get buffer() {
-      return N.MemoryBuffer(memories.handle(this));
-    }
-    toFixedLengthBuffer() {
-      return N.MemoryToFixed(memories.handle(this));
-    }
-    toResizableBuffer() {
-      return N.MemoryToResizable(memories.handle(this));
-    }
-    type() {
-      return reflect(parse(N.MemoryType(memories.handle(this))));
-    }
+  function Keeper() {
+    this.values = new Map();
+    this.slots = new Map();
+    this.fns = new Map();
+    this.ledger = { kind: EXTERN, ids: [], done: false };
+    this.into = null;
+    // What the natives call to reach an import: the wrapper in `slot`.
+    this.call = (slot, ...args) => root(this).fns.get(slot)(...args);
+    watch(this, this.ledger);
   }
-
-  class Global {
-    constructor(descriptor, v = undefined) {
-      if (!isObject(descriptor)) throw new TypeError('the global descriptor must be an object');
-      const mutable = Boolean(descriptor.mutable);
-      const type = valueType(descriptor.value, 'value');
-      if (type === 'v128') throw new TypeError('v128 globals cannot be made from script');
-      const value = v === undefined ? defaultValue(type) : v;
-      globals.register(this, N.GlobalNew(type, mutable, to(type)(value)));
-    }
-    get value() {
-      const handle = globals.handle(this);
-      return from(parse(N.GlobalType(handle)).value)(N.GlobalGet(handle));
-    }
-    set value(v) {
-      const handle = globals.handle(this);
-      const type = parse(N.GlobalType(handle));
-      if (!type.mutable) throw new TypeError('the global is immutable');
-      N.GlobalSet(handle, to(type.value)(v));
-    }
-    valueOf() {
-      globals.handle(this);
-      return this.value;
-    }
-    type() {
-      return parse(N.GlobalType(globals.handle(this)));
-    }
-  }
-
-  const elementType = (handle) => parse(N.TableType(handle)).element;
-  const is64Table = (handle) => parse(N.TableType(handle)).address === 'i64';
-  class Table {
-    constructor(descriptor, value = undefined) {
-      if (!isObject(descriptor)) throw new TypeError('the table descriptor must be an object');
-      const is64 = addressType(descriptor.address) === 'i64';
-      const element = String(descriptor.element);
-      if (!['anyfunc', 'funcref', 'externref'].includes(element)) {
-        throw new TypeError('element must be anyfunc, funcref or externref');
-      }
-      const { initial, maximum } = limits(descriptor, is64);
-      if (initial > MAX_TABLE || (maximum !== undefined && maximum < initial)) {
-        throw new RangeError('invalid table limits');
-      }
-      const init = value === undefined ? defaultValue(element) : value;
-      tables.register(this, N.TableNew(element, limitArg(initial), limitArg(maximum), to(element)(init), is64));
-    }
-    get length() {
-      const handle = tables.handle(this);
-      return sizeResult(N.TableLength(handle), is64Table(handle));
-    }
-    get(index) {
-      const handle = tables.handle(this);
-      const i = countArg(addressValue(index, 'index', is64Table(handle)));
-      return from(elementType(handle))(N.TableGet(handle, i));
-    }
-    set(index, value = undefined) {
-      const handle = tables.handle(this);
-      const i = countArg(addressValue(index, 'index', is64Table(handle)));
-      const element = elementType(handle);
-      const v = arguments.length < 2 ? defaultValue(element) : value;
-      N.TableSet(handle, i, to(element)(v));
-    }
-    grow(delta, value = undefined) {
-      const handle = tables.handle(this);
-      const is64 = is64Table(handle);
-      const d = countArg(addressValue(delta, 'delta', is64));
-      const element = elementType(handle);
-      const v = arguments.length < 2 ? defaultValue(element) : value;
-      return sizeResult(N.TableGrow(handle, d, to(element)(v)), is64);
-    }
-    type() {
-      return reflect(parse(N.TableType(tables.handle(this))));
-    }
-  }
-
-  // Type reflection: exported functions are instances of WebAssembly.Function.
-  function WasmFunction(type, fn) {
-    if (new.target === undefined) throw new TypeError('WebAssembly.Function must be called with new');
-    if (!isObject(type)) throw new TypeError('the function type must be an object');
-    const parameters = [...type.parameters].map((t) => valueType(t, 'parameter'));
-    const results = [...type.results].map((t) => valueType(t, 'result'));
-    if (typeof fn !== 'function') throw new TypeError('the function must be callable');
-    const wrapper = scriptWrapper(fn, { parameters, results });
-    return exportedFunction(N.FuncNew(parameters.join(','), results.join(','), wrapper));
-  }
-  setPrototypeOf(WasmFunction.prototype, Function.prototype);
-  defineProperty(WasmFunction.prototype, 'type', {
-    value: function type() {
-      const handle = funcHandles.get(this);
-      if (handle === undefined) throw new TypeError('expected a WebAssembly.Function');
-      const { parameters, results } = parse(N.Signature(handle));
-      return { parameters, results };
-    },
-    writable: true,
-    configurable: true,
-  });
-  defineProperty(WasmFunction, 'name', { value: 'Function' });
-
-  const modules = new WeakMap();
-  const instanceExports = new WeakMap();
-
-  const bufferBytes = (source) => {
-    if (ArrayBuffer.isView(source)) {
-      const end = source.byteOffset + source.byteLength;
-      return new Uint8Array(source.buffer.slice(source.byteOffset, end));
-    }
-    if (source instanceof ArrayBuffer) return new Uint8Array(source.slice(0));
-    throw new TypeError('expected an ArrayBuffer or a view of one');
+  const join = (a, b) => {
+    a = root(a);
+    b = root(b);
+    if (a === b) return a;
+    if (a.values.size + a.fns.size < b.values.size + b.fns.size) [a, b] = [b, a];
+    for (const [slot, value] of b.values) a.values.set(slot, value);
+    for (const [value, slot] of b.slots) a.slots.set(value, slot);
+    for (const [slot, fn] of b.fns) a.fns.set(slot, fn);
+    for (const id of b.ledger.ids) a.ledger.ids.push(id);
+    b.ledger.ids = [];
+    b.values = b.slots = b.fns = null;
+    b.into = a;
+    return a;
   };
-  const moduleHandle = (module) => {
-    const handle = modules.get(module);
-    if (handle === undefined) throw new TypeError('expected a WebAssembly.Module');
-    return handle;
+  // The slot an externref value holds in the group, the same for the same value.
+  const hold = (keeper, value) => {
+    const k = root(keeper);
+    const negativeZero = value === 0 && 1 / value < 0; // a Map would take it for 0
+    let slot = negativeZero ? undefined : k.slots.get(value);
+    if (slot === undefined) {
+      slot = N.Extern();
+      k.values.set(slot, value);
+      if (!negativeZero) k.slots.set(value, slot);
+      k.ledger.ids.push(slot);
+    }
+    return slot;
   };
-
-  class Module {
-    constructor(bytes) {
-      const handle = N.Compile(bufferBytes(bytes));
-      if (typeof handle === 'string') throw new CompileError(handle);
-      modules.set(this, handle);
-    }
-    static imports(module) {
-      return parse(N.Describe(moduleHandle(module))).imports
-        .map(({ module, name, kind, type }) => ({ module, name, kind, type: reflect(type) }));
-    }
-    static exports(module) {
-      return parse(N.Describe(moduleHandle(module))).exports
-        .map(({ name, kind, type }) => ({ name, kind, type: reflect(type) }));
-    }
-    static customSections(module, sectionName) {
-      const handle = moduleHandle(module);
-      if (arguments.length < 2) throw new TypeError('a section name is required');
-      const name = String(sectionName);
-      const sections = [];
-      for (let i = 0; ; i++) {
-        const bytes = N.CustomSection(handle, name, i);
-        if (bytes === undefined) return sections;
-        sections.push(bytes);
-      }
-    }
-  }
-
-  // One import as the natives take it: a plan entry, and a wrapper if any.
-  const linkImport = (imp, value, wrappers) => {
-    const where = `${imp.module}.${imp.name}`;
-    switch (imp.kind) {
-      case 'function': {
-        if (typeof value !== 'function') throw new LinkError(`${where} must be a function`);
-        const handle = funcHandles.get(value);
-        if (handle !== undefined) return `0:${handle}`;
-        wrappers.push(scriptWrapper(value, imp.type));
-        return 's';
-      }
-      case 'memory': {
-        const handle = memories.handles.get(value);
-        if (handle === undefined) throw new LinkError(`${where} must be a WebAssembly.Memory`);
-        return `2:${handle}`;
-      }
-      case 'table': {
-        const handle = tables.handles.get(value);
-        if (handle === undefined) throw new LinkError(`${where} must be a WebAssembly.Table`);
-        return `1:${handle}`;
-      }
-      default: {
-        const known = globals.handles.get(value);
-        if (known !== undefined) return `3:${known}`;
-        const { value: type, mutable } = imp.type;
-        const numeric = typeof value === 'number' && type !== 'i64' && type !== 'v128' && type !== 'externref' && type !== 'anyfunc';
-        const big = typeof value === 'bigint' && type === 'i64';
-        const ref = type === 'externref' || type === 'anyfunc';
-        if (!numeric && !big && !ref) throw new LinkError(`${where} must be a WebAssembly.Global or a ${type}`);
-        if (mutable) throw new LinkError(`${where} is mutable, so it must be a WebAssembly.Global`);
-        return `3:${N.GlobalNew(type, false, to(type)(value))}`;
-      }
-    }
+  const holdFn = (keeper, fn) => {
+    const slot = nextFn++;
+    root(keeper).fns.set(slot, fn);
+    return slot;
   };
-
-  const exportObject = (instance, { name, kind }) => {
-    const handle = N.ExportOf(instance, name, KIND[kind]);
-    switch (kind) {
-      case 'function': return exportedFunction(handle);
-      case 'memory': return memories.object(Memory, handle);
-      case 'table': return tables.object(Table, handle);
-      default: return globals.object(Global, handle);
-    }
-  };
-
-  // Reading the imports and instantiating are two steps, because
-  // `WebAssembly.instantiate` with a module reads the import object at once
-  // and instantiates on a later turn.
-  const readImports = (module, importObject) => {
-    const handle = moduleHandle(module);
-    const { imports, exports } = parse(N.Describe(handle));
-    if (importObject !== undefined && !isObject(importObject)) {
-      throw new TypeError('the import object must be an object');
-    }
-    if (imports.length > 0 && importObject === undefined) {
-      throw new TypeError('the module has imports but no import object was given');
-    }
-    const wrappers = [];
-    const plan = imports.map((imp) => {
-      const namespace = importObject[imp.module];
-      if (!isObject(namespace)) throw new TypeError(`import module "${imp.module}" must be an object`);
-      return linkImport(imp, namespace[imp.name], wrappers);
-    });
-    return { handle, exports, plan, wrappers };
-  };
-  const instantiateRead = (target, { handle, exports, plan, wrappers }) => {
-    const instance = N.Instantiate(handle, plan.join(','), ...wrappers);
-    if (typeof instance === 'string') {
-      const message = instance.slice(5);
-      throw instance.startsWith('trap:') ? new RuntimeError(message) : new LinkError(message);
-    }
-    const object = create(null);
-    for (const exp of exports) object[exp.name] = exportObject(instance, exp);
-    instanceExports.set(target, freeze(object));
-    return target;
-  };
-
-  class Instance {
-    constructor(module, importObject = undefined) {
-      instantiateRead(this, readImports(module, importObject));
-    }
-    get exports() {
-      const exports = instanceExports.get(this);
-      if (exports === undefined) throw new TypeError('expected a WebAssembly.Instance');
-      return exports;
-    }
-  }
-
-  // WebIDL members are enumerable, unlike class members.
-  const enumerable = (target, skip) => {
-    for (const key of Object.getOwnPropertyNames(target)) {
-      if (!skip.includes(key)) defineProperty(target, key, { enumerable: true });
-    }
-  };
-  for (const C of [Module, Instance, Memory, Global, Table]) {
-    enumerable(C.prototype, ['constructor']);
-    enumerable(C, ['length', 'name', 'prototype']);
-  }
-  enumerable(WasmFunction.prototype, ['constructor']);
-  const tag = (target, value) => defineProperty(target, Symbol.toStringTag, { value, configurable: true });
-  tag(Module.prototype, 'WebAssembly.Module');
-  tag(Instance.prototype, 'WebAssembly.Instance');
-  tag(Memory.prototype, 'WebAssembly.Memory');
-  tag(Global.prototype, 'WebAssembly.Global');
-  tag(Table.prototype, 'WebAssembly.Table');
-  tag(WasmFunction.prototype, 'WebAssembly.Function');
-
-  const namespace = {
-    validate(bytes) {
-      return typeof N.Compile(bufferBytes(bytes)) !== 'string';
-    },
-    compile(bytes) {
-      return new Promise((resolve) => resolve(new Module(bytes)));
-    },
-    instantiate(source, importObject = undefined) {
-      // From bytes, the import object is read on a later turn, after
-      // compiling, as the JS API's asynchronous instantiation does.
-      if (modules.has(source)) {
-        let read;
-        try {
-          read = readImports(source, importObject);
-        } catch (e) {
-          return Promise.reject(e);
-        }
-        return Promise.resolve().then(() => instantiateRead(create(Instance.prototype), read));
-      }
-      return namespace.compile(source).then((module) => ({ module, instance: new Instance(module, importObject) }));
-    },
-  };
-  const classes = { Module, Instance, Memory, Global, Table, Function: WasmFunction, CompileError, LinkError, RuntimeError };
-  for (const [name, value] of Object.entries(classes)) {
-    defineProperty(namespace, name, { value, writable: true, configurable: true });
-  }
-  tag(namespace, 'WebAssembly');
-  defineProperty(g, 'WebAssembly', { value: namespace, writable: true, configurable: true });
-})();

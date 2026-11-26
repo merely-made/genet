@@ -10,6 +10,7 @@
 
 mod bridge;
 mod entities_natives;
+mod handle_natives;
 mod memory_natives;
 mod natives;
 
@@ -49,8 +50,12 @@ fn native(name: &str) -> Native {
         "MemoryGrow" => memory_natives::memory_grow,
         "MemoryBuffer" => memory_natives::memory_buffer,
         "MemoryType" => memory_natives::memory_type,
-        "MemoryToFixed" => memory_natives::memory_to_fixed,
-        "MemoryToResizable" => memory_natives::memory_to_resizable,
+        "Stale" => memory_natives::stale,
+        "Detach" => memory_natives::detach,
+        "Repoint" => memory_natives::repoint,
+        "Retain" => handle_natives::retain,
+        "Release" => handle_natives::release,
+        "Extern" => handle_natives::extern_new,
         "GlobalNew" => entities_natives::global_new,
         "GlobalGet" => entities_natives::global_get,
         "GlobalSet" => entities_natives::global_set,
@@ -95,7 +100,8 @@ pub(crate) fn install_in_context(ctx: &mut Context) -> Result<(), String> {
                 NativeFunction::from_fn_ptr(native(short)),
             )?;
         }
-        ctx.eval(Source::from_bytes(genet_wasm::BOOTSTRAP)).map(drop)
+        ctx.eval(Source::from_bytes(genet_wasm::BOOTSTRAP))
+            .map(drop)
     })()
     .map_err(|e| format!("{e:?}"))
 }
@@ -123,6 +129,13 @@ impl BoaEngine {
     pub fn install_webassembly_in_realm(&mut self, realm: RealmId) -> Result<(), String> {
         self.with_realm(realm, install_in_context)
             .map_err(|e| format!("{e:?}"))?
+    }
+
+    /// What the engine's wasm store holds: live wrappers and buffers, handle
+    /// table entries, `externref` slots and store resets. `None` if
+    /// `WebAssembly` has not been installed.
+    pub fn wasm_stats(&self) -> Option<genet_wasm::Stats> {
+        bridge::host(&self.ctx).map(|host| host.stats())
     }
 
     /// Set the fuel all wasm calls on this engine draw from; `None` is

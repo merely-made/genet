@@ -9,7 +9,7 @@
 use boa_engine::object::builtins::{JsArrayBuffer, JsUint8Array};
 use boa_engine::{Context, JsResult, JsValue};
 use genet_wasm::wasmi::{FuncType, ValType};
-use genet_wasm::{ImportValue, json};
+use genet_wasm::{INSTANCE_KIND, ImportValue, json};
 
 use super::bridge::{
     Outcome, arg, args_for, drive, handle_arg, number, require_host, string, string_arg, to_js,
@@ -38,7 +38,7 @@ pub(super) fn describe(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsRe
     }
 }
 
-/// `instantiate(module, plan, ...wrappers)`; see `genet-vano`'s twin.
+/// `instantiate(module, plan, lookup)`; see `genet-vano`'s twin.
 pub(super) fn instantiate(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
     let module = handle_arg(&arg(args, 0));
@@ -46,24 +46,18 @@ pub(super) fn instantiate(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> J
     let Some((module, plan)) = module.zip(plan) else {
         return Err(type_error("expected a module and a plan"));
     };
-    let mut wrappers = 2..args.len();
-    let mut values = Vec::new();
-    for entry in plan.split(',').filter(|e| !e.is_empty()) {
-        let value = match entry.split_once(':') {
-            Some((kind, handle)) => match (kind.parse(), handle.parse()) {
-                (Ok(kind), Ok(handle)) => Some(ImportValue::Entity(kind, handle)),
-                _ => None,
-            },
-            None => wrappers.next().map(|i| ImportValue::Script(arg(args, i))),
-        };
-        values.push(value.ok_or_else(|| type_error("malformed import plan"))?);
-    }
+    let values =
+        ImportValue::parse_plan(&plan).ok_or_else(|| type_error("malformed import plan"))?;
     let (instance, start) = match host.instantiate(module, values) {
         Ok(linked) => linked,
         Err(message) => return Ok(string(message)),
     };
     if let Some(start) = start {
-        if let Outcome::Trap(message) = drive(&host, start, &[], ctx)? {
+        let outcome = drive(&host, &arg(args, 2), start, &[], ctx);
+        if !matches!(outcome, Ok(Outcome::Done(_))) {
+            host.release(INSTANCE_KIND, instance, false);
+        }
+        if let Outcome::Trap(message) = outcome? {
             return Ok(string(format!("trap:{message}")));
         }
     }
@@ -92,19 +86,19 @@ pub(super) fn signature(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsR
     }
 }
 
-/// `call(trapped, func, ...args)`: the result; for several, their count,
+/// `call(trapped, lookup, func, ...args)`: the result; for several, their count,
 /// read with `resultAt`; on a trap, `trapped`, with the message kept for
 /// `trapMessage`.
 pub(super) fn call(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
-    let Some(func) = handle_arg(&arg(args, 1)).and_then(|h| host.func(h)) else {
+    let Some(func) = handle_arg(&arg(args, 2)).and_then(|h| host.func(h)) else {
         return Err(type_error("not a function handle"));
     };
     let ty = host.func_type(&func);
-    let Some(inputs) = args_for(&host, args, 2, ty.params()) else {
+    let Some(inputs) = args_for(&host, args, 3, ty.params()) else {
         return Err(type_error("an argument of the wrong type"));
     };
-    match drive(&host, func, &inputs, ctx)? {
+    match drive(&host, &arg(args, 1), func, &inputs, ctx)? {
         Outcome::Done(values) => Ok(match values.as_slice() {
             [] => JsValue::undefined(),
             [value] => to_js(&host, value),
@@ -149,18 +143,20 @@ fn type_list(list: &str) -> Option<Vec<ValType>> {
         .collect()
 }
 
-/// `funcNew(params, results, wrapper)`: `new WebAssembly.Function`.
+/// `funcNew(params, results, slot)`: `new WebAssembly.Function`, calling the
+/// script function in keeper slot `slot`.
 pub(super) fn func_new(_: &JsValue, args: &[JsValue], ctx: &mut Context) -> JsResult<JsValue> {
     let host = require_host(ctx)?;
     let params = string_arg(&arg(args, 0)).and_then(|l| type_list(&l));
     let results = string_arg(&arg(args, 1)).and_then(|l| type_list(&l));
-    let Some((params, results)) = params.zip(results) else {
-        return Err(type_error("expected value types"));
+    let slot = handle_arg(&arg(args, 2));
+    let Some(((params, results), slot)) = params.zip(results).zip(slot) else {
+        return Err(type_error("expected value types and a slot"));
     };
     let func = host.script_func(
         &mut host.store.borrow_mut(),
         FuncType::new(params, results),
-        arg(args, 2),
+        slot,
     );
     Ok(number(host.func_handle(func, None)))
 }

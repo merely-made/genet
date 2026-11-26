@@ -47,11 +47,11 @@ impl<V> WasmHost<V> {
             Mutability::Const
         };
         let global = Global::new(&mut *self.store.borrow_mut(), value, mutability);
-        self.push(&self.globals, global)
+        self.globals.borrow_mut().insert(global)
     }
 
     fn global(&self, handle: usize) -> Option<Global> {
-        self.globals.borrow().get(handle).copied()
+        self.globals.borrow().copied(handle)
     }
 
     pub fn global_type(&self, handle: usize) -> Option<GlobalType> {
@@ -82,11 +82,11 @@ impl<V> WasmHost<V> {
     pub fn table_new(&self, ty: TableType, init: Ref) -> Result<usize, String> {
         let table =
             Table::new(&mut *self.store.borrow_mut(), ty, init).map_err(|e| e.to_string())?;
-        Ok(self.push(&self.tables, table))
+        Ok(self.tables.borrow_mut().insert(table))
     }
 
     fn table(&self, handle: usize) -> Option<Table> {
-        self.tables.borrow().get(handle).copied()
+        self.tables.borrow().copied(handle)
     }
 
     pub fn table_type(&self, handle: usize) -> Option<TableType> {

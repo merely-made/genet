@@ -15,11 +15,11 @@ use nova_vm::ecmascript::{Agent, ArgumentsList, ArrayBuffer, JsResult, TypedArra
 use nova_vm::engine::{Bindable, GcScope};
 
 use super::bridge::{
-    Outcome, args_for, drive, handle_arg, host, number, require_host, root, string, string_arg,
-    to_js, type_error,
+    Lookup, Outcome, args_for, drive, handle_arg, host, number, require_host, root, string,
+    string_arg, to_js, type_error,
 };
-use genet_wasm::ImportValue;
 use genet_wasm::json;
+use genet_wasm::{INSTANCE_KIND, ImportValue};
 
 fn bytes_arg(agent: &Agent, value: Value) -> Option<Vec<u8>> {
     let Value::Uint8Array(array) = value else {
@@ -73,10 +73,10 @@ pub(super) fn describe<'gc>(
     }
 }
 
-/// `instantiate(module, plan, ...wrappers)`: an instance handle, or `link:`
-/// or `trap:` and the message. `plan` has one comma-separated entry per
-/// import: `s` takes the next wrapper, and `kind:handle` names an entity.
-/// Runs a moved start function through the bridge.
+/// `instantiate(module, plan, lookup)`: an instance handle, or `link:` or
+/// `trap:` and the message. `plan` has one comma-separated `kind:handle`
+/// entry per import (`ImportValue::parse_plan`); `lookup` reaches the group's
+/// script functions. Runs a moved start function through the bridge.
 pub(super) fn instantiate<'gc>(
     agent: &mut Agent,
     _this: Value,
@@ -99,34 +99,25 @@ pub(super) fn instantiate<'gc>(
             gc.into_nogc(),
         ));
     };
-    let mut wrappers = 2..args.len();
-    let mut values = Vec::new();
-    for entry in plan.split(',').filter(|e| !e.is_empty()) {
-        let value = match entry.split_once(':') {
-            Some((kind, handle)) => match (kind.parse(), handle.parse()) {
-                (Ok(kind), Ok(handle)) => Some(ImportValue::Entity(kind, handle)),
-                _ => None,
-            },
-            None => wrappers
-                .next()
-                .map(|i| ImportValue::Script(root(agent, args.get(i), gc.nogc()))),
-        };
-        let Some(value) = value else {
-            return Err(type_error(agent, "malformed import plan", gc.into_nogc()));
-        };
-        values.push(value);
-    }
+    let Some(values) = ImportValue::parse_plan(&plan) else {
+        return Err(type_error(agent, "malformed import plan", gc.into_nogc()));
+    };
     let (instance, start) = match host.instantiate(module, values) {
         Ok(linked) => linked,
         Err(message) => return Ok(string(agent, message, gc.into_nogc())),
     };
     if let Some(start) = start {
-        match drive(agent, &host, start, &[], gc.reborrow()) {
+        let lookup = Lookup { args: &args, at: 2 };
+        match drive(agent, &host, &lookup, start, &[], gc.reborrow()) {
             Ok(Outcome::Done(_)) => {},
             Ok(Outcome::Trap(message)) => {
+                host.release(INSTANCE_KIND, instance, false);
                 return Ok(string(agent, format!("trap:{message}"), gc.into_nogc()));
             },
-            Err(error) => return Err(error.bind(gc.into_nogc())),
+            Err(error) => {
+                host.release(INSTANCE_KIND, instance, false);
+                return Err(error.bind(gc.into_nogc()));
+            },
         }
     }
     Ok(number(agent, instance as f64, gc.into_nogc()))
@@ -170,7 +161,7 @@ pub(super) fn signature<'gc>(
     }
 }
 
-/// `call(trapped, func, ...args)`: the result; for several, their count, read
+/// `call(trapped, lookup, func, ...args)`: the result; for several, their count, read
 /// with `resultAt`. On a trap it returns `trapped`, a sentinel the bootstrap
 /// owns, since any value can be a result, and keeps the message for
 /// `trapMessage`.
@@ -187,18 +178,19 @@ pub(super) fn call<'gc>(
             gc.into_nogc(),
         ));
     };
-    let Some(func) = handle_arg(agent, args.get(1)).and_then(|h| host.func(h)) else {
+    let Some(func) = handle_arg(agent, args.get(2)).and_then(|h| host.func(h)) else {
         return Err(type_error(agent, "not a function handle", gc.into_nogc()));
     };
     let ty = host.func_type(&func);
-    let Some(inputs) = args_for(agent, &host, &args, 2, ty.params(), gc.nogc()) else {
+    let Some(inputs) = args_for(agent, &host, &args, 3, ty.params(), gc.nogc()) else {
         return Err(type_error(
             agent,
             "an argument of the wrong type",
             gc.into_nogc(),
         ));
     };
-    match drive(agent, &host, func, &inputs, gc.reborrow()) {
+    let lookup = Lookup { args: &args, at: 1 };
+    match drive(agent, &host, &lookup, func, &inputs, gc.reborrow()) {
         Ok(Outcome::Done(values)) => {
             let gc = gc.into_nogc();
             match values.as_slice() {
@@ -272,9 +264,10 @@ fn type_list(list: &str) -> Option<Vec<genet_wasm::wasmi::ValType>> {
         .collect()
 }
 
-/// `funcNew(params, results, wrapper)`: a function handle for a wasm function
-/// of that type that calls `wrapper`, as `new WebAssembly.Function` makes.
-/// The types are comma-separated JS API names.
+/// `funcNew(params, results, slot)`: a function handle for a wasm function
+/// of that type that calls the script function in keeper slot `slot`, as
+/// `new WebAssembly.Function` makes. The types are comma-separated JS API
+/// names.
 pub(super) fn func_new<'gc>(
     agent: &mut Agent,
     _this: Value,
@@ -285,14 +278,14 @@ pub(super) fn func_new<'gc>(
     let host = require_host(agent, gc)?;
     let params = string_arg(agent, args.get(0)).and_then(|l| type_list(&l));
     let results = string_arg(agent, args.get(1)).and_then(|l| type_list(&l));
-    let Some((params, results)) = params.zip(results) else {
-        return Err(type_error(agent, "expected value types", gc));
+    let slot = handle_arg(agent, args.get(2));
+    let Some(((params, results), slot)) = params.zip(results).zip(slot) else {
+        return Err(type_error(agent, "expected value types and a slot", gc));
     };
-    let wrapper = root(agent, args.get(2), gc);
     let func = host.script_func(
         &mut host.store.borrow_mut(),
         FuncType::new(params, results),
-        wrapper,
+        slot,
     );
     let handle = host.func_handle(func, None);
     Ok(number(agent, handle as f64, gc))

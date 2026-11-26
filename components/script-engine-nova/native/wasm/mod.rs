@@ -8,6 +8,7 @@
 
 mod bridge;
 mod entities_natives;
+mod handle_natives;
 mod memory_natives;
 mod natives;
 
@@ -48,8 +49,12 @@ fn native(name: &str) -> RegularFn {
         "MemoryGrow" => memory_natives::memory_grow,
         "MemoryBuffer" => memory_natives::memory_buffer,
         "MemoryType" => memory_natives::memory_type,
-        "MemoryToFixed" => memory_natives::memory_to_fixed,
-        "MemoryToResizable" => memory_natives::memory_to_resizable,
+        "Stale" => memory_natives::stale,
+        "Detach" => memory_natives::detach,
+        "Repoint" => memory_natives::repoint,
+        "Retain" => handle_natives::retain,
+        "Release" => handle_natives::release,
+        "Extern" => handle_natives::extern_new,
         "GlobalNew" => entities_natives::global_new,
         "GlobalGet" => entities_natives::global_get,
         "GlobalSet" => entities_natives::global_set,
@@ -66,11 +71,16 @@ fn native(name: &str) -> RegularFn {
 
 /// Create the engine-wide wasm state if no realm has installed it yet.
 fn ensure_host(slot: &WasmSlot) {
-    slot.borrow_mut().get_or_insert_with(|| Rc::new(WasmHost::new()));
+    slot.borrow_mut()
+        .get_or_insert_with(|| Rc::new(WasmHost::new()));
 }
 
 /// Define the bootstrap's natives on `target`'s global, as that realm's functions.
-fn define_natives(agent: &mut Agent, target: Realm<'_>, mut gc: GcScope<'_, '_>) -> Result<(), String> {
+fn define_natives(
+    agent: &mut Agent,
+    target: Realm<'_>,
+    mut gc: GcScope<'_, '_>,
+) -> Result<(), String> {
     let target = target.unbind();
     let global = target.bind(gc.nogc()).global_object(agent).unbind();
     let mut out = Ok(());
@@ -173,6 +183,17 @@ impl NovaEngine {
             },
             None => Err("WebAssembly is not installed".to_string()),
         }
+    }
+
+    /// What the engine's wasm store holds: live wrappers and buffers, handle
+    /// table entries, `externref` slots and store resets. `None` if
+    /// `WebAssembly` has not been installed.
+    pub fn wasm_stats(&self) -> Option<genet_wasm::Stats> {
+        self.hook_owner
+            .wasm
+            .borrow()
+            .as_ref()
+            .map(|host| host.stats())
     }
 
     /// A clone cannot share the donor's store, so a live wasm object refuses

@@ -11,28 +11,34 @@
 //! is the backend's rooted script value.
 
 pub mod entities;
+pub mod handles;
 pub mod host;
 pub mod json;
 pub mod memory;
 pub mod sections;
+pub mod slab;
 
+pub use handles::{BUFFER_KIND, EXTERN_KIND, INSTANCE_KIND, MODULE_KIND, Stats};
 pub use host::{ImportCall, ImportValue, WasmHost};
-pub use memory::Refresh;
 pub use wasmi;
 
 /// The script that builds `WebAssembly` over a backend's natives. It takes
 /// each `__genetWasm…` global it needs and deletes it.
-pub const BOOTSTRAP: &str = include_str!("bootstrap.js");
+pub const BOOTSTRAP: &str = concat!(
+    include_str!("bootstrap.js"),
+    include_str!("bootstrap_values.js"),
+    include_str!("bootstrap_namespace.js"),
+);
 
 /// The natives the bootstrap expects, by the name after `__genetWasm`, with
 /// their `length`.
-pub const NATIVES: [(&str, u32); 27] = [
+pub const NATIVES: [(&str, u32); 31] = [
     ("Compile", 1),
     ("Describe", 1),
-    ("Instantiate", 2),
+    ("Instantiate", 3),
     ("ExportOf", 3),
     ("Signature", 1),
-    ("Call", 2),
+    ("Call", 3),
     ("TrapMessage", 0),
     ("ResultAt", 1),
     ("Stage", 0),
@@ -40,10 +46,14 @@ pub const NATIVES: [(&str, u32); 27] = [
     ("CustomSection", 3),
     ("MemoryNew", 2),
     ("MemoryGrow", 2),
-    ("MemoryBuffer", 1),
+    ("MemoryBuffer", 2),
     ("MemoryType", 1),
-    ("MemoryToFixed", 1),
-    ("MemoryToResizable", 1),
+    ("Stale", 1),
+    ("Detach", 1),
+    ("Repoint", 2),
+    ("Retain", 2),
+    ("Release", 3),
+    ("Extern", 0),
     ("GlobalNew", 3),
     ("GlobalGet", 1),
     ("GlobalSet", 2),

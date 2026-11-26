@@ -1337,11 +1337,16 @@ mod native {
         fn install_webassembly(
             &mut self,
             realm: RealmId,
-            fuel: Option<u64>,
         ) -> Result<(), script_engine_api::WasmInstallError> {
             self.install_webassembly_in_realm(realm)
-                .and_then(|()| self.set_wasm_fuel(fuel))
                 .map_err(script_engine_api::WasmInstallError::Engine)
+        }
+        #[cfg(all(feature = "wasm", not(target_family = "wasm")))]
+        fn set_webassembly_fuel(
+            &mut self,
+            fuel: Option<u64>,
+        ) -> Result<(), script_engine_api::WasmInstallError> {
+            self.set_wasm_fuel(fuel).map_err(script_engine_api::WasmInstallError::Engine)
         }
         fn execution_capabilities() -> ExecutionCapabilities {
             ExecutionCapabilities { bounded_pump_jobs: true, ..ExecutionCapabilities::default() }

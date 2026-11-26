@@ -75,7 +75,8 @@ pub enum BoundedEvalError<E> {
     Engine(E),
 }
 
-/// Why [`ScriptEngine::install_webassembly`] did not install the object.
+/// Why [`ScriptEngine::install_webassembly`] or
+/// [`ScriptEngine::set_webassembly_fuel`] refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WasmInstallError {
     /// This backend, or this build of it, has no WebAssembly (the trait default).
@@ -412,15 +413,18 @@ pub trait ScriptEngine: Sized {
         }
     }
 
-    /// Give `realm`'s global a `WebAssembly` object. `fuel` bounds the wasm
-    /// work the whole engine does (`None` is unbounded). Backends without it, or
-    /// built without it, refuse with [`WasmInstallError::Unsupported`].
-    fn install_webassembly(
-        &mut self,
-        realm: RealmId,
-        fuel: Option<u64>,
-    ) -> Result<(), WasmInstallError> {
-        let _ = (realm, fuel);
+    /// Give `realm`'s global a `WebAssembly` object. Every realm shares the
+    /// engine's one wasm store and fuel. Backends without it, or built without
+    /// it, refuse with [`WasmInstallError::Unsupported`].
+    fn install_webassembly(&mut self, realm: RealmId) -> Result<(), WasmInstallError> {
+        let _ = realm;
+        Err(WasmInstallError::Unsupported)
+    }
+
+    /// Bound the wasm work the whole engine does (`None` is unbounded, the
+    /// state after install). Installing in a later realm keeps the setting.
+    fn set_webassembly_fuel(&mut self, fuel: Option<u64>) -> Result<(), WasmInstallError> {
+        let _ = fuel;
         Err(WasmInstallError::Unsupported)
     }
 

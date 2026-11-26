@@ -881,10 +881,10 @@ fn install_date_source<E: ScriptEngine>(engine: &mut E, clock: &SharedClock) {
     engine.set_date_source(Rc::new(move || clock.epoch_now_ms()));
 }
 
-/// Give `realm` a `WebAssembly` object, unbounded (the embedder sets no fuel).
-/// An engine without it keeps its realms as they are.
+/// Give `realm` a `WebAssembly` object; fuel stays as the embedder set it
+/// (unbounded by default). An engine without it keeps its realms as they are.
 fn install_webassembly<E: ScriptEngine>(engine: &mut E, realm: RealmId) -> Result<(), String> {
-    match engine.install_webassembly(realm, None) {
+    match engine.install_webassembly(realm) {
         Ok(()) | Err(WasmInstallError::Unsupported) => Ok(()),
         Err(WasmInstallError::Engine(message)) => Err(message),
     }

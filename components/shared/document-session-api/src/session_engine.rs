@@ -102,6 +102,11 @@ pub struct SessionSpawnRequest {
     /// Fetched body, when the host fetched it. `None` asks the engine to
     /// load via its own fetcher seam.
     pub body: Option<String>,
+    /// The exact fetched bytes behind `body`, when the host holds them. An
+    /// engine that parses non-UTF-8 content reads [`Self::body_bytes`].
+    /// In-process only, like `http_response`.
+    #[serde(skip)]
+    pub body_bytes: Option<Vec<u8>>,
     pub content_type: Option<String>,
     /// In-process response metadata accompanying a body acquired by the host.
     #[serde(skip)]
@@ -118,6 +123,7 @@ impl SessionSpawnRequest {
         Self {
             address: address.into(),
             body: None,
+            body_bytes: None,
             content_type: None,
             http_response: None,
             viewport: (0, 0),
@@ -127,8 +133,23 @@ impl SessionSpawnRequest {
 
     pub fn with_body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into());
+        self.body_bytes = None;
         self.http_response = None;
         self
+    }
+
+    /// Carry the exact fetched bytes beside the decoded body. Call after
+    /// `with_body`, which clears them so the two views stay coherent.
+    pub fn with_body_bytes(mut self, bytes: Vec<u8>) -> Self {
+        self.body_bytes = Some(bytes);
+        self
+    }
+
+    /// The exact bytes when carried, else the UTF-8 bytes of `body`, else none.
+    pub fn body_bytes(&self) -> Option<&[u8]> {
+        self.body_bytes
+            .as_deref()
+            .or_else(|| self.body.as_deref().map(str::as_bytes))
     }
 
     pub fn with_content_type(mut self, content_type: impl Into<String>) -> Self {
@@ -1756,9 +1777,17 @@ mod tests {
     fn phase_c_t5_api_legacy_spawn_unicode_body() {
         let request = SessionSpawnRequest { address: "https://forms.test/".into(),
             body: Some("café".into()), content_type: Some("text/html".into()),
-            http_response: None, viewport: (320, 240), hidden: false };
+            body_bytes: None, http_response: None, viewport: (320, 240), hidden: false };
         assert_eq!(request.body.as_deref(), Some("café"));
+        assert_eq!(request.body_bytes(), Some("café".as_bytes()));
         assert_eq!(SessionSpawnRequest::new("a").with_body("café").body, request.body);
+    }
+    #[test]
+    fn spawn_request_carries_exact_bytes_beside_body() {
+        let raw = SessionSpawnRequest::new("x:1").with_body("lossy").with_body_bytes(vec![0xff, b'o', b'k']);
+        assert_eq!(raw.body_bytes(), Some(&[0xff, b'o', b'k'][..]));
+        assert_eq!(raw.clone().with_body("again").body_bytes(), Some(&b"again"[..]));
+        assert_eq!(SessionSpawnRequest::new("x:2").body_bytes(), None);
     }
     #[test]
     fn phase_c_t5_api_old_session_accessor_none() {

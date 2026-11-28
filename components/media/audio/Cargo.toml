@@ -27,7 +27,7 @@ speexdsp-resampler = { workspace = true }
 num-complex = { workspace = true }
 
 [dependencies.petgraph]
-version = "0.4.12"
+version = ">=0.8"
 features = ["stable_graph"]
 
 [dependencies.byte-slice-cast]

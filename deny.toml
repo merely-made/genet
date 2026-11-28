@@ -100,45 +100,23 @@ deny = [
 skip = [
     # Native/full metadata audit, 2026-11-03. Exact older versions only;
     # new duplicate versions still fail. Keep independent engine oracles separate.
-    { crate = "alloc-no-stdlib@2.0.4", reason = "brotli-decompressor@5.0.3 require this older API line; the other resolved callers use 3.0.0." },
-    { crate = "asn1-rs@0.6.2", reason = "der-parser@9.0.0, oid-registry@0.7.1, x509-parser@0.16.0 require this older API line; the other resolved callers use 0.7.2." },
-    { crate = "asn1-rs-derive@0.5.1", reason = "asn1-rs@0.6.2 require this older API line; the other resolved callers use 0.6.0." },
-    { crate = "brotli-decompressor@5.0.3", reason = "wuff@0.2.9 require this older API line; the other resolved callers use 6.0.1." },
     { crate = "cpufeatures@0.2.17", reason = "aes@0.8.4, sha1@0.10.7 require this older API line; the other resolved callers use 0.3.1." },
-    { crate = "der-parser@9.0.0", reason = "rtc-dtls@0.21.1 and x509-parser@0.16.0 require this older API line; x509-parser@0.18.1 uses 10.0.0." },
-    { crate = "embedded-io@0.4.0", reason = "postcard@1.1.3 require this older API line; the other resolved callers use 0.6.1." },
     { crate = "hmac@0.12.1", reason = "rtc-crypto@0.21.1 require this older API line; the other resolved callers use 0.13.0." },
     { crate = "miniz_oxide@0.8.9", reason = "exr@1.74.2, png@0.18.1 require this older API line; the other resolved callers use 0.9.1." },
     { crate = "num-bigint@0.4.8", reason = "der-parser@10.0.0, der-parser@9.0.0, nova_vm@1.0.0, num-rational@0.4.2, and other recorded callers require this older API line; the other resolved callers use 0.5.1." },
-    { crate = "lock_api@0.4.14", reason = "dashmap@6.2.1, futures-intrusive@0.5.0, parking_lot@0.12.5 require this older API line; the other resolved callers use 0.5.0." },
-    { crate = "objc2-cloud-kit@0.2.2", reason = "objc2-ui-kit@0.2.2 require this older API line; the other resolved callers use 0.3.2." },
-    { crate = "objc2-core-data@0.2.2", reason = "objc2-app-kit@0.2.2, objc2-ui-kit@0.2.2 require this older API line; the other resolved callers use 0.3.2." },
-    { crate = "objc2-core-image@0.2.2", reason = "objc2-app-kit@0.2.2, objc2-ui-kit@0.2.2 require this older API line; the other resolved callers use 0.3.2." },
-    { crate = "objc2-metal@0.2.2", reason = "objc2-core-image@0.2.2, objc2-quartz-core@0.2.2 require this older API line; the other resolved callers use 0.3.2." },
-    { crate = "objc2-quartz-core@0.2.2", reason = "objc2-app-kit@0.2.2, objc2-ui-kit@0.2.2 require this older API line; the other resolved callers use 0.3.2." },
-    { crate = "oid-registry@0.7.1", reason = "x509-parser@0.16.0 require this older API line; the other resolved callers use 0.8.1." },
-    { crate = "parking_lot@0.12.5", reason = "futures-intrusive@0.5.0, string_cache@0.11.0, tokio@1.54.1, wgpu@30.0.2, wgpu-core@30.0.2, wgpu-hal@30.0.2 require this older API line; the other resolved callers use 0.13.0." },
-    { crate = "parking_lot_core@0.9.12", reason = "parking_lot@0.12.5 require this older API line; the other resolved callers use 0.10.0." },
-    { crate = "pastey@0.1.1", reason = "av-scenechange@0.14.1 require this older API line; the other resolved callers use 0.2.3." },
     { crate = "pem@3.0.6", reason = "rtc-dtls@0.21.1, rtc@0.21.1 require this older API line; the other resolved callers use 4.0.0." },
     { crate = "phf@0.13.1", reason = "oxc_ast_macros@0.124.0, oxc_regular_expression@0.124.0, oxc_syntax@0.124.0 require this older API line; the other resolved callers use 0.14.0." },
     { crate = "phf_generator@0.13.1", reason = "phf_macros@0.13.1 require this older API line; the other resolved callers use 0.14.0." },
     { crate = "phf_macros@0.13.1", reason = "phf@0.13.1 require this older API line; the other resolved callers use 0.14.0." },
     { crate = "phf_shared@0.13.1", reason = "phf@0.13.1, phf_generator@0.13.1, phf_macros@0.13.1 require this older API line; the other resolved callers use 0.14.0." },
     { crate = "r-efi@5.3.0", reason = "getrandom@0.3.4 require this older API line; the other resolved callers use 6.0.0." },
-    { crate = "regress@0.11.1", reason = "genet-scripted-dom keeps its local 0.11.1 compatibility patch; Nova uses the independent registry 0.11.1 oracle, while Boa requires 0.12. Keep their sources separate." },
     { crate = "syn@2.0.119", reason = "arg_enum_proc_macro@0.3.4, asn1-rs-derive@0.5.1, asn1-rs-derive@0.6.0, asn1-rs-impl@0.2.0, and other recorded callers require this older API line; the other resolved callers use 3.0.6." },
     { crate = "synstructure@0.13.2", reason = "asn1-rs-derive@0.5.1, asn1-rs-derive@0.6.0 require this older API line; the other resolved callers use 0.14.0." },
     # Pre-existing duplicate beside uuid 1.29.1, through ipc-channel 0.23.1 and servo-media.
     { crate = "uuid@0.8.2", reason = "ipc-channel@0.23.1 (servo-media-dummy, servo-media-auto) requires this older API line; the other resolved callers use 1.29.1." },
-    { crate = "webpki-roots@0.26.11", reason = "Pinned tokio-tungstenite@0.29.0 uses this compatibility shim; it re-exports the webpki-roots 1.x root set used directly by the other callers." },
-    { crate = "x509-parser@0.16.0", reason = "rtc-dtls@0.21.1, rtc@0.21.1 require this older API line; the other resolved callers use 0.18.1." },
 
-    "bitflags",
     "cookie",
     "redox_syscall",
-    # Duplicated by getrandom 0.1 and getrandom 0.2
-    "wasi",
 
     # Web Crypto uses RustCrypto's digest 0.11 line (sha1, sha2, hmac; ruled
     # 2026-10-20, design_docs/2026-10-20_webcrypto_subtle_plan.md). tungstenite
@@ -152,35 +130,16 @@ skip = [
     "itertools",
 
     # Duplicated by btleplug
-    "jni",
     "jni-sys",
 
     # Duplicated by egui
     "foldhash",
-    "windows-collections",
-    "windows-future",
-    "windows-numerics",
-    "windows-strings",
-    "windows-threading",
-
-    # Duplicated by egui-file-dialog
-    "windows",
-    "windows-implement",
-    "windows-interface",
-    "windows-link",
-    "windows-result",
 
     # Duplicated by winit.
     "windows-sys",
 
-    # wgpu has the latest and greatest.
-    "windows-core",
-
     # rust-content-security-policy uses newest base64.
     "base64",
-
-    # Duplicated by gilrs.
-    "core-foundation",
 
     # wgpu crates still depend on 1.1.0
     "rustc-hash",
@@ -190,7 +149,6 @@ skip = [
     "thiserror-impl",
 
     # duplicated by winit
-    "block2",
     "objc2-app-kit",
     "objc2-foundation",
     "objc2",
@@ -198,69 +156,17 @@ skip = [
     # duplicated by tungstenite
     "getrandom",
     "rand",
-    "rand_chacha",
     "rand_core",
-
-    # duplicated by blurz/blurmock
-    "hex",
-
-    # duplciated by rustix
-    "linux-raw-sys",
-
-    # duplicated by async-io
-    "rustix",
-
-    # duplicated by sea-query
-    "heck",
-
-    # duplicated by bindgen as build dependency
-    # Remove when cexpr updates its nom version
-    # and bindgen updates the cexpr version
-    "nom",
-
-    # duplicated by core-graphics
-    "core-graphics-types",
-
-    # duplicated by winresource and proc-macro-crate. Once everything
-    # switches to the latest version of toml we can remove this. It's
-    # really just a build dep, so not a large problem.
-    "toml_datetime",
-    "toml_edit",
-
-    # usvg depends on svgtypes, which depends on old version of kurbo
-    "kurbo",
 
     # Dependency by quick_cache and other
     "hashbrown",
 
-    # Duplicated by ml-kem 0.2.1 and ml-dsa 0.0.4. They use different
-    # version of hybrid-array. Once ml-kem releases the next version
-    # 0.3.0 and ml-dsa releases the next version 0.1.0, we can remove
-    # this.
-    "hybrid-array",
-
-    # duplicated by zbus
-    "winnow",
-
-    # The following 5 duplicates were introduced when Servo's CI was failing to
+    # The following duplicate was introduced when Servo's CI was failing to
     # detect duplicates introduced in automatic dependabot PRs (#38945). They
-    # are added here to allow the fix for this issue to land as a priority.
-    # These need to be investigated separately to see if the duplication can be
+    # is added here to allow the fix for this issue to land as a priority.
+    # It needs to be investigated separately to see if the duplication can be
     # avoided.
     "libloading",
-    "cfg-expr",
-    "system-deps",
-    "target-lexicon",
-
-    # Duplicated by wgpu/egui+dependencies
-    "font-types",
-    "glow",
-    "objc2-ui-kit",
-    "peniko",
-    "read-fonts",
-    "skrifa",
-    "vello_common",
-    "vello_cpu",
 ]
 
 # github.com organizations to allow git sources for

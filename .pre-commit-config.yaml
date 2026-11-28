@@ -20,7 +20,7 @@ repos:
         pass_filenames: false
       - id: dependency-bans
         name: dependency bans
-        entry: cargo deny --locked check bans
+        entry: cargo deny check bans
         language: system
         pass_filenames: false
         always_run: true
